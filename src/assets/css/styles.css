@@ -1,0 +1,13 @@
+body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.btn, .card {
+    transition: transform 0.3s;
+}
+
+.btn:hover, .card:hover {
+    transform: scale(1.05);
+}

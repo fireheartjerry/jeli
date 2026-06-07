@@ -87,8 +87,8 @@ const theme = createTheme({
   },
   typography: {
     fontFamily: SANS,
-    body1: { fontSize: '1rem', lineHeight: 1.7, fontWeight: 400 },
-    body2: { fontSize: '0.9rem', lineHeight: 1.7, fontWeight: 400 },
+    body1: { fontSize: '1.25rem', lineHeight: 1.7, fontWeight: 400 },
+    body2: { fontSize: '1.125rem', lineHeight: 1.7, fontWeight: 400 },
   },
 });
 
@@ -106,7 +106,7 @@ const Nav = () => (
         <Typography
           component="a" href="#"
           onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-          sx={{ fontFamily: MONO, fontSize: '0.95rem', color: '#a0a0a0', textDecoration: 'none', '&:hover': { color: '#f5f5f5' } }}
+          sx={{ fontFamily: MONO, fontSize: '1.19rem', color: '#a0a0a0', textDecoration: 'none', '&:hover': { color: '#f5f5f5' } }}
         >
           jerry li
         </Typography>
@@ -114,7 +114,7 @@ const Nav = () => (
           {NAV_ITEMS.map((id) => (
             <Box
               key={id} component="a" href={`#${id}`} onClick={scrollTo(id)}
-              sx={{ fontFamily: MONO, fontSize: '0.8rem', color: '#a0a0a0', textDecoration: 'none', '&:hover': { color: '#f5f5f5' } }}
+              sx={{ fontFamily: MONO, fontSize: '1rem', color: '#a0a0a0', textDecoration: 'none', '&:hover': { color: '#f5f5f5' } }}
             >
               {id}
             </Box>
@@ -127,7 +127,7 @@ const Nav = () => (
 
 const Section = ({ id, title, children }) => (
   <Box component="section" id={id} sx={{ py: { xs: 5, md: 6 }, scrollMarginTop: '52px' }}>
-    <Typography sx={{ fontFamily: MONO, fontSize: '0.8rem', letterSpacing: '0.18em', color: '#808080', mb: 3, textTransform: 'uppercase', fontWeight: 500 }}>
+    <Typography sx={{ fontFamily: MONO, fontSize: '1rem', letterSpacing: '0.18em', color: '#808080', mb: 3, textTransform: 'uppercase', fontWeight: 500 }}>
       {title}
     </Typography>
     {children}
@@ -151,16 +151,16 @@ function App() {
             <Typography
               sx={{
                 fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400,
-                fontSize: { xs: '3rem', md: '4.5rem' },
+                fontSize: { xs: '3.75rem', md: '5.625rem' },
                 letterSpacing: '-0.02em', mb: 3, lineHeight: 1.05, color: '#ffffff',
               }}
             >
               Jerry (Yuze) Li.
             </Typography>
-            <Typography sx={{ color: '#d0d0d0', mb: 2.5, lineHeight: 1.7, fontSize: '1.05rem', fontWeight: 500 }}>
+            <Typography sx={{ color: '#d0d0d0', mb: 2.5, lineHeight: 1.7, fontSize: '1.31rem', fontWeight: 500 }}>
               Incoming Waterloo CS · Schulich Leader ($100,000).
             </Typography>
-            <Typography sx={{ color: '#c8c8c8', lineHeight: 1.8, fontSize: '1rem', maxWidth: '36rem' }}>
+            <Typography sx={{ color: '#c8c8c8', lineHeight: 1.8, fontSize: '1.25rem', maxWidth: '36rem' }}>
               Built{' '}
               <Link href="https://topsoj.com" target="_blank" rel="noopener noreferrer" underline="hover" sx={{ color: '#c8c8c8' }}>
                 TopsOJ
@@ -208,10 +208,10 @@ function App() {
               ].map((e) => (
                 <Box key={e.school}>
                   <Stack direction="row" justifyContent="space-between" alignItems="baseline" flexWrap="wrap" gap={1}>
-                    <Typography sx={{ fontSize: '1rem', fontWeight: 500 }}>{e.school}</Typography>
-                    <Typography sx={{ fontFamily: MONO, fontSize: '0.82rem', color: '#808080' }}>{e.period}</Typography>
+                    <Typography sx={{ fontSize: '1.25rem', fontWeight: 500 }}>{e.school}</Typography>
+                    <Typography sx={{ fontFamily: MONO, fontSize: '1.03rem', color: '#808080' }}>{e.period}</Typography>
                   </Stack>
-                  <Typography sx={{ fontSize: '0.95rem', color: '#c8c8c8', mt: 0.4 }}>{e.desc}</Typography>
+                  <Typography sx={{ fontSize: '1.19rem', color: '#c8c8c8', mt: 0.4 }}>{e.desc}</Typography>
                 </Box>
               ))}
             </Stack>
@@ -229,15 +229,15 @@ function App() {
                   flexWrap="wrap" gap={1}
                   sx={{ py: 1.5, borderBottom: i < contests.length - 1 ? '1px solid #1a1a1a' : 'none' }}
                 >
-                  <Typography sx={{ fontFamily: MONO, fontSize: '0.95rem' }}>{c.name}</Typography>
+                  <Typography sx={{ fontFamily: MONO, fontSize: '1.19rem' }}>{c.name}</Typography>
                   <Stack direction="row" alignItems="baseline" gap={1.5} flexWrap="wrap">
-                    <Typography sx={{ fontFamily: MONO, fontSize: '0.82rem', color: '#c8c8c8' }}>{c.result}</Typography>
-                    {c.sub && <Typography sx={{ fontFamily: MONO, fontSize: '0.82rem', color: '#808080' }}>{c.sub}</Typography>}
+                    <Typography sx={{ fontFamily: MONO, fontSize: '1.03rem', color: '#c8c8c8' }}>{c.result}</Typography>
+                    {c.sub && <Typography sx={{ fontFamily: MONO, fontSize: '1.03rem', color: '#808080' }}>{c.sub}</Typography>}
                   </Stack>
                 </Stack>
               ))}
             </Stack>
-            <Typography sx={{ fontFamily: MONO, fontSize: '0.8rem', color: '#909090', mt: 2 }}>
+            <Typography sx={{ fontFamily: MONO, fontSize: '1rem', color: '#909090', mt: 2 }}>
               + Euclid / Pascal / Hypatia / Fermat / CSMC honour rolls
             </Typography>
           </Section>
@@ -255,8 +255,8 @@ function App() {
                       <Launch sx={{ fontSize: 14 }} />
                     </Link>
                   </Stack>
-                  <Typography sx={{ fontSize: '0.95rem', color: '#666', mt: 0.4, lineHeight: 1.7 }}>{p.blurb}</Typography>
-                  <Typography sx={{ fontFamily: MONO, fontSize: '0.8rem', color: '#909090', mt: 0.75 }}>{p.tags}</Typography>
+                  <Typography sx={{ fontSize: '1.19rem', color: '#666', mt: 0.4, lineHeight: 1.7 }}>{p.blurb}</Typography>
+                  <Typography sx={{ fontFamily: MONO, fontSize: '1rem', color: '#909090', mt: 0.75 }}>{p.tags}</Typography>
                 </Box>
               ))}
             </Stack>
@@ -266,17 +266,17 @@ function App() {
 
           {/* ── Research ── */}
           <Section id="research" title="research">
-            <Typography sx={{ fontSize: '0.95rem', color: '#666', mb: 3.5, lineHeight: 1.7 }}>
+            <Typography sx={{ fontSize: '1.19rem', color: '#666', mb: 3.5, lineHeight: 1.7 }}>
               Computational astrophysics: binary star mass transfer dynamics. Advised by Dr. Alexander Mushtukov (Oxford).
             </Typography>
             <Stack spacing={3}>
               {papers.map((p) => (
                 <Box key={p.url}>
                   <Typography sx={{ fontSize: '0.9rem', fontWeight: 500 }}>{p.title}</Typography>
-                  <Typography sx={{ fontFamily: MONO, fontSize: '0.82rem', color: '#808080', mt: 0.4 }}>{p.venue}</Typography>
+                  <Typography sx={{ fontFamily: MONO, fontSize: '1.03rem', color: '#808080', mt: 0.4 }}>{p.venue}</Typography>
                   <Link
                     href={p.url} target="_blank" rel="noopener noreferrer" underline="hover"
-                    sx={{ fontFamily: MONO, fontSize: '0.8rem', color: '#909090', display: 'inline-flex', alignItems: 'center', gap: 0.4, mt: 0.5, '&:hover': { color: '#888' } }}
+                    sx={{ fontFamily: MONO, fontSize: '1rem', color: '#909090', display: 'inline-flex', alignItems: 'center', gap: 0.4, mt: 0.5, '&:hover': { color: '#888' } }}
                   >
                     {p.url} <Launch sx={{ fontSize: 11 }} />
                   </Link>
@@ -288,7 +288,7 @@ function App() {
           {/* ── Footer ── */}
           <Divider />
           <Box sx={{ pt: 3, pb: 6 }}>
-            <Typography sx={{ fontFamily: MONO, fontSize: '0.8rem', color: '#909090' }}>
+            <Typography sx={{ fontFamily: MONO, fontSize: '1rem', color: '#909090' }}>
               © {new Date().getFullYear()} jerry li
             </Typography>
           </Box>

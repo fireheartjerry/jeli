@@ -11,9 +11,42 @@ html, body {
   box-sizing: border-box;
 }
 
+/* ── Background atmosphere ─────────────────────────────────────────────
+   One barely-there glow keeps the black from feeling dead, without adding
+   visual noise. Sits behind everything, never intercepts pointer events. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 640px at 50% -10%, rgba(255, 255, 255, 0.035), transparent 62%),
+    #0a0a0a;
+}
+
 ::selection {
-  background: #7dd3fc;
+  background: #f2f2f2;
   color: #0a0a0a;
+}
+
+/* Keyboard focus only — clean for mouse, clear for tab navigation. */
+:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Signature terminal caret after the name. */
+.caret {
+  animation: caret-blink 1.15s steps(1, end) infinite;
+}
+@keyframes caret-blink {
+  0%, 50%   { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
 }
 
 ::-webkit-scrollbar {
@@ -30,6 +63,30 @@ html, body {
   background: #3a3a3a;
 }
 
+/* ── Page-load reveal ─────────────────────────────────────────────────── */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.reveal {
+  opacity: 0;
+  animation: reveal-up 0.65s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Scroll-triggered reveal — .is-visible is added by IntersectionObserver. */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.75s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.75s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -37,4 +94,7 @@ html, body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  .reveal { opacity: 1 !important; transform: none !important; }
+  [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .caret { animation: none !important; opacity: 1 !important; }
 }

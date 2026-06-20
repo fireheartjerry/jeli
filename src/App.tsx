@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { HeroGeometric } from "@/components/ui/shape-landing-hero";
 
 const App: React.FC = () => {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -341,30 +340,97 @@ const App: React.FC = () => {
       </nav>
 
       <main id="top">
-        <HeroGeometric
-          badge="Incoming Waterloo CS · Schulich Leader"
-          title1="Jerry"
-          title2="(Yuze) Li"
-          subtitle="Built TopsOJ at 15 because no one else would. Two first-author astrophysics papers by 17. I like optimization and biohacking — eventually, I want to land astronauts on Mars."
-        >
-          <div className="mt-2 flex items-center justify-center gap-1">
-            {socials.map((social) => (
+        <header className="shell g12 hero">
+          <div className="hero-l">
+            <motion.div
+              className="kick"
+              variants={itemVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              <span className="sq"></span>Est. 2008 — Toronto → Waterloo
+            </motion.div>
+            <motion.h1
+              className="name in"
+              variants={itemVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              Jerry <span className="paren">(Yuze)</span> Li<span className="dot">.</span>
+            </motion.h1>
+            <motion.p
+              className="statement"
+              variants={itemVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              Incoming Waterloo CS · Schulich Leader.
+            </motion.p>
+            <motion.p
+              className="bio"
+              variants={itemVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              Built{" "}
               <motion.a
-                key={social.label}
-                href={social.href}
-                target={social.label !== "Email" ? "_blank" : undefined}
-                rel={social.label !== "Email" ? "noopener noreferrer" : undefined}
-                aria-label={social.label}
-                data-mag
-                className="grid h-11 w-11 place-items-center text-white/50 transition-colors hover:text-white [&_svg]:h-5 [&_svg]:w-5"
-                whileHover={{ scale: 1.1, transition: { duration: 0.2 } }}
-                whileTap={{ scale: 0.95 }}
+                className="ul"
+                href="https://topsoj.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                whileHover={{ color: "var(--accent)" }}
               >
-                <SocialIcon type={social.icon} />
-              </motion.a>
-            ))}
+                TopsOJ
+              </motion.a>{" "}
+              at 15 because no one else would. Two first-author astrophysics papers
+              by 17. I like optimization and biohacking. Eventually, I want to land
+              astronauts on Mars.
+            </motion.p>
+            <motion.div
+              className="social"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              {socials.map((social) => (
+                <motion.a
+                  key={social.label}
+                  href={social.href}
+                  target={social.label !== "Email" ? "_blank" : undefined}
+                  rel={social.label !== "Email" ? "noopener noreferrer" : undefined}
+                  aria-label={social.label}
+                  data-mag
+                  variants={itemVariants}
+                  whileHover={{ scale: 1.1, transition: { duration: 0.2 } }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <SocialIcon type={social.icon} />
+                </motion.a>
+              ))}
+            </motion.div>
           </div>
-        </HeroGeometric>
+
+          <motion.div
+            className="hero-r index"
+            variants={itemVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <div className="lab">Index</div>
+            <motion.a href="#education" className={activeSection === "#education" ? "on" : ""} variants={navLinkVariants} initial="rest" whileHover="hover">
+              <span>Education</span><span className="n">01</span>
+            </motion.a>
+            <motion.a href="#contests" className={activeSection === "#contests" ? "on" : ""} variants={navLinkVariants} initial="rest" whileHover="hover">
+              <span>Contests</span><span className="n">02</span>
+            </motion.a>
+            <motion.a href="#projects" className={activeSection === "#projects" ? "on" : ""} variants={navLinkVariants} initial="rest" whileHover="hover">
+              <span>Projects</span><span className="n">03</span>
+            </motion.a>
+            <motion.a href="#research" className={activeSection === "#research" ? "on" : ""} variants={navLinkVariants} initial="rest" whileHover="hover">
+              <span>Research</span><span className="n">04</span>
+            </motion.a>
+          </motion.div>
+        </header>
 
         <motion.section
           className="shell g12 sec"

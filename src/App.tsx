@@ -6,6 +6,7 @@ const App: React.FC = () => {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [navShrink, setNavShrink] = useState(false);
   const [activeSection, setActiveSection] = useState("#top");
+  const [railVisible, setRailVisible] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("theme");
@@ -36,6 +37,7 @@ const App: React.FC = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       setScrollProgress(max > 0 ? (window.scrollY / max) * 100 : 0);
       setNavShrink(window.scrollY > 24);
+      setRailVisible(window.scrollY > window.innerHeight * 0.6);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -279,7 +281,15 @@ const App: React.FC = () => {
         transition={{ duration: 0.3 }}
       />
 
-      <nav className="rail" aria-label="Sections">
+      <nav
+        className="rail"
+        aria-label="Sections"
+        style={{
+          opacity: railVisible ? 1 : 0,
+          pointerEvents: railVisible ? "auto" : "none",
+          transition: "opacity .4s ease",
+        }}
+      >
         <motion.a href="#top" aria-label="Top" whileHover={{ x: -5 }}>
           <span className="dlabel">Top</span><span className="ddot"></span>
         </motion.a>

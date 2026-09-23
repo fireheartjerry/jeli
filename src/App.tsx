@@ -172,7 +172,7 @@ const App: React.FC = () => {
   const education = [
     {
       school: "University of Waterloo — BCS",
-      period: "2026–2031",
+      period: "2026–2029",
       desc: "Bachelor of Computer Science · Faculty of Mathematics · Schulich Leader ($100,000).",
     },
     {
@@ -374,7 +374,7 @@ const App: React.FC = () => {
               initial="hidden"
               animate="visible"
             >
-              Incoming Waterloo CS · Schulich Leader.
+              Waterloo BCS '29 · Schulich Leader.
             </motion.p>
             <motion.p
               className="bio"

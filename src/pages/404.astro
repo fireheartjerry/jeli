@@ -1,0 +1,32 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Not found · Jerry Li" noindex>
+  <main class="wrap nf">
+    <p class="code num">404</p>
+    <h1>This page lost its orbit.</h1>
+    <p>Whatever was here has drifted off. <a class="ln" href="/">Head back to the start</a>.</p>
+  </main>
+</Base>
+
+<style>
+  .nf {
+    min-height: 100svh;
+    display: grid;
+    align-content: center;
+    gap: 14px;
+  }
+  .code {
+    font-family: var(--cm);
+    color: var(--accent);
+  }
+  h1 {
+    font-size: clamp(36px, 5vw, 64px);
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+  }
+  p {
+    color: var(--ink-2);
+  }
+</style>

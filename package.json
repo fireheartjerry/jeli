@@ -1,29 +1,26 @@
 {
-  "name": "jeli",
-  "version": "0.1.0",
+  "name": "yuzeli",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
-    "framer-motion": "^12.40.0",
-    "lucide-react": "^1.21.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tailwind-merge": "^3.6.0"
+    "@fontsource-variable/instrument-sans": "^5.3.0",
+    "astro": "^7.3.5",
+    "gsap": "^3.15.0",
+    "katex": "^0.18.9"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.1",
-    "@types/react": "^18.3.31",
-    "@types/react-dom": "^18.3.7",
-    "@vitejs/plugin-react": "^4.7.0",
-    "tailwindcss": "^4.3.1",
+    "@astrojs/check": "^0.9.10",
+    "@types/katex": "^0.16.8",
+    "playwright-core": "^1.63.0",
+    "topojson-client": "^3.1.0",
     "typescript": "^6.0.3",
-    "vite": "^6.4.3"
+    "world-atlas": "^2.0.2"
   }
 }

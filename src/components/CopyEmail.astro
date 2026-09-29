@@ -1,0 +1,124 @@
+---
+interface Props {
+  label?: string;
+  class?: string;
+}
+const { label = "Email", class: cls } = Astro.props;
+const address = "fireheartjerry@gmail.com";
+---
+
+<!--
+  Without JS this is a plain mailto link. With JS a click copies the address
+  instead; Cmd/Ctrl/Shift-click still opens the mail client. Both labels share
+  one grid cell so swapping them never shifts the layout.
+-->
+<a class:list={["copy", cls]} href={`mailto:${address}`} data-copy={address} title={address}>
+  <span class="face idle">{label}</span>
+  <span class="face done" aria-hidden="true">
+    <svg viewBox="0 0 12 12" width="0.7em" height="0.7em" aria-hidden="true"><path d="M2 6.4 4.7 9 10 3" pathLength="1" /></svg>
+    Copied
+  </span>
+</a>
+
+<script>
+  const live = document.createElement("div");
+  live.className = "sr-only";
+  live.setAttribute("aria-live", "polite");
+  document.body.append(live);
+
+  const timers = new WeakMap<HTMLElement, number>();
+
+  async function copy(el: HTMLAnchorElement) {
+    const address = el.dataset.copy!;
+    try {
+      await navigator.clipboard.writeText(address);
+    } catch {
+      window.location.href = el.href; // clipboard blocked: fall back to mail client
+      return;
+    }
+    el.classList.remove("is-done");
+    void el.offsetWidth; // restart the check-mark draw on repeat clicks
+    el.classList.add("is-done");
+    live.textContent = `Copied ${address}`;
+    clearTimeout(timers.get(el));
+    timers.set(el, window.setTimeout(() => el.classList.remove("is-done"), 1800));
+  }
+
+  document.querySelectorAll<HTMLAnchorElement>("a[data-copy]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      copy(el);
+    });
+  });
+
+  // "e" anywhere copies the address, unless the reader is typing. Astro
+  // bundles this script once however many buttons are on the page.
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "e" || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    const t = e.target as HTMLElement;
+    if (t.closest("input, textarea, select, [contenteditable]")) return;
+    // Confirm on whichever copy button the reader can currently see.
+    const all = [...document.querySelectorAll<HTMLAnchorElement>("a[data-copy]")];
+    const seen = all.filter((a) => {
+      const r = a.getBoundingClientRect();
+      return r.bottom > 0 && r.top < window.innerHeight;
+    });
+    const el = seen[seen.length - 1] ?? all[0];
+    if (el) copy(el);
+  });
+</script>
+
+<style>
+  .copy {
+    display: inline-grid;
+    cursor: pointer;
+  }
+  .face {
+    grid-area: 1 / 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    transition:
+      opacity 0.22s var(--ease-out),
+      transform 0.32s var(--ease-out),
+      filter 0.22s ease;
+  }
+  .done {
+    color: var(--accent);
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(2px);
+  }
+  .copy.is-done .idle {
+    opacity: 0;
+    transform: translateY(-0.45em);
+    filter: blur(2px);
+  }
+  .copy.is-done .done {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  .copy.is-done path {
+    transition: stroke-dashoffset 0.34s 0.08s var(--ease-out);
+    stroke-dashoffset: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .face,
+    path {
+      transition: none !important;
+      transform: none !important;
+      filter: none !important;
+    }
+  }
+</style>

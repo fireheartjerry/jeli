@@ -1,0 +1,196 @@
+---
+// Fig: TopsOJ submissions, from the real (de-duplicated, authentic-only)
+// database export. A live judge strip on top (answers go in, verdicts come
+// out at the site's real acceptance rate), then cumulative submissions with
+// monthly bars and a tick per contest. Geometry is computed at build time.
+import Figure from "../Figure.astro";
+import data from "../../data/topsoj.json";
+
+const W = 640, H = 322;
+const L = 8, R = 560, T = 86, B = 268;
+const f = (v: number) => v.toFixed(1);
+const fmt = (v: number) => v.toLocaleString("en-US");
+
+// The continuous record, July 2023 to January 2026.
+const months = data.months.filter((m) => m.m < "2026-02");
+const max = 130_000;
+const x = (i: number) => L + (i / (months.length - 1)) * (R - L);
+const y = (v: number) => B - (v / max) * (B - T);
+const pts = months.map((m, i) => [x(i), y(m.c)] as const);
+const line = pts.map(([px, py], i) => `${i ? "L" : "M"}${f(px)} ${f(py)}`).join("");
+
+const BAR = 50;
+const peakN = Math.max(...months.map((m) => m.n));
+const peakI = months.findIndex((m) => m.n === peakN);
+const bars = months.map((m, i) => ({ x: x(i), h: (m.n / peakN) * BAR }));
+
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const label = (iso: string) => `${MON[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
+const monthIndex = (iso: string) => {
+  const [yy, mm] = iso.slice(0, 7).split("-").map(Number);
+  const [y0, m0] = months[0].m.split("-").map(Number);
+  return (yy - y0) * 12 + (mm - m0) + (Number(iso.slice(8, 10)) - 1) / 30;
+};
+
+// Contest ticks under the axis, height by participants. Contests on the same
+// day sit side by side.
+const contests = data.contests.filter((c) => c.start && !c.test && c.start < "2026-02");
+const maxP = Math.max(...contests.map((c) => c.participants));
+const seen = new Map<string, number>();
+const ticks = contests.map((c) => {
+  const day = c.start!.slice(0, 10);
+  const k = seen.get(day) ?? 0;
+  seen.set(day, k + 1);
+  return { x: x(monthIndex(c.start!)) + k * 2.2, h: 3 + (c.participants / maxP) * 15 };
+});
+const TK = B + 5;
+const years = ["2024", "2025", "2026"].map((yr) => ({ yr, x: x(monthIndex(`${yr}-01-01`)) }));
+
+const total = months[months.length - 1].c;
+const end = pts[pts.length - 1];
+// Where the line first passes 100,000.
+const c100 = months.findIndex((m) => m.c >= 100_000);
+const p100 = pts[c100];
+
+// Live judge strip: the real share of accepted answers.
+const acc = data.totals.correctSubmissions / data.totals.submissions;
+const accPct = (acc * 100).toFixed(1);
+const SY = 20;
+const BOX = { x0: 318, x1: 384 };
+// Verdicts leave the box along their own lane, which ends well short of the rate label.
+const LANE = { x0: BOX.x1, x1: 520 };
+const tokens = [112, 180, 238, 286];
+const chips = [
+  { v: "AC", x: 396 },
+  { v: "WA", x: 432 },
+  { v: "AC", x: 468 },
+];
+
+const payload = JSON.stringify({
+  L, R, T, B, max, BAR, TK,
+  m: months.map((m) => [label(m.m), m.n, m.c]),
+  acc,
+});
+---
+
+<Figure name="submissions" n={4} title="Submissions to TopsOJ" label="TopsOJ submissions over time" readout={`${fmt(total)} submissions`}>
+  <svg class="sb" viewBox={`0 0 ${W} ${H}`} role="img" data-g={payload} aria-label={`Cumulative TopsOJ submissions from July 2023 to January 2026, reaching ${fmt(total)}, with monthly counts peaking at ${fmt(peakN)} in ${label(months[peakI].m)} and a tick for each contest. ${accPct}% of all answers are judged correct.`}>
+    <g class="strip">
+      <text class="sb-k" x={L} y={SY + 4}>Answers</text>
+      <line class="sb-track" x1="70" x2={BOX.x0 - 6} y1={SY} y2={SY} />
+      <g class="toks">
+        {tokens.map((tx) => <rect class="tok" x="-5" y="-5" width="10" height="10" rx="2" transform={`translate(${tx} ${SY})`} />)}
+      </g>
+      <rect class="inset box" x={BOX.x0} y={SY - 13} width={BOX.x1 - BOX.x0} height="26" rx="5" />
+      <text class="sb-box" x={(BOX.x0 + BOX.x1) / 2} y={SY + 1} text-anchor="middle">judge</text>
+      <line class="sb-prog" x1={BOX.x0 + 10} x2={BOX.x1 - 10} y1={SY + 8} y2={SY + 8} />
+      <clipPath id="sb-lane"><rect x={LANE.x0} y={SY - 16} width={LANE.x1 - LANE.x0} height="32" /></clipPath>
+      <line class="sb-track" x1={LANE.x0 + 8} x2={LANE.x1} y1={SY} y2={SY} />
+      <line class="sb-end" x1={LANE.x1 + 0.5} x2={LANE.x1 + 0.5} y1={SY - 7} y2={SY + 7} />
+      <g class="chips" clip-path="url(#sb-lane)">
+        {chips.map((c) => (
+          <g class:list={["chip", c.v === "AC" ? "ac" : "wa"]} transform={`translate(${c.x} ${SY})`}>
+            <rect class="chip-r" x="0" y="-8" width="28" height="16" rx="3" />
+            <text class="chip-t" x="14" y="3.5" text-anchor="middle">{c.v}</text>
+          </g>
+        ))}
+      </g>
+      <text class="sb-rate" x={W - 8} y={SY + 4} text-anchor="end"><tspan class="cm-n">{accPct}%</tspan><tspan class="sb-wide"> accepted</tspan></text>
+    </g>
+    <line class="hair" x1={L} x2={W - 8} y1="50" y2="50" />
+
+    <g class="grid">
+      {[25_000, 50_000, 75_000, 100_000, 125_000].map((v) => (
+        <>
+          <line class="hair" x1={L} x2={R} y1={f(y(v))} y2={f(y(v))} />
+          <text class="cm" x={R + 10} y={f(y(v) + 4)}>{v / 1000}k</text>
+        </>
+      ))}
+    </g>
+    <g class="bars">
+      {bars.map((b, i) => b.h > 0.4 && <rect class:list={["bar", { peak: i === peakI }]} x={f(b.x - 3)} y={f(B - b.h)} width="6" height={f(b.h)} data-h={f(b.h)} data-i={i} />)}
+    </g>
+    <g class="ann peak-ann">
+      <line class="lead" x1={f(bars[peakI].x + 4)} x2={f(bars[peakI].x + 9)} y1={f(B - BAR + 3)} y2={f(B - BAR + 3)} />
+      <text class="cm sm" x={f(bars[peakI].x + 12)} y={f(B - BAR + 7)}>{fmt(peakN)} in {label(months[peakI].m)}</text>
+    </g>
+    <line class="faint" x1={L} x2={R} y1={B} y2={B} />
+    <g class="ticks">
+      {ticks.map((t) => <line class="tick" x1={f(t.x)} x2={f(t.x)} y1={TK} y2={f(TK + t.h)} />)}
+    </g>
+    {years.map((t) => <text class="cm" x={f(t.x)} y={H - 4} text-anchor="middle">{t.yr}</text>)}
+    <text class="sm ticks-k" x={W - 8} y={TK + 13} text-anchor="end">contests</text>
+
+    <g class="ann m100">
+      <circle class="pin" cx={f(p100[0])} cy={f(p100[1])} r="2.4" />
+      <line class="lead" x1={f(p100[0])} x2={f(p100[0])} y1={f(p100[1] + 5)} y2={f(p100[1] + 30)} />
+      <text class="sm" x={f(p100[0] + 5)} y={f(p100[1] + 29)}>100,000th in {label(months[c100].m)}</text>
+    </g>
+
+    <path class="accent line" d={line} />
+    <g class="head" transform={`translate(${f(end[0])} ${f(end[1])})`}>
+      <circle class="dot-accent" r="3.5" />
+      <text class="acc count" x="-10" y="-12" text-anchor="end">{fmt(total)}</text>
+    </g>
+
+    <g class="xh" opacity="0">
+      <line class="xh-l" x1="0" x2="0" y1={T - 8} y2={B} />
+      <circle class="xh-d" r="3.5" />
+      <g class="xh-p">
+        <rect class="inset xh-box" x="0" y="0" width="120" height="50" rx="5" />
+        <text class="xh-m" x="9" y="16"></text>
+        <text class="xh-n" x="9" y="31"></text>
+        <text class="xh-c" x="9" y="45"></text>
+      </g>
+    </g>
+    <rect class="hit" x={L - 4} y={T - 12} width={R - L + 8} height={B - T + 34} />
+  </svg>
+  <Fragment slot="caption">Cumulative submissions, July 2023 to January 2026, with monthly counts as bars. Each tick under the axis is a contest, taller for more participants.</Fragment>
+</Figure>
+
+<style>
+  .sb .bar { fill: var(--ink); opacity: 0.13; }
+  .sb .bar.peak { opacity: 0.22; }
+  .sb .bar.on { fill: var(--accent); opacity: 0.55; }
+  .sb .tick { stroke: var(--ink); stroke-opacity: 0.42; stroke-width: 1; }
+  .sb .count { font-family: var(--cm); font-size: 14px; letter-spacing: 0; }
+  .sb .sm { font-size: 10.5px; }
+  .sb text.cm.sm { font-size: 11px; }
+  .sb .lead { stroke: var(--ink-4); stroke-width: 1; }
+  .sb .pin { fill: var(--panel); stroke: var(--accent); stroke-width: 1.25; }
+  .sb .sb-k { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; fill: var(--ink-3); }
+  .sb .sb-track { stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 1 4; stroke-linecap: round; }
+  .sb :global(.tok) { fill: var(--panel); stroke: var(--ink); stroke-width: 1; }
+  .sb .sb-box { font-size: 10.5px; fill: var(--ink-2); }
+  .sb .sb-prog { stroke: var(--hair); stroke-width: 1.5; stroke-linecap: round; }
+  .sb :global(.sb-bar) { stroke: var(--ink-2); stroke-width: 1.5; stroke-linecap: round; }
+  .sb :global(.chip-r) { stroke-width: 1; }
+  .sb :global(.chip.ac .chip-r) { fill: var(--s-green-t); stroke: var(--s-green); }
+  .sb :global(.chip.wa .chip-r) { fill: var(--s-red-t); stroke: var(--s-red); }
+  .sb :global(.chip-t) { font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; }
+  .sb :global(.chip.ac .chip-t) { fill: var(--s-green); }
+  .sb :global(.chip.wa .chip-t) { fill: var(--s-red); }
+  .sb .sb-end { stroke: var(--ink-4); stroke-width: 1; }
+  .sb .sb-rate { font-size: 11px; fill: var(--ink-3); }
+  .sb .cm-n { font-family: var(--cm); font-size: 13px; fill: var(--s-green); }
+  .sb .xh-l { stroke: var(--ink); stroke-opacity: 0.5; stroke-width: 1; }
+  .sb .xh-d { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
+  .sb .xh-m { font-size: 11px; font-weight: 500; fill: var(--ink); }
+  .sb .xh-n, .sb .xh-c { font-family: var(--cm); font-size: 12px; fill: var(--ink-2); letter-spacing: 0; }
+  .sb .xh-box { fill: var(--panel); }
+  .sb .ann text { transition: opacity 0.25s ease; }
+  .sb.reading .ann text { opacity: 0.25; }
+  .sb .hit { fill: transparent; pointer-events: none; }
+  .sb[data-live] .hit { pointer-events: all; cursor: crosshair; touch-action: pan-y; }
+  @media (max-width: 560px) {
+    .sb .sb-wide, .sb .m100 text, .sb .peak-ann, .sb .ticks-k, .sb .strip > .sb-k { display: none; }
+    .sb .sb-box { font-size: 16px; }
+    .sb :global(.tok) { width: 16px; height: 16px; x: -8px; y: -8px; rx: 3px; }
+    .sb :global(.chip-t) { font-size: 17px; transform: translate(9px, 2px); }
+    .sb :global(.chip-r) { width: 46px; height: 28px; y: -14px; }
+    .sb .cm-n { font-size: 19px; }
+    .sb .count { font-size: 21px; }
+    .sb .xh-m { font-size: 19px; }
+    .sb .xh-n, .sb .xh-c { font-size: 19px; }
+  }
+</style>

@@ -1,0 +1,55 @@
+---
+// Rendered to public/og.png by tools/og.mjs; not linked from anywhere.
+import Base from "../layouts/Base.astro";
+import { masses, aBallistic, aConservative, roche, toPath, F_MAX } from "../scripts/binary";
+
+const f = F_MAX * 0.7;
+const { md, ma } = masses(f);
+const a = aBallistic(f) * 250;
+const ac = aConservative(f) * 250;
+const R = roche(md, ma);
+const cx = 900, cy = 315, th = -0.55;
+const rot = (x: number, y: number): [number, number] => [cx + x * Math.cos(th) - y * Math.sin(th), cy + x * Math.sin(th) + y * Math.cos(th)];
+const map = (x: number, y: number) => rot(x * a, y * a);
+const [ax, ay] = rot(a * md, 0);
+const l1 = R.l1 * a, end = a * md - 9, bend = -0.3 * a;
+const stream = Array.from({ length: 22 }, (_, i) => {
+  const u = (i + 0.5) / 22, v = 1 - u;
+  const x = v * v * l1 + 2 * v * u * ((l1 + end) / 2) + u * u * end;
+  return { p: rot(x, 2 * v * u * bend), o: Math.sin(Math.PI * u) * 0.9 };
+});
+---
+
+<Base title="og" noindex>
+  <div class="og">
+    <div class="copy">
+      <p class="name">Jerry Li</p>
+      <p class="line">Computer science at Waterloo. Mathos AI, TopsOJ, and three papers on binary stars.</p>
+      <p class="url">yuzeli.ca</p>
+    </div>
+    <svg viewBox="0 0 1200 630" class="fig">
+      <circle class="ghost" cx={cx} cy={cy} r={ac * ma} />
+      <circle class="ring" cx={cx} cy={cy} r={a * ma} />
+      <circle class="ring" cx={cx} cy={cy} r={a * md} />
+      <path class="lobe" d={toPath(R.accretor(), map)} />
+      <path class="donor" d={toPath(R.donor(), map)} />
+      {stream.map((s) => <circle class="s" cx={s.p[0]} cy={s.p[1]} r="3" opacity={s.o.toFixed(2)} />)}
+      <circle class="acc" cx={ax} cy={ay} r="10" />
+    </svg>
+  </div>
+</Base>
+
+<style>
+  .og { position: relative; width: 1200px; height: 630px; overflow: hidden; background: var(--paper); }
+  .fig { position: absolute; inset: 0; width: 1200px; height: 630px; }
+  .copy { position: absolute; left: 80px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; width: 520px; z-index: 1; }
+  .name { font-size: 104px; font-weight: 500; letter-spacing: -0.045em; line-height: 1; }
+  .line { margin-top: 28px; font-size: 28px; line-height: 1.35; color: var(--ink-2); }
+  .url { margin-top: 36px; font-size: 22px; color: var(--accent); }
+  .ring { fill: none; stroke: var(--ink-4); stroke-width: 1.5; }
+  .ghost { fill: none; stroke: var(--ink-4); stroke-width: 1.5; stroke-dasharray: 3 7; }
+  .lobe { fill: none; stroke: var(--ink-4); stroke-width: 1.5; stroke-dasharray: 3 4; }
+  .donor { fill: var(--paper); stroke: var(--ink); stroke-width: 2; }
+  .s { fill: var(--accent); }
+  .acc { fill: var(--ink); }
+</style>

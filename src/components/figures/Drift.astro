@@ -1,0 +1,352 @@
+---
+// Fig: Drift, told with real product fidelity. A Chrome window with a chat;
+// the model starts thinking, Drift's popup (anchored to its toolbar icon)
+// asks whether to scroll while you wait, a focused side window opens with a
+// feed, the answer streams in token by token, a toast says it is ready, and
+// the side window collapses as focus returns to the chat.
+//
+// Under 560px the browser and the side window are re-laid out with CSS
+// transforms (from --m) so the chat text stays legible: the side window
+// floats over the chat, which is how it covers the page while you wait.
+import Figure from "../Figure.astro";
+
+const W = 640, H = 372;
+const f = (v: number) => +v.toFixed(2);
+
+// Browser window: full width on desktop; on phones a 396-wide variant of the
+// frame is shown and the toolbar icons and chat column slide left into it.
+const B = { x: 4, y: 4, w: 632, h: 364, wm: 396 };
+const TAB = 34, TOOL = 66;
+const SIDE_R = 132; // sidebar edge
+const CL = 160, CR = 452; // chat column
+const ICON = { x: 566, y: 50 }; // Drift's toolbar icon
+const DXR = B.wm - B.w; // phone shift for the toolbar's right end
+const DXC = 48 - CL; // phone shift for the chat column
+
+// Tokens: f = "s" sans, "mi" math italic, "mr" math roman; sup = superscript.
+type Tok = { t: string; f?: "s" | "mi" | "mr"; sup?: boolean };
+const s = (t: string): Tok => ({ t });
+const mi = (t: string, sup = false): Tok => ({ t, f: "mi", sup });
+const mr = (t: string, sup = false): Tok => ({ t, f: "mr", sup });
+const lines: { x: number; y: number; toks: Tok[]; eq?: boolean }[] = [
+  { x: CL, y: 142, toks: [s("Write "), mi("x"), mi("x", true), s(" as "), mi("e"), mi("x", true), mr(" ln ", true), mi("x", true), s(" and"), s(" use"), s(" the"), s(" chain"), s(" rule:")] },
+  {
+    x: CL + 36, y: 182, eq: true,
+    toks: [mi("x"), mi("x", true), mr(" = "), mi("e"), mi("x", true), mr(" ln ", true), mi("x", true), mr("(ln "), mi("x"), mr(" + 1)"), mr(" = "), mi("x"), mi("x", true), mr("(ln "), mi("x"), mr(" + 1)")],
+  },
+  { x: CL, y: 222, toks: [s("since"), s(" the"), s(" derivative"), s(" of "), mi("x"), mr(" ln "), mi("x"), s(" is "), mr("ln "), mi("x"), mr(" + 1.")] },
+];
+const SUP = 5.5;
+// Token index runs across all lines (the fraction d/dx is token 13).
+let k = 0;
+const rendered = lines.map((l, li) => {
+  let prevSup = false;
+  const toks = l.toks.map((tok) => {
+    const dy = tok.sup && !prevSup ? -SUP : !tok.sup && prevSup ? SUP : 0;
+    prevSup = !!tok.sup;
+    if (li === 1 && k === 13) k++; // reserve an index for the fraction
+    return { ...tok, dy, k: k++ };
+  });
+  return { ...l, toks };
+});
+const FRAC_K = 13;
+const NTOK = k;
+
+// Popup under the toolbar icon.
+const PU = { x: ICON.x + 20 - 184, y: 72, w: 184, h: 96 };
+const YES = { x: PU.x + PU.w - 60, y: PU.y + 66, w: 48, h: 19 };
+const NOW = { x: YES.x - 62, y: YES.y, w: 56, h: 19 };
+
+// The focused side window floats over the page, with a feed of 4 cards drawn
+// twice so the scroll wraps.
+const SW = { x: 462, y: 80, w: 168, h: 278, bar: 22 };
+const CARD = { x: SW.x + 10, w: SW.w - 20, h: 84, pitch: 122, y0: SW.y + SW.bar + 10 };
+const feed = Array.from({ length: 8 }, (_, i) => ({ i: i % 4, y: CARD.y0 + i * CARD.pitch }));
+const tints = ["t-blue", "t-amber", "t-green", "t-violet"];
+const caps = [[92, 54], [110, 40], [78, 64], [100, 48]];
+
+// Sidebar history skeletons.
+const hist = [
+  { y: 128, w: 84, on: true },
+  { y: 146, w: 70 },
+  { y: 164, w: 92 },
+  { y: 212, w: 64 },
+  { y: 230, w: 88 },
+  { y: 248, w: 74 },
+  { y: 266, w: 58 },
+];
+
+// Phone layout.
+const SB = f(640 / 404), SS = 1.42;
+const sideTop = 176;
+const mt = {
+  browser: `scale(${SB})`,
+  side: `translate(${f(634 - SW.w * SS - SW.x * SS)}px, ${f(sideTop - SW.y * SS)}px) scale(${SS})`,
+  right: `translate(${DXR}px, 0px)`,
+  chat: `translate(${DXC}px, 0px)`,
+};
+const HM = Math.ceil(Math.max(H * SB, sideTop + SW.h * SS) + 4);
+const geo = { NTOK, FRAC_K, period: CARD.pitch * 4 };
+const drift = (x: number, y: number, r = 7) =>
+  `M${x - r + 2} ${y - r + 3.2}c${r * 0.3} ${-r * 0.3} ${r * 0.55} ${-r * 0.3} ${r * 0.85} 0s${r * 0.55} ${r * 0.3} ${r * 0.85} 0` +
+  `M${x - r + 2} ${y + 0.4}c${r * 0.3} ${-r * 0.3} ${r * 0.55} ${-r * 0.3} ${r * 0.85} 0s${r * 0.55} ${r * 0.3} ${r * 0.85} 0` +
+  `M${x - r + 2 + r * 0.55} ${y + r - 3.2}h${r * 0.6}`;
+const frame = (w: number) => ({
+  strip: `M${B.x} ${TAB}V${B.y + 10}Q${B.x} ${B.y} ${B.x + 10} ${B.y}H${B.x + w - 10}Q${B.x + w} ${B.y} ${B.x + w} ${B.y + 10}V${TAB}Z`,
+});
+---
+
+<Figure name="drift" n={10} title="Drift" label="Drift, a Chrome extension that opens your feed in a side window while ChatGPT, Claude or Gemini is thinking, and brings you back when the answer is ready" readout="back in 0.4 s">
+  <svg
+    class="dr"
+    viewBox={`0 0 ${W} ${H}`}
+    preserveAspectRatio="xMidYMin meet"
+    role="img"
+    style={`--hm:${HM}`}
+    data-g={JSON.stringify(geo)}
+    aria-label="A Chrome window with a chat. I ask for the derivative of x to the x and the model starts thinking. Drift's popup under its toolbar icon asks: scroll while you wait? Yes opens a focused side window with a feed. The answer streams in: write x to the x as e to the x ln x and use the chain rule, so the derivative is x to the x times ln x plus 1. A toast says the response is ready, the side window collapses, and focus returns to the chat."
+  >
+    <defs>
+      <linearGradient id="dr-sweep" x1="0" x2="1" y1="0" y2="0">
+        <stop offset="0" stop-color="#000" />
+        <stop offset="0.5" stop-color="#fff" />
+        <stop offset="1" stop-color="#000" />
+      </linearGradient>
+      <mask id="dr-shim" maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
+        <rect class="shim" x={CL - 70} y="120" width="64" height="30" fill="url(#dr-sweep)" />
+      </mask>
+      <clipPath id="dr-type"><rect class="type-clip" x={CL + 14} y="314" width="0" height="32" /></clipPath>
+      <clipPath id="dr-feed"><rect class="feed-clip" x={SW.x + 1} y={SW.y + SW.bar + 0.5} width={SW.w - 2} height={SW.h - SW.bar - 1.5} /></clipPath>
+    </defs>
+
+    <!-- ===== browser ===== -->
+    <g class="blk browser" style={`--m:${mt.browser}`}>
+      <rect class="ring dsk" x="0.75" y="0.75" width={B.w + 6.5} height={B.h + 6.5} rx="13" />
+      <rect class="ring mob" x="0.75" y="0.75" width={B.wm + 6.5} height={B.h + 6.5} rx="13" />
+      <rect class="win dsk" x={B.x} y={B.y} width={B.w} height={B.h} rx="10" />
+      <rect class="win mob" x={B.x} y={B.y} width={B.wm} height={B.h} rx="10" />
+      <path class="strip dsk" d={frame(B.w).strip} />
+      <path class="strip mob" d={frame(B.wm).strip} />
+      <path class="tab" d={`M${B.x + 8} ${TAB}Q${B.x + 12} ${TAB} ${B.x + 12} ${TAB - 4}V${B.y + 11}Q${B.x + 12} ${B.y + 7} ${B.x + 16} ${B.y + 7}H${190}Q${194} ${B.y + 7} ${194} ${B.y + 11}V${TAB - 4}Q${194} ${TAB} ${198} ${TAB}`} />
+      <circle class="fav" cx="30" cy="22" r="4.5" />
+      <circle class="fav-d" cx="30" cy="22" r="1.4" />
+      <text class="tab-t" x="41" y="25.5">Derivative of <tspan class="mi">x</tspan><tspan class="mi sup" dy="-4">x</tspan></text>
+      <path class="ico-f" d="M179.5 19.5l5 5m0 -5l-5 5" />
+      <rect class="fav-sq" x="209" y="18" width="8" height="8" rx="2" />
+      <text class="tab-t off" x="223" y="25.5">Reading list</text>
+      <line class="hair" x1="300" x2="300" y1="14" y2="28" />
+      <path class="ico-f" d="M314 17v10M309 22h10" />
+      <line class="hair dsk" x1={B.x} x2={B.x + B.w} y1={TAB} y2={TAB} />
+      <line class="hair mob" x1={B.x} x2={B.x + B.wm} y1={TAB} y2={TAB} />
+      <!-- toolbar -->
+      <path class="ico" d="M25 50H15M19.5 45.5L15 50l4.5 4.5" />
+      <path class="ico-f" d="M35 50h10M40.5 45.5L45 50l-4.5 4.5" />
+      <path class="ico" d="M65.2 46.6A5.5 5.5 0 1 0 66 51.2M66 45v2.8h-2.8" />
+      <rect class="omni dsk" x="76" y="40" width={ICON.x - 96} height="20" rx="10" />
+      <rect class="omni mob" x="76" y="40" width={ICON.x + DXR - 96} height="20" rx="10" />
+      <path class="ico-f" d="M87 50.5h6.5v5h-6.5zM88.5 50.5v-1.6a1.75 1.75 0 0 1 3.5 0v1.6" />
+      <text class="url" x="100" y="54"><tspan class="u1">chat.example</tspan>/c/derivative</text>
+      <line class="hair dsk" x1={B.x} x2={B.x + B.w} y1={TOOL} y2={TOOL} />
+      <line class="hair mob" x1={B.x} x2={B.x + B.wm} y1={TOOL} y2={TOOL} />
+
+      <!-- sidebar (desktop) -->
+      <g class="dsk">
+        <line class="hair" x1={SIDE_R} x2={SIDE_R} y1={TOOL} y2={B.y + B.h} />
+        <path class="ico" d="M20 82.5h7M20 82.5v8.5h9.5v-4M26.5 88.5l5.5-5.5l1.5 1.5l-5.5 5.5h-1.5z" />
+        <text class="side-t" x="40" y="90.5">New chat</text>
+        <text class="side-h" x="18" y="114">Today</text>
+        <text class="side-h" x="18" y="198">Earlier</text>
+        {hist.map((h) => (
+          <>
+            {h.on && <rect class="hist-on" x="10" y={h.y - 8} width={SIDE_R - 18} height="17" rx="5" />}
+            <line class={`hist${h.on ? " on" : ""}`} x1="18" x2={18 + h.w} y1={h.y + 0.5} y2={h.y + 0.5} />
+          </>
+        ))}
+      </g>
+
+      <!-- chat -->
+      <g class="chat-col" style={`--m:${mt.chat}`}>
+        <g class="bubble">
+          <rect class="bub" x={CR - 196} y="82" width="196" height="28" rx="14" />
+          <text class="chat" x={CR - 182} y="100.5">What's the derivative of <tspan class="mi">x</tspan><tspan class="mi sup" dy="-5">x</tspan><tspan dy="5">?</tspan></text>
+        </g>
+        <path class="mark" d={`M${CL - 14} 132.5c.6 3 1.9 4.3 4.9 4.9c-3 .6-4.3 1.9-4.9 4.9c-.6-3-1.9-4.3-4.9-4.9c3-.6 4.3-1.9 4.9-4.9z`} />
+        <g class="thinking" opacity="0">
+          <text class="chat think-base" x={CL} y="141.5">Thinking</text>
+          <text class="chat think-hi" x={CL} y="141.5" mask="url(#dr-shim)">Thinking</text>
+        </g>
+        {rendered.map((l) => (
+          <text class={`chat ans${l.eq ? " eq" : ""}`} x={l.x} y={l.y}>
+            {l.toks.map((t) => (
+              <tspan class={`tk ${t.f ?? "s"}${t.sup ? " sup" : ""}`} data-k={t.k} dy={t.dy || undefined}>{t.t}</tspan>
+            ))}
+          </text>
+        ))}
+        <g class="frac" data-k={FRAC_K}>
+          <text class="fr" x={CL + 20} y="175" text-anchor="middle"><tspan class="mr">d</tspan></text>
+          <line class="fr-bar" x1={CL + 12} x2={CL + 29} y1="179" y2="179" />
+          <text class="fr" x={CL + 20} y="191.5" text-anchor="middle"><tspan class="mr">d</tspan><tspan class="mi">x</tspan></text>
+        </g>
+        <rect class="caret" x="0" y="-11" width="1.5" height="14" opacity="0" />
+        <!-- input -->
+        <rect class="input" x={CL} y="312" width={CR - CL} height="36" rx="18" />
+        <text class="ph" x={CL + 16} y="334">Ask anything</text>
+        <g clip-path="url(#dr-type)">
+          <text class="chat typed" x={CL + 16} y="334" opacity="0">What's the derivative of <tspan class="mi">x</tspan><tspan class="mi sup" dy="-5">x</tspan><tspan dy="5">?</tspan></text>
+        </g>
+        <rect class="tcaret" x={CL + 16} y="324" width="1.25" height="14" opacity="0" />
+        <circle class="send" cx={CR - 18} cy="330" r="11" />
+        <path class="send-a" d={`M${CR - 18} 335V325M${CR - 22.5} 329.5L${CR - 18} 325l4.5 4.5`} />
+        <rect class="send-s" x={CR - 21.5} y="326.5" width="7" height="7" rx="1.2" opacity="0" />
+      </g>
+
+      <!-- toolbar right end, the popup and the pointer -->
+      <g class="tb-right" style={`--m:${mt.right}`}>
+        <g class="dicon">
+          <rect class="dicon-bg" x={ICON.x - 8} y={ICON.y - 8} width="16" height="16" rx="4.5" />
+          <path class="dicon-g" d={drift(ICON.x, ICON.y)} />
+          <circle class="badge" cx={ICON.x + 7} cy={ICON.y - 7} r="2.6" opacity="0" />
+        </g>
+        <circle class="ico" cx={ICON.x + 24} cy="50" r="7" />
+        <path class="ico" d={`M${ICON.x + 20} 54.8a5 5 0 0 1 8 0M${ICON.x + 24} 51.2a2.2 2.2 0 1 0 0-4.4a2.2 2.2 0 1 0 0 4.4`} />
+        {[45.5, 50, 54.5].map((y) => <circle class="kebab" cx={ICON.x + 48} cy={y} r="1.3" />)}
+        <g class="popup" opacity="0">
+          <path class="pop" d={`M${PU.x + 8} ${PU.y}H${ICON.x - 6}L${ICON.x} ${PU.y - 6}L${ICON.x + 6} ${PU.y}H${PU.x + PU.w - 8}Q${PU.x + PU.w} ${PU.y} ${PU.x + PU.w} ${PU.y + 8}V${PU.y + PU.h - 8}Q${PU.x + PU.w} ${PU.y + PU.h} ${PU.x + PU.w - 8} ${PU.y + PU.h}H${PU.x + 8}Q${PU.x} ${PU.y + PU.h} ${PU.x} ${PU.y + PU.h - 8}V${PU.y + 8}Q${PU.x} ${PU.y} ${PU.x + 8} ${PU.y}Z`} />
+          <rect class="dicon-bg on" x={PU.x + 12} y={PU.y + 10} width="12" height="12" rx="3.5" />
+          <path class="dicon-g on" d={drift(PU.x + 18, PU.y + 16, 5.2)} />
+          <text class="pop-n" x={PU.x + 30} y={PU.y + 19.5}>Drift</text>
+          <text class="pop-t" x={PU.x + 12} y={PU.y + 41}>Scroll while you wait?</text>
+          <text class="pop-s" x={PU.x + 12} y={PU.y + 56}>Back when the answer is ready.</text>
+          <rect class="btn-n" x={NOW.x} y={NOW.y} width={NOW.w} height={NOW.h} rx="5" />
+          <text class="btn-t" x={NOW.x + NOW.w / 2} y={NOW.y + 13} text-anchor="middle">Not now</text>
+          <g class="yes">
+            <rect class="btn-y" x={YES.x} y={YES.y} width={YES.w} height={YES.h} rx="5" />
+            <text class="btn-yt" x={YES.x + YES.w / 2} y={YES.y + 13} text-anchor="middle">Yes</text>
+          </g>
+        </g>
+        <path class="cursor" opacity="0" data-to={`${YES.x + YES.w / 2 + 2} ${YES.y + YES.h / 2 + 2}`} d="M0 0L0 14.5L3.7 11L6.3 16.6L8.6 15.6L6 10.1L10.9 10.1Z" />
+      </g>
+    </g>
+
+    <!-- ===== focused side window ===== -->
+    <g class="blk" style={`--m:${mt.side}`}>
+      <g class="side" opacity="0">
+        <rect class="sw" x={SW.x} y={SW.y} width={SW.w} height={SW.h} rx="10" />
+        {[0, 8, 16].map((d) => <circle class="wdot" cx={SW.x + 13 + d} cy={SW.y + SW.bar / 2} r="2.4" />)}
+        <text class="sw-t" x={SW.x + SW.w / 2 + 12} y={SW.y + 14.5} text-anchor="middle">feed.example</text>
+        <line class="hair" x1={SW.x} x2={SW.x + SW.w} y1={SW.y + SW.bar} y2={SW.y + SW.bar} />
+        <g clip-path="url(#dr-feed)">
+          <g class="feed">
+            {feed.map((c) => {
+              const x = CARD.x, y = c.y, w = CARD.w, h = CARD.h, t = tints[c.i];
+              return (
+                <g>
+                  <rect class={t} x={x} y={y} width={w} height={h} rx="6" />
+                  {c.i === 0 && (<><circle class={t} cx={x + w * 0.66} cy={y + h * 0.44} r={h * 0.27} /><rect class={t} x={x} y={y + h * 0.7} width={w} height={h * 0.3} /></>)}
+                  {c.i === 1 && (<><path class={t} d={`M${x} ${y + h}L${x + w * 0.32} ${y + h * 0.38}L${x + w * 0.54} ${y + h * 0.74}L${x + w * 0.73} ${y + h * 0.46}L${x + w} ${y + h * 0.9}V${y + h}Z`} /><circle class={t} cx={x + w * 0.26} cy={y + h * 0.28} r={h * 0.1} /></>)}
+                  {c.i === 2 && [34, 58, 46, 72, 26].map((bh, b) => <rect class={t} x={x + w * 0.14 + b * w * 0.15} y={y + h - 12 - bh * h / 100} width={w * 0.09} height={bh * h / 100} rx="1.5" />)}
+                  {c.i === 3 && (<><circle class={t} cx={x + w * 0.41} cy={y + h / 2} r={h * 0.32} /><circle class={t} cx={x + w * 0.61} cy={y + h / 2} r={h * 0.32} /></>)}
+                  <circle class="av" cx={x + 6} cy={y + h + 14} r="5.5" />
+                  <line class="cap" x1={x + 18} x2={x + 18 + caps[c.i][0]} y1={y + h + 10.5} y2={y + h + 10.5} />
+                  <line class="cap c2" x1={x + 18} x2={x + 18 + caps[c.i][1]} y1={y + h + 18} y2={y + h + 18} />
+                </g>
+              );
+            })}
+          </g>
+          <g class="toast" opacity="0">
+            <rect class="toast-r" x={SW.x + 10} y={SW.y + SW.h - 42} width={SW.w - 20} height="30" rx="15" />
+            <circle class="dot-accent" cx={SW.x + 25} cy={SW.y + SW.h - 27} r="3" />
+            <text class="toast-t" x={SW.x + 34} y={SW.y + SW.h - 23}>Response ready</text>
+            <path class="toast-a" d={`M${SW.x + SW.w - 22} ${SW.y + SW.h - 31}v3.5a2 2 0 0 1 -2 2h-8M${SW.x + SW.w - 29} ${SW.y + SW.h - 29}l-3 1.5l3 1.5`} />
+          </g>
+        </g>
+      </g>
+    </g>
+  </svg>
+  <Fragment slot="caption">Drift is a Chrome extension, Featured on the Chrome Web Store. When ChatGPT, Claude or Gemini starts thinking, it asks if you want to scroll while you wait, opens your feed in a focused side window, and brings you back when the answer is ready.</Fragment>
+</Figure>
+
+<style is:global>
+  .fig svg.dr text { font-size: 11px; fill: var(--ink-3); }
+  .fig svg.dr text.cm, .fig svg.dr text.m { font-size: 12px; }
+  .fig svg.dr .mi { font-family: var(--math); font-style: italic; font-size: 14.5px; letter-spacing: 0; }
+  .fig svg.dr .mr { font-family: var(--cm); font-size: 14px; letter-spacing: 0; }
+  .fig svg.dr .sup { font-size: 10px; }
+  .fig svg.dr text.fr { font-size: 13px; fill: var(--ink); }
+  .fig svg.dr text.fr .mi { font-size: 13px; }
+  .fig svg.dr .fr-bar { stroke: var(--ink); stroke-width: 0.9; }
+
+  .fig svg.dr .win { fill: var(--panel); stroke: var(--ink); stroke-width: 1.25; transition: stroke 0.3s; }
+  .fig svg.dr .blur .win { stroke: var(--ink-4); }
+  .fig svg.dr .ring { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .fig svg.dr .strip { fill: var(--panel-2); }
+  .fig svg.dr .tab { fill: var(--panel); stroke: var(--hair); }
+  .fig svg.dr .fav { fill: none; stroke: var(--ink-3); stroke-width: 1.1; }
+  .fig svg.dr .fav-d { fill: var(--ink-3); }
+  .fig svg.dr .fav-sq { fill: none; stroke: var(--ink-4); }
+  .fig svg.dr text.tab-t { font-size: 11px; fill: var(--ink); }
+  .fig svg.dr text.tab-t .mi { font-size: 12.5px; }
+  .fig svg.dr text.tab-t .sup { font-size: 8.5px; }
+  .fig svg.dr text.tab-t.off { fill: var(--ink-3); }
+  .fig svg.dr .ico { fill: none; stroke: var(--ink-2); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.dr .ico-f { fill: none; stroke: var(--ink-4); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.dr .kebab { fill: var(--ink-2); }
+  .fig svg.dr .omni { fill: var(--panel-2); }
+  .fig svg.dr text.url { font-size: 10.5px; fill: var(--ink-3); }
+  .fig svg.dr .url .u1 { fill: var(--ink); }
+  .fig svg.dr .dicon-bg { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; }
+  .fig svg.dr .dicon-g { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; }
+  .fig svg.dr .dicon-bg.on, .fig svg.dr .dicon.on .dicon-bg { fill: var(--accent); stroke: var(--accent); }
+  .fig svg.dr .dicon-g.on, .fig svg.dr .dicon.on .dicon-g { stroke: var(--panel); }
+  .fig svg.dr .badge { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+
+  .fig svg.dr text.chat { font-size: 12.5px; fill: var(--ink); }
+  .fig svg.dr .bub { fill: var(--panel-2); stroke: var(--hair); }
+  .fig svg.dr .mark { fill: var(--ink-3); }
+  .fig svg.dr text.think-base { fill: var(--ink-4); }
+  .fig svg.dr text.think-hi { fill: var(--ink); }
+  .fig svg.dr text.ans { white-space: pre; }
+  .fig svg.dr .caret { fill: var(--ink); }
+  .fig svg.dr .input { fill: var(--panel); stroke: var(--ink-4); }
+  .fig svg.dr text.ph { font-size: 12px; fill: var(--ink-3); }
+  .fig svg.dr .send { fill: var(--ink); }
+  .fig svg.dr .send-a { fill: none; stroke: var(--panel); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.dr .send-s { fill: var(--panel); }
+
+  .fig svg.dr .pop { fill: var(--panel); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.dr text.pop-n { font-size: 11px; fill: var(--ink); font-weight: 500; }
+  .fig svg.dr text.pop-t { font-size: 13px; fill: var(--ink); font-weight: 500; }
+  .fig svg.dr text.pop-s { font-size: 10.5px; fill: var(--ink-3); }
+  .fig svg.dr .btn-n { fill: var(--panel); stroke: var(--ink-4); }
+  .fig svg.dr text.btn-t { font-size: 10.5px; fill: var(--ink-2); }
+  .fig svg.dr .btn-y { fill: var(--accent); }
+  .fig svg.dr text.btn-yt { font-size: 10.5px; fill: var(--panel); font-weight: 500; }
+  .fig svg.dr .cursor { fill: var(--panel); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
+
+  .fig svg.dr .sw { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1.25; }
+  .fig svg.dr .side.focus .sw { stroke: var(--ink); }
+  .fig svg.dr .wdot { fill: var(--hair); }
+  .fig svg.dr text.sw-t { font-size: 10px; fill: var(--ink-3); }
+  .fig svg.dr .av { fill: rgb(20 20 19 / 0.08); }
+  .fig svg.dr .cap { stroke: rgb(20 20 19 / 0.1); stroke-width: 4; stroke-linecap: round; }
+  .fig svg.dr .cap.c2 { stroke: rgb(20 20 19 / 0.06); }
+  .fig svg.dr .toast-r { fill: var(--panel); stroke: var(--ink); stroke-width: 1; }
+  .fig svg.dr text.toast-t { font-size: 11px; fill: var(--ink); font-weight: 500; }
+  .fig svg.dr text.toast-s { font-size: 10.5px; fill: var(--accent); }
+
+  .fig svg.dr .mob { display: none; }
+  .fig svg.dr text.side-t { font-size: 11px; fill: var(--ink); }
+  .fig svg.dr text.side-h { font-size: 9.5px; fill: var(--ink-3); }
+  .fig svg.dr .hist { stroke: rgb(20 20 19 / 0.1); stroke-width: 4; stroke-linecap: round; }
+  .fig svg.dr .hist.on { stroke: rgb(20 20 19 / 0.22); }
+  .fig svg.dr .hist-on { fill: var(--panel-2); }
+  .fig svg.dr .tcaret { fill: var(--accent); }
+  .fig svg.dr .toast-a { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+
+  @media (max-width: 560px) {
+    .fig svg.dr { aspect-ratio: 640 / var(--hm); }
+    .fig svg.dr .blk, .fig svg.dr .chat-col, .fig svg.dr .tb-right { transform: var(--m); }
+    .fig svg.dr .dsk { display: none; }
+    .fig svg.dr .mob { display: inline; }
+  }
+</style>

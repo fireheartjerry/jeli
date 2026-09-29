@@ -1,0 +1,733 @@
+{
+"source": "Google Analytics 4, all time to 2026-09-27",
+"countries": [
+{
+"name": "Singapore",
+"engagedSessions": 4920
+},
+{
+"name": "China",
+"engagedSessions": 845
+},
+{
+"name": "United States",
+"engagedSessions": 5592
+},
+{
+"name": "Brazil",
+"engagedSessions": 740
+},
+{
+"name": "Canada",
+"engagedSessions": 17260
+},
+{
+"name": "Vietnam",
+"engagedSessions": 259
+},
+{
+"name": "Pakistan",
+"engagedSessions": 242
+},
+{
+"name": "India",
+"engagedSessions": 602
+},
+{
+"name": "Bangladesh",
+"engagedSessions": 125
+},
+{
+"name": "Ukraine",
+"engagedSessions": 136
+},
+{
+"name": "Argentina",
+"engagedSessions": 145
+},
+{
+"name": "Mexico",
+"engagedSessions": 132
+},
+{
+"name": "South Africa",
+"engagedSessions": 162
+},
+{
+"name": "France",
+"engagedSessions": 86
+},
+{
+"name": "Iraq",
+"engagedSessions": 112
+},
+{
+"name": "Colombia",
+"engagedSessions": 92
+},
+{
+"name": "Saudi Arabia",
+"engagedSessions": 106
+},
+{
+"name": "Russia",
+"engagedSessions": 107
+},
+{
+"name": "Venezuela",
+"engagedSessions": 78
+},
+{
+"name": "Uzbekistan",
+"engagedSessions": 178
+},
+{
+"name": "Morocco",
+"engagedSessions": 97
+},
+{
+"name": "Indonesia",
+"engagedSessions": 106
+},
+{
+"name": "Chile",
+"engagedSessions": 64
+},
+{
+"name": "United Kingdom",
+"engagedSessions": 264
+},
+{
+"name": "Kenya",
+"engagedSessions": 62
+},
+{
+"name": "Tunisia",
+"engagedSessions": 65
+},
+{
+"name": "United Arab Emirates",
+"engagedSessions": 84
+},
+{
+"name": "Germany",
+"engagedSessions": 83
+},
+{
+"name": "Ecuador",
+"engagedSessions": 46
+},
+{
+"name": "Jordan",
+"engagedSessions": 41
+},
+{
+"name": "Nigeria",
+"engagedSessions": 88
+},
+{
+"name": "Kazakhstan",
+"engagedSessions": 45
+},
+{
+"name": "T\u00fcrkiye",
+"engagedSessions": 64
+},
+{
+"name": "Azerbaijan",
+"engagedSessions": 32
+},
+{
+"name": "Egypt",
+"engagedSessions": 71
+},
+{
+"name": "Algeria",
+"engagedSessions": 43
+},
+{
+"name": "Hong Kong",
+"engagedSessions": 155
+},
+{
+"name": "Oman",
+"engagedSessions": 28
+},
+{
+"name": "Israel",
+"engagedSessions": 30
+},
+{
+"name": "Thailand",
+"engagedSessions": 86
+},
+{
+"name": "Malaysia",
+"engagedSessions": 191
+},
+{
+"name": "Philippines",
+"engagedSessions": 59
+},
+{
+"name": "Spain",
+"engagedSessions": 59
+},
+{
+"name": "Nepal",
+"engagedSessions": 17
+},
+{
+"name": "Peru",
+"engagedSessions": 39
+},
+{
+"name": "Paraguay",
+"engagedSessions": 29
+},
+{
+"name": "Italy",
+"engagedSessions": 44
+},
+{
+"name": "Japan",
+"engagedSessions": 107
+},
+{
+"name": "Netherlands",
+"engagedSessions": 139
+},
+{
+"name": "South Korea",
+"engagedSessions": 141
+},
+{
+"name": "Australia",
+"engagedSessions": 58
+},
+{
+"name": "Syria",
+"engagedSessions": 35
+},
+{
+"name": "Uruguay",
+"engagedSessions": 18
+},
+{
+"name": "Ethiopia",
+"engagedSessions": 32
+},
+{
+"name": "Albania",
+"engagedSessions": 22
+},
+{
+"name": "Iran",
+"engagedSessions": 59
+},
+{
+"name": "Senegal",
+"engagedSessions": 13
+},
+{
+"name": "Dominican Republic",
+"engagedSessions": 21
+},
+{
+"name": "Taiwan",
+"engagedSessions": 59
+},
+{
+"name": "Poland",
+"engagedSessions": 80
+},
+{
+"name": "Bolivia",
+"engagedSessions": 15
+},
+{
+"name": "Ireland",
+"engagedSessions": 15
+},
+{
+"name": "Palestine",
+"engagedSessions": 4
+},
+{
+"name": "C\u00f4te d\u2019Ivoire",
+"engagedSessions": 19
+},
+{
+"name": "Romania",
+"engagedSessions": 59
+},
+{
+"name": "Qatar",
+"engagedSessions": 16
+},
+{
+"name": "Bulgaria",
+"engagedSessions": 19
+},
+{
+"name": "Myanmar (Burma)",
+"engagedSessions": 19
+},
+{
+"name": "Jamaica",
+"engagedSessions": 8
+},
+{
+"name": "Lebanon",
+"engagedSessions": 17
+},
+{
+"name": "Bahrain",
+"engagedSessions": 4
+},
+{
+"name": "Georgia",
+"engagedSessions": 19
+},
+{
+"name": "Greece",
+"engagedSessions": 31
+},
+{
+"name": "Moldova",
+"engagedSessions": 11
+},
+{
+"name": "Belarus",
+"engagedSessions": 10
+},
+{
+"name": "Angola",
+"engagedSessions": 16
+},
+{
+"name": "Cambodia",
+"engagedSessions": 9
+},
+{
+"name": "Serbia",
+"engagedSessions": 11
+},
+{
+"name": "Costa Rica",
+"engagedSessions": 7
+},
+{
+"name": "Hungary",
+"engagedSessions": 10
+},
+{
+"name": "Congo - Brazzaville",
+"engagedSessions": 15
+},
+{
+"name": "Togo",
+"engagedSessions": 12
+},
+{
+"name": "Armenia",
+"engagedSessions": 8
+},
+{
+"name": "Bosnia & Herzegovina",
+"engagedSessions": 7
+},
+{
+"name": "Portugal",
+"engagedSessions": 9
+},
+{
+"name": "Panama",
+"engagedSessions": 8
+},
+{
+"name": "Sweden",
+"engagedSessions": 26
+},
+{
+"name": "Kuwait",
+"engagedSessions": 7
+},
+{
+"name": "Kyrgyzstan",
+"engagedSessions": 6
+},
+{
+"name": "Honduras",
+"engagedSessions": 7
+},
+{
+"name": "Belgium",
+"engagedSessions": 9
+},
+{
+"name": "Czechia",
+"engagedSessions": 11
+},
+{
+"name": "Mongolia",
+"engagedSessions": 12
+},
+{
+"name": "New Zealand",
+"engagedSessions": 8
+},
+{
+"name": "Sri Lanka",
+"engagedSessions": 10
+},
+{
+"name": "Austria",
+"engagedSessions": 19
+},
+{
+"name": "Guatemala",
+"engagedSessions": 7
+},
+{
+"name": "Croatia",
+"engagedSessions": 12
+},
+{
+"name": "Slovakia",
+"engagedSessions": 4
+},
+{
+"name": "Lithuania",
+"engagedSessions": 7
+},
+{
+"name": "El Salvador",
+"engagedSessions": 4
+},
+{
+"name": "Switzerland",
+"engagedSessions": 13
+},
+{
+"name": "Gabon",
+"engagedSessions": 6
+},
+{
+"name": "Latvia",
+"engagedSessions": 5
+},
+{
+"name": "Norway",
+"engagedSessions": 9
+},
+{
+"name": "Kosovo",
+"engagedSessions": 8
+},
+{
+"name": "North Macedonia",
+"engagedSessions": 9
+},
+{
+"name": "Mauritius",
+"engagedSessions": 4
+},
+{
+"name": "Trinidad & Tobago",
+"engagedSessions": 1
+},
+{
+"name": "Puerto Rico",
+"engagedSessions": 8
+},
+{
+"name": "Nicaragua",
+"engagedSessions": 2
+},
+{
+"name": "Botswana",
+"engagedSessions": 3
+},
+{
+"name": "Cyprus",
+"engagedSessions": 6
+},
+{
+"name": "Luxembourg",
+"engagedSessions": 15
+},
+{
+"name": "Mali",
+"engagedSessions": 1
+},
+{
+"name": "Guyana",
+"engagedSessions": 6
+},
+{
+"name": "Brunei",
+"engagedSessions": 3
+},
+{
+"name": "Denmark",
+"engagedSessions": 6
+},
+{
+"name": "Malta",
+"engagedSessions": 0
+},
+{
+"name": "Burkina Faso",
+"engagedSessions": 3
+},
+{
+"name": "Estonia",
+"engagedSessions": 4
+},
+{
+"name": "Finland",
+"engagedSessions": 5
+},
+{
+"name": "Ghana",
+"engagedSessions": 5
+},
+{
+"name": "Uganda",
+"engagedSessions": 4
+},
+{
+"name": "Slovenia",
+"engagedSessions": 2
+},
+{
+"name": "Maldives",
+"engagedSessions": 3
+},
+{
+"name": "Cuba",
+"engagedSessions": 0
+},
+{
+"name": "Guadeloupe",
+"engagedSessions": 0
+},
+{
+"name": "Laos",
+"engagedSessions": 2
+},
+{
+"name": "Tajikistan",
+"engagedSessions": 0
+},
+{
+"name": "Tanzania",
+"engagedSessions": 1
+},
+{
+"name": "Fiji",
+"engagedSessions": 6
+},
+{
+"name": "Western Sahara",
+"engagedSessions": 1
+},
+{
+"name": "Zimbabwe",
+"engagedSessions": 2
+},
+{
+"name": "Congo - Kinshasa",
+"engagedSessions": 0
+},
+{
+"name": "Libya",
+"engagedSessions": 1
+},
+{
+"name": "Rwanda",
+"engagedSessions": 5
+},
+{
+"name": "Bahamas",
+"engagedSessions": 0
+},
+{
+"name": "Cameroon",
+"engagedSessions": 1
+},
+{
+"name": "Cura\u00e7ao",
+"engagedSessions": 0
+},
+{
+"name": "Macao",
+"engagedSessions": 3
+},
+{
+"name": "Madagascar",
+"engagedSessions": 1
+},
+{
+"name": "Namibia",
+"engagedSessions": 1
+},
+{
+"name": "Cape Verde",
+"engagedSessions": 0
+},
+{
+"name": "Montenegro",
+"engagedSessions": 0
+},
+{
+"name": "Mozambique",
+"engagedSessions": 0
+},
+{
+"name": "R\u00e9union",
+"engagedSessions": 0
+},
+{
+"name": "Zambia",
+"engagedSessions": 0
+},
+{
+"name": "Benin",
+"engagedSessions": 6
+},
+{
+"name": "Iceland",
+"engagedSessions": 2
+},
+{
+"name": "New Caledonia",
+"engagedSessions": 2
+},
+{
+"name": "Seychelles",
+"engagedSessions": 2
+},
+{
+"name": "South Sudan",
+"engagedSessions": 1
+},
+{
+"name": "Afghanistan",
+"engagedSessions": 0
+},
+{
+"name": "Anguilla",
+"engagedSessions": 0
+},
+{
+"name": "Barbados",
+"engagedSessions": 0
+},
+{
+"name": "Bermuda",
+"engagedSessions": 0
+},
+{
+"name": "Bhutan",
+"engagedSessions": 1
+},
+{
+"name": "British Virgin Islands",
+"engagedSessions": 0
+},
+{
+"name": "Cayman Islands",
+"engagedSessions": 0
+},
+{
+"name": "Djibouti",
+"engagedSessions": 0
+},
+{
+"name": "Faroe Islands",
+"engagedSessions": 0
+},
+{
+"name": "French Guiana",
+"engagedSessions": 0
+},
+{
+"name": "Gambia",
+"engagedSessions": 1
+},
+{
+"name": "Grenada",
+"engagedSessions": 0
+},
+{
+"name": "Guernsey",
+"engagedSessions": 0
+},
+{
+"name": "Jersey",
+"engagedSessions": 1
+},
+{
+"name": "Liechtenstein",
+"engagedSessions": 0
+},
+{
+"name": "Malawi",
+"engagedSessions": 0
+},
+{
+"name": "Martinique",
+"engagedSessions": 0
+},
+{
+"name": "Mayotte",
+"engagedSessions": 0
+},
+{
+"name": "Monaco",
+"engagedSessions": 0
+},
+{
+"name": "Niger",
+"engagedSessions": 0
+},
+{
+"name": "San Marino",
+"engagedSessions": 1
+},
+{
+"name": "Sint Maarten",
+"engagedSessions": 0
+},
+{
+"name": "Somalia",
+"engagedSessions": 0
+},
+{
+"name": "St. Lucia",
+"engagedSessions": 0
+},
+{
+"name": "St. Vincent & Grenadines",
+"engagedSessions": 1
+},
+{
+"name": "Suriname",
+"engagedSessions": 1
+},
+{
+"name": "Turkmenistan",
+"engagedSessions": 1
+},
+{
+"name": "Turks & Caicos Islands",
+"engagedSessions": 0
+},
+{
+"name": "U.S. Virgin Islands",
+"engagedSessions": 0
+}
+]
+}

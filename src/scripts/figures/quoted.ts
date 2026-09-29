@@ -23,13 +23,25 @@ export default function (root: HTMLElement) {
   const op = (el: Element, v: number) => ((el as SVGElement).style.opacity = v.toFixed(3));
 
   // ---- scrape ----
-  const wins = qa<SVGGElement>(root, ".win");
   const cards = qa<SVGGElement>(root, ".card");
   const sel = q<SVGGElement>(root, ".sel");
-  const cardPos = cards.map((c) => {
-    const r = c.querySelector(".card-r")!;
-    const x = Number(r.getAttribute("x")), y = Number(r.getAttribute("y"));
-    return { x: x + 36, y: y + 33.5 }; // price box: 58 x 15 from (x+36, y+21.5)
+  const selBox = q<SVGRectElement>(sel, ".sel-r");
+  const selTag = q<SVGGElement>(sel, ".sel-tg");
+  // Each price's own box, inset 3 units around its text (measured once fonts
+  // are in). The selector is positioned and sized only by transforms.
+  const prices = cards.map((c) => q<SVGTextElement>(c, ".price"));
+  let boxes: { x: number; y: number; w: number; h: number }[] = [];
+  const measureBoxes = () => {
+    boxes = prices.map((p) => {
+      const b = p.getBBox();
+      return { x: b.x - 3, y: b.y - 3, w: b.width + 6, h: b.height + 6 };
+    });
+  };
+  measureBoxes();
+  document.fonts?.ready.then(() => {
+    measureBoxes();
+    measure();
+    render();
   });
 
   // ---- table + plot ----
@@ -110,7 +122,7 @@ export default function (root: HTMLElement) {
     const pt = (m: DOMMatrix, x: number, y: number) => new DOMPoint(x, y).matrixTransform(m);
     paths = cards.map((_, i) => {
       const bg = rows[i].querySelector(".row-bg")!;
-      const a = pt(mA, cardPos[i].x + 29, cardPos[i].y - 4.5);
+      const a = pt(mA, boxes[i].x + boxes[i].w / 2, boxes[i].y + boxes[i].h / 2);
       const b = pt(mB, Number(bg.getAttribute("x")) + Number(bg.getAttribute("width")) - 40, Number(bg.getAttribute("y")) + 8.5);
       return { ax: a.x, ay: a.y, bx: b.x, by: b.y, s: mA.a };
     });
@@ -175,14 +187,10 @@ export default function (root: HTMLElement) {
   function render() {
     let t = K.scrape;
     // 1. windows and cards
-    wins.forEach((w, i) => {
-      const u = e3(phase(t, 0.05 + i * 0.14, 0.5 + i * 0.14));
-      op(w, u);
-      w.setAttribute("transform", `translate(0 ${((1 - u) * 6).toFixed(2)})`);
-    });
+    // window frames are there from the start; the cards load in
     cards.forEach((c, i) => {
       const wi = Math.floor(i / 2);
-      const u = e3(phase(t, 0.2 + wi * 0.14 + (i % 2) * 0.06, 0.6 + wi * 0.14 + (i % 2) * 0.06));
+      const u = e3(phase(t, 0.02 + wi * 0.12 + (i % 2) * 0.06, 0.4 + wi * 0.12 + (i % 2) * 0.06));
       op(c, u);
       c.setAttribute("transform", `translate(0 ${((1 - u) * 6).toFixed(2)})`);
     });
@@ -190,9 +198,11 @@ export default function (root: HTMLElement) {
     // selector hops price to price
     const k = Math.min(5, Math.max(0, Math.floor((t - X0 + 0.2) / XS)));
     const hop = e3(phase(t, X0 + k * XS - 0.2, X0 + k * XS));
-    const from = cardPos[Math.max(0, k - 1)], to = cardPos[k];
-    const sx = k === 0 ? to.x : lerp(from.x, to.x, hop), sy = k === 0 ? to.y : lerp(from.y, to.y, hop);
-    sel.setAttribute("transform", `translate(${sx.toFixed(2)} ${sy.toFixed(2)})`);
+    const A = boxes[Math.max(0, k - 1)], B = boxes[k];
+    const m = k === 0 ? 1 : hop;
+    const bx = lerp(A.x, B.x, m), by = lerp(A.y, B.y, m), bw = lerp(A.w, B.w, m), bh = lerp(A.h, B.h, m);
+    selBox.setAttribute("transform", `translate(${bx.toFixed(2)} ${by.toFixed(2)}) scale(${bw.toFixed(2)} ${bh.toFixed(2)})`);
+    selTag.setAttribute("transform", `translate(${bx.toFixed(2)} ${by.toFixed(2)})`);
     op(sel, Math.min(phase(t, X0 - 0.25, X0 - 0.05), 1 - phase(t, X0 + 5 * XS + 0.45, X0 + 5 * XS + 0.65)));
 
     // pills fly from each price into its table row; rows land
@@ -298,13 +308,12 @@ export default function (root: HTMLElement) {
     t = Math.max(K.scrape, K.table, K.queue, K.print, K.band);
     n = rows.filter((r) => Number(r.style.opacity) > 0.5).length;
     let s: string;
-    if (t < X0 - 0.1) s = "scraping";
-    else if (t < 3.7) s = `scraping ${n} / 6`;
-    else if (t < 4.85) s = "pricing data";
-    else if (t < 5.4) s = "POST /labels 200";
-    else if (t < 7.1) s = "printing job 412";
-    else if (t < A0 + 1.3) s = "manual vs automated";
-    else s = "−70% processing time";
+    if (t < 3.7) s = `scraped ${n} / 6`;
+    else if (t < 4.85) s = "priced";
+    else if (t < 5.4) s = "POST 200";
+    else if (t < 7.1) s = "printing";
+    else if (t < A0 + 1.3) s = "timing";
+    else s = "−70% time";
     if (readout && readout.textContent !== s) readout.textContent = s;
   }
 
@@ -323,7 +332,7 @@ export default function (root: HTMLElement) {
   };
   const mm = gsap.matchMedia();
   mm.add("(min-width: 561px)", () => {
-    const tl = scrubbed(root, { start: "top 80%", end: "bottom 45%" });
+    const tl = scrubbed(root, { start: "top 85%", end: "center 45%" });
     const clock = { t: 0 };
     tl.to(clock, { t: T, duration: T, ease: "none" });
     tl.eventCallback("onUpdate", () => {

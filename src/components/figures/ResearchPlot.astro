@@ -11,15 +11,19 @@ const wide = mode === "wide";
 
 const W = wide ? 640 : 400;
 const L = wide ? 80 : 54, R = wide ? 412 : 392; // plot box, shared by all three panels
-const T = wide ? 34 : 32, B = wide ? 198 : 184; // plot top and bottom, relative to the panel's top
-const XT = wide ? 30 : 27; // x-axis title below B
+const T = wide ? 26 : 50, B = wide ? 154 : 202; // plot top and bottom, relative to the panel's top
+// x-axis titles: in the tick row on wide plates (xAt gives each panel's gap), on their own row on phones.
+const XT = wide ? 8 : 27;
 const SX = wide ? 440 : 1, SW = wide ? 198 : 398; // inset column
 const INS_H = wide ? [0, 0, 0] : [104, 132, 150];
 const insTop = () => (wide ? T - 4 : B + 54); // relative to the panel's top
 const insH = (k: number) => (wide ? B - T + 8 : INS_H[k]);
-const panelH = (k: number) => (wide ? 286 : B + 54 + INS_H[k] + 42);
+const PW = 206; // wide panel pitch
+const panelH = (k: number) => (wide ? PW : B + 54 + INS_H[k] + 42);
 const Y0 = [0, panelH(0), panelH(0) + panelH(1)];
-const H = wide ? 2 * 286 + B + 56 : Y0[2] + B + 54 + INS_H[2] + 4;
+const H = wide ? 2 * PW + B + 24 : Y0[2] + B + 54 + INS_H[2] + 4;
+const xAt = () => (wide ? L - 14 : (L + R) / 2);
+const xAnchor = wide ? "end" : "middle";
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 type Pt = [number, number];
@@ -45,7 +49,7 @@ const aSep = QS.map((q0) => aBallistic(A.fmax, q0));
 const lEnd = QS.map((q0) => lBallistic(A.fmax, q0));
 const aC = { x: ax(0.05), y: ay(1 - 0.05) };
 const aIn = { y0: A.y0 + insTop(), h: insH(0) };
-const aRow = (i: number) => aIn.y0 + 48 + i * 24; // wide list rows
+const aRow = (i: number) => aIn.y0 + 42 + i * 20; // wide list rows
 const aCol = [SX + 196, SX + 292, SX + 384]; // narrow table columns (right edges)
 
 // (b) JHSS 2026. q0 = 2, 15% of the donor moved over 50 orbits. With the
@@ -59,8 +63,8 @@ const bCurve: Pt[] = Array.from({ length: 51 }, (_, i) => [bx(i), by(aClosure(i,
 const aFinal = aClosure(Bp.tmax, Bp.q0, Bp.tmax); // 0.8190
 const err = (1 / aFinal - 1) * 100; // 22.1%
 const yOne = by(1), yFin = by(aFinal);
-const bLt = wide ? 30 : 13;
-const bLead = { x: bx(bLt), y: by(aClosure(bLt, Bp.q0, Bp.tmax)), v: wide ? 0.945 : 0.962 };
+// The closure's label sits right-aligned above the curve, with a tick down to it.
+const bLead = { x: bx(38), y: by(aClosure(38, Bp.q0, Bp.tmax)), v: 0.95 };
 // Zoom on the last orbits.
 const Z = { t0: 44, t1: 50, lo: 0.81, hi: 0.8335 };
 const zIn = { x0: SX, x1: SX + SW, y0: Bp.y0 + insTop(), y1: Bp.y0 + insTop() + insH(1) };
@@ -74,7 +78,7 @@ const zBox = { x0: bx(Z.t0), x1: bx(Z.t1), y0: by(Z.hi), y1: by(Z.lo) };
 const zBrk = { x: SX + SW - 12, top: zIn.y0 + 12, bot: zy(aFinal) };
 const zCon = wide
   ? `M${zBox.x1} ${zBox.y0}L${zIn.x0} ${zIn.y0 + 7}M${zBox.x1} ${zBox.y1}L${zIn.x0} ${zIn.y1 - 7}`
-  : `M${zBox.x0} ${zBox.y1}L${zx(Z.t0)} ${zIn.y0}M${zBox.x1} ${zBox.y1}L${zx(Z.t1)} ${zIn.y0}`;
+  : `M${r2((zBox.x0 + zBox.x1) / 2)} ${zBox.y1}V${zIn.y0}`; // straight down, between the tick labels
 
 // (c) arXiv:2608.19107. Normalized orbital response to a parcel δm moved
 // with effective velocity η v1 + (1 − η) v2: (ΔL/L)/δm = (1 - η) - η/q, in
@@ -84,16 +88,15 @@ const cx = (eta: number) => r2(L + eta * (R - L));
 const cy = (v: number) => r2(C.y0 + B - ((v - C.lo) / (C.hi - C.lo)) * (B - T));
 const cLines = QS.map((q) => ({ q, x0: cx(0), y0: cy(1), x1: cx(1), y1: cy(respL(1, q)), ec: q / (1 + q) }));
 const ecLabel = (v: number) => v.toFixed(3).replace(/0+$/, "");
-const cCall = { x: cx(cLines[2].ec), y: cy(0) };
 // Binary diagram, final state: q = 1, ballistic (η = 1).
 const bnIn = { x0: SX, x1: SX + SW, y0: C.y0 + insTop(), y1: C.y0 + insTop() + insH(2) };
 const BN = wide
-  ? { cx: SX + 62, cy: bnIn.y0 + 80, th: -0.55, qi: 1, eta: 1, k: 1 }
+  ? { cx: SX + 56, cy: bnIn.y0 + 80, th: -0.55, qi: 1, eta: 1, k: 0.9 }
   : { cx: SX + 90, cy: bnIn.y0 + 76, th: -0.55, qi: 1, eta: 1, k: 1.2 };
 const bn = binary(QS[BN.qi], BN.eta, BN.th, BN.cx, BN.cy, BN.k);
 // Right-hand column of the diagram's inset.
 const RC = wide
-  ? { chipY: bnIn.y0 + 18, chipX: [SX + 62, SX + 110, SX + 148], qx: SX + 12, eta: bnIn.y0 + 62, verd: bnIn.y0 + 82, dl: bnIn.y1 - 32, da: bnIn.y1 - 13, rule: bnIn.y1 - 46, lx: SX + 12 }
+  ? { chipY: bnIn.y0 + 17, chipX: [SX + 64, SX + 112, SX + 150], qx: SX + 12, eta: bnIn.y0 + 46, verd: bnIn.y0 + 64, dl: bnIn.y0 + 98, da: bnIn.y0 + 118, rule: bnIn.y0 + 81, lx: SX + 104 }
   : { chipY: bnIn.y0 + 20, chipX: [SX + 250, SX + 306, SX + 350], qx: SX + 186, eta: bnIn.y0 + 56, verd: bnIn.y0 + 78, dl: bnIn.y0 + 110, da: bnIn.y0 + 132, rule: bnIn.y0 + 94, lx: SX + 186 };
 const arrowAng = -2.35; // radial arrow on the donor's ring, upper left
 const arr = (e: number, r: number) => {
@@ -124,10 +127,12 @@ const G = {
 };
 
 const heads = [
-  { k: "a", venue: "RNAAS 2026", what: "Angular momentum after ballistic transfer" },
-  { k: "b", venue: "JHSS 2026", what: "Separation over 50 orbits, two mappings" },
-  { k: "c", venue: "arXiv 2026", what: "Angular momentum change against η" },
+  { k: "a", venue: "RNAAS 2026" },
+  { k: "b", venue: "JHSS 2026" },
+  { k: "c", venue: "arXiv 2026" },
 ];
+// Subtitle position: beside the venue on wide plates, on a second line on phones.
+const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] + 29 });
 ---
 
 <svg
@@ -138,8 +143,13 @@ const heads = [
   aria-label={`Three panels. (a) Under ballistic transfer the orbital angular momentum falls as 1 minus f for mass ratios 0.4, 1 and 2, all on one line, although their separations end at ${aSep.map((v) => v.toFixed(3)).join(", ")}. (b) At q0 = 2, moving 15% of the donor over 50 orbits: with no closure the separation stays at 1, with velocity rescaling it falls to the analytic ${aFinal.toFixed(3)}, a ${err.toFixed(1)}% difference; an inset zooms on the last six orbits. (c) The normalized angular momentum response (1 minus eta) minus eta over q crosses zero at eta = q/(1+q). A diagram of the two stars shows whether their separation grows or shrinks, which changes sign at eta = 1/(1+q).`}
 >
   {heads.map((h, k) => (
-    <text class="plab" x="0" y={Y0[k] + 9} dominant-baseline="central" aria-hidden="true"><tspan class="pl">({h.k})</tspan><tspan class="k" dx="7">{h.venue}</tspan><tspan dx="9">{h.what}</tspan></text>
+    <text class="plab" x="0" y={Y0[k] + 9} dominant-baseline="central" aria-hidden="true"><tspan class="pl">({h.k})</tspan><tspan class="k" dx="7">{h.venue}</tspan></text>
   ))}
+  <g class="psub" aria-hidden="true">
+    <text x={sub(0).x} y={sub(0).y} dominant-baseline="central">Ballistic transfer: <tspan class="mi">L</tspan>/<tspan class="mi">L</tspan><tspan class="sbs" dy="3">0</tspan><tspan dy="-3"> = 1 − </tspan><tspan class="mi">f</tspan> for every <tspan class="mi">q</tspan><tspan class="sbs" dy="3">0</tspan></text>
+    <text x={sub(1).x} y={sub(1).y} dominant-baseline="central">The closure reaches the analytic <tspan class="mi">a</tspan>/<tspan class="mi">a</tspan><tspan class="sbs" dy="3">0</tspan><tspan dy="-3">; no closure is {err.toFixed(1)}% off</tspan></text>
+    <text x={sub(2).x} y={sub(2).y} dominant-baseline="central">Δ<tspan class="mi">L</tspan> flips sign at η = <tspan class="mi">q</tspan>/(1 + <tspan class="mi">q</tspan>), the separation at 1/(1 + <tspan class="mi">q</tspan>)</text>
+  </g>
 
   <!-- (a) -->
   <g class="pa" aria-hidden="true">
@@ -157,7 +167,7 @@ const heads = [
       </>
     ))}
     <text class="m yl" transform={`translate(12 ${A.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle">L<tspan class="u">/</tspan>L<tspan class="sb" dy="3">0</tspan></text>
-    <text class="m xl" x={(L + R) / 2} y={A.y0 + B + XT} text-anchor="middle" dominant-baseline="hanging">f<tspan class="u"> = Δ</tspan>M<tspan class="u">/</tspan>M<tspan class="sb" dy="3">d0</tspan></text>
+    <text class="m xl" x={xAt()} y={A.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging">{wide ? "f" : <>f<tspan class="u"> = Δ</tspan>M<tspan class="u">/</tspan>M<tspan class="sb" dy="3">d0</tspan></>}</text>
 
     <path class="dash ref" d={`M${ax(0)} ${ay(1)}L${ax(A.fmax)} ${ay(1 - A.fmax)}`} />
     {aCurves.map((pts, i) => <path class={`lc s-${QCOL[i]}`} d={pathOf(pts)} stroke-dashoffset={-7 * i} />)}
@@ -172,9 +182,9 @@ const heads = [
       <rect class="inset" x={SX} y={aIn.y0} width={SW} height={aIn.h} rx="7" />
       {wide ? (
         <>
-          <text class="ann" x={SX + 12} y={aIn.y0 + 18} dominant-baseline="central">at <tspan class="mi">f</tspan> = 15%</text>
-          <text class="m hd" x={SX + SW - 12} y={aIn.y0 + 18} text-anchor="end" dominant-baseline="central">a<tspan class="u">/</tspan>a<tspan class="sb" dy="3">0</tspan></text>
-          <line class="hair" x1={SX + 12} x2={SX + SW - 12} y1={aIn.y0 + 32} y2={aIn.y0 + 32} />
+          <text class="ann" x={SX + 12} y={aIn.y0 + 15} dominant-baseline="central"><tspan class="mi">f</tspan> = Δ<tspan class="mi">M</tspan>/<tspan class="mi">M</tspan><tspan class="sbs" dy="3">d0</tspan><tspan dy="-3"> = 15%</tspan></text>
+          <text class="m hd" x={SX + SW - 12} y={aIn.y0 + 15} text-anchor="end" dominant-baseline="central">a<tspan class="u">/</tspan>a<tspan class="sb" dy="3">0</tspan></text>
+          <line class="hair" x1={SX + 12} x2={SX + SW - 12} y1={aIn.y0 + 27} y2={aIn.y0 + 27} />
           {QS.map((q0, i) => (
             <g class="arow">
               <line class={`sw s-${QCOL[i]}`} x1={SX + 12} x2={SX + 28} y1={aRow(i)} y2={aRow(i)} />
@@ -183,10 +193,9 @@ const heads = [
             </g>
           ))}
           <g class="alsum">
-            <line class="hair" x1={SX + 12} x2={SX + SW - 12} y1={aRow(2) + 18} y2={aRow(2) + 18} />
-            <text class="m" x={SX + 12} y={aRow(2) + 36} dominant-baseline="central">L<tspan class="u">/</tspan>L<tspan class="sb" dy="3">0</tspan></text>
-            <text class="cm acc" x={SX + SW - 12} y={aRow(2) + 36} text-anchor="end" dominant-baseline="central">{lEnd[0].toFixed(3)}</text>
-            <text class="ann" x={SX + 12} y={aRow(2) + 57} dominant-baseline="central">the same for all three</text>
+            <line class="hair" x1={SX + 12} x2={SX + SW - 12} y1={aRow(2) + 15} y2={aRow(2) + 15} />
+            <text class="m" x={SX + 12} y={aRow(2) + 32} dominant-baseline="central">L<tspan class="u">/</tspan>L<tspan class="sb" dy="3">0</tspan><tspan class="ann-in" dy="-3">, all three</tspan></text>
+            <text class="cm acc" x={SX + SW - 12} y={aRow(2) + 32} text-anchor="end" dominant-baseline="central">{lEnd[0].toFixed(3)}</text>
           </g>
         </>
       ) : (
@@ -228,7 +237,7 @@ const heads = [
       </>
     ))}
     <text class="m yl" transform={`translate(12 ${Bp.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle">a<tspan class="u">/</tspan>a<tspan class="sb" dy="3">0</tspan></text>
-    <text class="xl" x={(L + R) / 2} y={Bp.y0 + B + XT} text-anchor="middle" dominant-baseline="hanging"><tspan class="mi">t</tspan>, orbits</text>
+    <text class="xl" x={xAt()} y={Bp.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging"><tspan class="mi">t</tspan>, orbits</text>
 
     <line class="dotted" x1={L} x2={R} y1={yFin} y2={yFin} />
     <text class="ann anl" x={L + 8} y={yFin - 8}>analytic {aFinal.toFixed(3)}</text>
@@ -236,8 +245,8 @@ const heads = [
     <text class="ann nocl" x={L + 8} y={yOne - 8}>no closure</text>
     <path class="accent clo" d={pathOf(bCurve)} />
     <g class="clol">
-      <path class="lead" d={`M${bLead.x + 3} ${bLead.y - 4}L${bLead.x + 14} ${by(bLead.v)}H${bLead.x + 22}`} />
-      <text class="ann acc" x={bLead.x + 26} y={by(bLead.v)} dominant-baseline="central">velocity-rescaling closure</text>
+      <path class="lead" d={`M${bLead.x} ${bLead.y - 5}V${by(bLead.v) + 8}`} />
+      <text class="ann acc" x={R - 6} y={by(bLead.v)} text-anchor="end" dominant-baseline="central">velocity-rescaling closure</text>
     </g>
     <circle class="dot hn" cx={bx(Bp.tmax)} cy={yOne} r="2.5" />
     <circle class="dot-accent hc" cx={bx(Bp.tmax)} cy={yFin} r="3.5" />
@@ -288,7 +297,7 @@ const heads = [
       </>
     ))}
     <text class="m yl" transform={`translate(12 ${C.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle"><tspan class="u">(Δ</tspan>L<tspan class="u">/</tspan>L<tspan class="u">)/</tspan>δm</text>
-    <text class="m xl" x={(L + R) / 2} y={C.y0 + B + XT} text-anchor="middle" dominant-baseline="hanging">η</text>
+    <text class="m xl" x={xAt()} y={C.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging">η</text>
     <text class="ann" x={L + 8} y={cy(0.2)} dominant-baseline="central"><tspan class="mi">L</tspan> rises</text>
     <text class="ann" x={L + 8} y={cy(-2.35)} dominant-baseline="central"><tspan class="mi">L</tspan> falls</text>
 
@@ -303,9 +312,7 @@ const heads = [
     ))}
     {cLines.map((l, i) => <circle class={`ec f-${QCOL[i]}`} cx={cx(l.ec)} cy={cy(0)} r="3" />)}
     <g class="ccall">
-      <path class="lead" d={`M${cCall.x + 3} ${cCall.y - 4}L${cCall.x + 14} ${cy(0.5)}H${cx(0.74) - 4}`} />
-      <text class="ann" x={cx(0.74)} y={cy(0.5)} dominant-baseline="central">Δ<tspan class="mi">L</tspan> = 0 at</text>
-      <text class="ann" x={cx(0.74)} y={cy(0.17)} dominant-baseline="central">η = <tspan class="mi">q</tspan>/(1 + <tspan class="mi">q</tspan>)</text>
+      <text class="ann" x={R - 6} y={cy(0) - 8} text-anchor="end">Δ<tspan class="mi">L</tspan> = 0</text>
     </g>
     <g class="cur" opacity="0">
       <line class="curl" x1={cx(0.5)} x2={cx(0.5)} y1={C.y0 + T - 4} y2={C.y0 + B} />

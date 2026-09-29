@@ -7,6 +7,7 @@ import Hero from "../components/Hero.astro";
 import Footer from "../components/Footer.astro";
 import Submissions from "../components/figures/Submissions.astro";
 import TopsojMap from "../components/figures/TopsojMap.astro";
+import TopsojGA from "../components/figures/TopsojGA.astro";
 import MathosLogo from "../components/figures/MathosLogo.astro";
 import Quoted from "../components/figures/Quoted.astro";
 import Ratings from "../components/figures/Ratings.astro";
@@ -35,7 +36,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
         </p>
         <p>
           I built an OAuth and MCP server so people can make Mathos videos from inside ChatGPT and Claude,
-          and rebuilt how the tutor grades each step of a student's work, which made it far more accurate and fast.
+          and rebuilt how the AI tutor grades each step of a student's work.
         </p>
         <MathosLogo slot="figure" />
       </Entry>
@@ -44,7 +45,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
         <p>
           A judge for competitive math that I started in high school. Google Analytics counts over 100,000
           users from 180+ countries. It holds {fmt(topsoj.totals.publicProblems)} problems from the AMC, AIME, CEMC
-          contests, HMMT and our own setters, and has taken {fmt(topsoj.totals.submissions)} submissions.
+          contests, HMMT and our own setters, and has taken over 120,000 submissions.
         </p>
         <p>
           I designed its EloMMR ratings and led a team of 30 setters, developers and organizers,
@@ -52,6 +53,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
         </p>
         <div slot="figure" class="topsoj-figs">
           <TopsojMap />
+          <TopsojGA />
           <div class="pair">
             <Submissions />
             <Ratings />
@@ -121,7 +123,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
       </Entry>
     </Section>
 
-    <Section id="contests" title="Contests">
+    <Section id="contests" title="Contests" lede="Results from programming, physics and math competitions.">
       <div class="contest-grid">
         <ul class="results">
           <li><span>USACO</span><span>Platinum, with a perfect score on Gold</span></li>
@@ -166,7 +168,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
-    align-items: start;
+    align-items: stretch;
   }
   @media (max-width: 980px) {
     .pair {
@@ -202,21 +204,6 @@ const fmt = (n: number) => n.toLocaleString("en-US");
     font-size: 15px;
   }
   @media (max-width: 880px) {
-    .topsoj-figs {
-    display: grid;
-    gap: 20px;
-  }
-  .pair {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    align-items: start;
-  }
-  @media (max-width: 980px) {
-    .pair {
-      grid-template-columns: 1fr;
-    }
-  }
   .contest-grid {
       grid-template-columns: 1fr;
       row-gap: 36px;

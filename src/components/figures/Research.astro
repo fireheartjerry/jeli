@@ -5,38 +5,25 @@
 // at build time from the papers' formulas; the script only reveals it.
 import Figure from "../Figure.astro";
 import ResearchPlot from "./ResearchPlot.astro";
-import { aClosure } from "../../scripts/geo/research";
-
-const err = ((1 / aClosure(50, 2, 50) - 1) * 100).toFixed(1);
 ---
 
 <Figure
   name="research"
-  n={7}
+  n={8}
   title="Three results"
   label="Three results on mass transfer in binary stars, one panel per paper"
   readout=""
 >
   <ResearchPlot mode="wide" />
   <ResearchPlot mode="narrow" />
-  <Fragment slot="caption">
-    (a) RNAAS: with ballistic transfer the orbit keeps 1 − <span class="mi">f</span> of its angular momentum for
-    <span class="mi">q</span><sub>0</sub> = 0.4, 1 and 2 alike, although their separations end far apart.
-    (b) JHSS (Best Manuscript): 15% of the donor moves over 50 orbits at <span class="mi">q</span><sub>0</sub> = 2. The
-    velocity-rescaling closure lands on the analytic value; with no closure the separation stays fixed,
-    {err}% off. (c) arXiv: the transferred mass moves with η<span class="mi">v</span><sub>1</sub> + (1 − η)<span class="mi">v</span><sub>2</sub>.
-    The orbit gains angular momentum for η below <span class="mi">q</span>/(1 + <span class="mi">q</span>), the dots, and loses it
-    above. In the inset, the two stars show the separation, from Δ<span class="mi">a</span>/<span class="mi">a</span> = 2δ<span class="mi">m</span>[(1 − η)/<span class="mi">M</span><sub>1</sub> − η/<span class="mi">M</span><sub>2</sub>],
-    which turns over at η = 1/(1 + <span class="mi">q</span>). Values are per unit δ<span class="mi">m</span>, in units of <span class="mi">M</span><sub>2</sub>.
-    Drag across the bottom panel, or pick a <span class="mi">q</span>.
-  </Fragment>
+  <Fragment slot="caption">Each panel is one paper's closed-form result, drawn for mass ratios 0.4, 1 and 2 in red, green and violet. Drag across panel (c) or pick a <span class="mi">q</span> to see which way the two stars' separation moves.</Fragment>
 </Figure>
 
 <style is:global>
   /* Text grows as the plate shrinks, so labels stay near 10px on a phone.
      --u is one CSS px at desktop width and about 1.9 at a 390px viewport. */
   .fig svg.rs-w {
-    --u: clamp(1px, calc(3.49px - 0.4036vw), 1.914px);
+    --u: clamp(1.06px, calc(3.49px - 0.4036vw), 1.914px);
   }
   /* The narrow layout is 400 wide, so it needs far less growth. */
   .fig .plot svg.rs-n {
@@ -54,7 +41,10 @@ const err = ((1 / aClosure(50, 2, 50) - 1) * 100).toFixed(1);
   .fig svg.rs tspan.pl { font-family: var(--cm); fill: var(--ink); font-size: 1.05em; }
   .fig svg.rs tspan.k { fill: var(--ink); font-weight: 500; }
   .fig svg.rs tspan.u { font-family: var(--cm); font-style: normal; }
-  .fig svg.rs tspan.sb { font-family: var(--cm); font-style: normal; font-size: 0.7em; }
+  .fig svg.rs tspan.sb { font-family: var(--cm); font-style: normal; font-size: 0.74em; }
+  .fig svg.rs .psub text { font-size: calc(11 * var(--u)); fill: var(--ink-2); }
+  .fig svg.rs tspan.sbs { font-family: var(--cm); font-size: 0.92em; }
+  .fig svg.rs tspan.ann-in { font-family: var(--sans); font-style: normal; font-size: 0.78em; fill: var(--ink-3); }
   .fig svg.rs tspan.mi { font-family: var(--math); font-style: italic; font-size: 1.16em; }
   .fig svg.rs text.ann { font-size: calc(10.5 * var(--u)); }
   .fig svg.rs text.hd { fill: var(--ink-3); }

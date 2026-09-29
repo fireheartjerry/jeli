@@ -88,7 +88,7 @@ const KEYS = Array.from({ length: 10 }, (_, k) => (k === 0 ? 1 : k * 100));
 const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
 ---
 
-<Figure name="worldline" n={11} title="Worldline" label="A seeded universe simulation you can scrub through time" readout={readout}>
+<Figure name="worldline" n={12} title="Worldline" label="A seeded universe simulation you can scrub through time" readout={readout}>
   <div class="wl">
     <div class="wl-main">
       <div class="wl-stage" role="img" aria-label={`A universe of ${u.n} bodies generated from the seed ${SEED}: one heavy central body with smaller bodies on perturbed orbits, each trailing its recent path, over a polar grid. Inner orbits are green, outer orbits violet, and the one planet is blue with a long trail. Scrolling plays its ${FRAMES} precomputed frames forwards or backwards.`}>
@@ -101,11 +101,11 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
           </g>
           <ellipse class="wl-band in" cx={CX} cy={CY} rx={A_INNER} ry={f1(A_INNER * tilt)} />
           <ellipse class="wl-band out" cx={CX} cy={CY} rx={A_OUTER} ry={f1(A_OUTER * tilt)} />
-          <text class="wl-rl" x={ringLabel(A_INNER).x} y={ringLabel(A_INNER).y} dx="4" dy="19">a = {A_INNER}</text>
-          <text class="wl-rl" x={ringLabel(A_OUTER).x} y={ringLabel(A_OUTER).y} dx="4" dy="19">a = {A_OUTER}</text>
           {trails.map((t) => t.d.map((d, c) => <path class={`wl-trail ${t.cls}`} d={d} stroke-opacity={TRAIL_ALPHA[c]} />))}
           {accentTrail.map((d, c) => <path class="wl-atrail" d={d} stroke-opacity={ACCENT_ALPHA[c]} />)}
           {dots.map((t) => <path class={`wl-dot ${t.cls}`} d={t.d} />)}
+          <text class="wl-rl" x={ringLabel(A_INNER).x} y={ringLabel(A_INNER).y} dx="4" dy="19">a = {A_INNER}</text>
+          <text class="wl-rl" x={ringLabel(A_OUTER).x} y={ringLabel(A_OUTER).y} dx="4" dy="19">a = {A_OUTER}</text>
           <circle class="wl-halo" cx={f1(core.x)} cy={f1(core.y)} r="9" />
           <circle class="dot" cx={f1(core.x)} cy={f1(core.y)} r={core.r} />
           <circle class="wl-ahalo" cx={f1(lead.x)} cy={f1(lead.y)} r={(lead.r + 3.5).toFixed(2)} />
@@ -143,7 +143,7 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
         </label>
         <div class="wl-row"><span class="k">hash</span><span class="v num" data-hash>{hex(fingerprint(SEED))}</span></div>
         <div class="wl-row"><span class="k">bodies</span><span class="v num" data-n>{u.n}</span></div>
-        <div class="wl-row"><span class="k">total mass</span><span class="v num"><span data-mass>{u.totalMass.toFixed(4)}</span> <i>M</i><sub>c</sub></span></div>
+        <div class="wl-row" title="Total mass in units of the central star"><span class="k">mass, star = 1</span><span class="v num" data-mass>{u.totalMass.toFixed(4)}</span></div>
         <div class="wl-row"><span class="k">frame</span><span class="v num"><span data-frame>{FRAMES}</span> / {FRAMES}</span></div>
       </div>
       <div class="wl-sec wl-energy">
@@ -164,7 +164,7 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
       </div>
     </aside>
   </div>
-  <Fragment slot="caption">Worldline Engine is my deterministic universe simulator in C++ and raylib, with seeded generation, live physics, save and replay, and timeline playback. Here scrolling scrubs a precomputed timeline, and you can drag the playhead or type a new seed. Same seed, same universe. The energy trace is the real drift of the integrator; colours group orbits by semi-major axis <i>a</i>.</Fragment>
+  <Fragment slot="caption">Scrolling plays the 900 precomputed frames; drag the playhead to hold one, or type a seed to generate another universe. Orbits are coloured by semi-major axis <i>a</i>, and the trace on the right is the integrator's real energy drift.</Fragment>
 </Figure>
 
 <style>
@@ -202,7 +202,7 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
   .wl-band { fill: none; stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
   .wl-band.in { stroke: var(--s-green); stroke-opacity: 0.45; }
   .wl-band.out { stroke: var(--s-violet); stroke-opacity: 0.4; }
-  .wl-snap text.wl-rl { font-size: 15px; fill: var(--ink-3); }
+  .wl-snap text.wl-rl { font-size: 15px; fill: var(--ink-3); paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
   .wl-trail { fill: none; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
   .wl-trail.ink { stroke: var(--ink); }
   .wl-trail.in { stroke: var(--s-green); }
@@ -298,7 +298,7 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
   .wl-row .k { white-space: nowrap; }
   .wl-row .v { color: var(--ink); font-family: var(--cm); font-size: 13px; white-space: nowrap; }
   .wl-insp i { font-family: var(--math); font-size: 1.08em; }
-  .wl-insp sub, .wl-insp sup { font-size: 0.72em; line-height: 0; }
+  .wl-insp sub, .wl-insp sup { font-size: max(10px, 0.74em); line-height: 0; }
   .wl-insp sup { vertical-align: 0.5em; margin-left: 1px; }
   .wl-seed input {
     font: inherit;

@@ -1,4 +1,4 @@
-import { gsap, scrubbed, whileVisible, phase, q, qa } from "../motion";
+import { gsap, scrubbed, phase, q, qa } from "../motion";
 
 interface Geo {
   total: number; goldEnd: number; lengths: number[]; n: number;
@@ -22,10 +22,7 @@ export default function (root: HTMLElement) {
   const count = q<SVGTextElement>(root, ".count");
   const on = q<SVGPathElement>(root, ".cells-on");
   const front = q<SVGPathElement>(root, ".cells-front");
-  const glint = q<SVGRectElement>(root, ".cells-glint");
-  const glintClip = q<SVGRectElement>(root, ".glint-clip");
   const vds = qa<SVGGElement>(root, ".vd");
-  const vdText = q<SVGTextElement>(root, ".vd-t");
   const cellsD = on.getAttribute("d")!;
   const offsets: number[] = [];
   for (let i = cellsD.indexOf("M"); i !== -1; i = cellsD.indexOf("M", i + 1)) offsets.push(i);
@@ -37,18 +34,12 @@ export default function (root: HTMLElement) {
 
   // 2. strips
   const strips = qa<SVGGElement>(root, ".strip");
-  const tracks = qa<SVGLineElement>(root, ".track");
-  const trackLen = G.XR - G.XL;
-  tracks.forEach((t) => (t.style.strokeDasharray = `${trackLen} ${trackLen}`));
-  const ticks = qa<SVGPathElement>(root, ".ticks");
   const marks = qa<SVGGElement>(root, ".mk").map((el) => {
     const lead = q<SVGPathElement>(el, ".lead");
     const len = lead.getTotalLength();
     lead.style.strokeDasharray = `${len} ${len}`;
     return { needle: q<SVGGElement>(el, ".needle"), call: q<SVGGElement>(el, ".call"), lead, len, label: q(el, ".cl"), x: Number(el.dataset.x), y: Number(el.dataset.y) };
   });
-  const axisText = [...qa(root, ".tk"), ...qa(root, ".axl")];
-  const names = qa(root, ".nm");
 
   // 3. AIME
   const aline = q<SVGLineElement>(root, ".aline");
@@ -58,7 +49,6 @@ export default function (root: HTMLElement) {
 
   let shown = -1, frontKey = "";
   let p = 0;
-  let glintX = -1;
 
   function renderStairs(): string {
     // Draw up to the end of Gold, sweep the grid, then climb to Platinum.
@@ -107,25 +97,16 @@ export default function (root: HTMLElement) {
       const [cx, cy] = [Number(v.querySelector("circle")!.getAttribute("cx")), Number(v.querySelector("circle")!.getAttribute("cy"))];
       v.setAttribute("transform", `translate(${cx} ${cy}) scale(${(0.6 + 0.4 * u).toFixed(3)}) translate(${-cx} ${-cy})`);
     });
-    op(vdText, phase(p, 0.5, 0.54));
 
-    if (k > 0) return "USACO Platinum";
-    if (p >= 0.2) return `Gold  ${fmt.format(lit)} / ${fmt.format(G.n)}`;
-    if (up >= G.lengths[2]) return "USACO Gold";
-    if (up >= G.lengths[1]) return "USACO Silver";
-    return up > 0 ? "USACO Bronze" : "";
+    if (k > 0) return "Platinum";
+    if (p >= 0.2) return `Gold ${fmt.format(lit)}`;
+    if (up >= G.lengths[2]) return "Gold";
+    if (up >= G.lengths[1]) return "Silver";
+    return up > 0 ? "Bronze" : "USACO";
   }
 
   function renderStrips(): string {
     const windows = [[0.56, 0.72], [0.6, 0.76], [0.66, 0.82], [0.7, 0.86]];
-    tracks.forEach((t, i) => {
-      const d = phase(p, 0.52 + i * 0.08, 0.62 + i * 0.08);
-      t.style.strokeDashoffset = String(trackLen * (1 - d));
-      op(t, d > 0 ? 1 : 0);
-      op(ticks[i], phase(p, 0.56 + i * 0.08, 0.64 + i * 0.08));
-      op(names[i * 2], phase(p, 0.52 + i * 0.08, 0.56 + i * 0.08));
-    });
-    axisText.forEach((el) => op(el, phase(p, 0.64, 0.7)));
     let label = "";
     marks.forEach((m, i) => {
       const [a, b] = windows[i];
@@ -137,7 +118,7 @@ export default function (root: HTMLElement) {
       m.lead.style.strokeDashoffset = String(m.len * (1 - c));
       op(m.lead, c > 0 ? 1 : 0);
       op(m.label, phase(c, 0.5, 1));
-      if (u > 0) label = i < 2 ? "PhysicsBowl: CA 1, world 7" : "Newton: CA 4, world 9";
+      if (u > 0) label = i < 2 ? "PhysicsBowl" : "Newton";
     });
     return label;
   }
@@ -152,7 +133,7 @@ export default function (root: HTMLElement) {
       op(y, u);
       if (u >= 1) done.push(2024 + i);
     });
-    return lu > 0 ? `AIME ${done.join(", ")}` : "";
+    return lu > 0 ? `AIME ×${done.length}` : "";
   }
 
   function render() {
@@ -175,25 +156,9 @@ export default function (root: HTMLElement) {
       render();
     });
   };
-  mm.add("(min-width: 561px)", bind({ start: "top 70%", end: "bottom 62%" }));
+  mm.add("(min-width: 561px)", bind({ start: "top 85%", end: "center 45%" }));
   mm.add("(max-width: 560px)", bind({ start: "top 80%", end: "bottom 82%" }));
   render();
-
-  // Ambient: once the grid is complete, a faint re-judge glint crosses it
-  // every few seconds.
-  const gx0 = Number(glintClip.getAttribute("x"));
-  let tt = 0;
-  whileVisible(root, (dt) => {
-    if (p < 0.5) {
-      if (glintX !== -1) { glint.style.opacity = "0"; glintX = -1; }
-      return;
-    }
-    tt = (tt + dt) % 4.5;
-    const u = Math.min(1, tt / 1.6);
-    glintX = gx0 + u * 420;
-    glintClip.setAttribute("x", glintX.toFixed(1));
-    glint.style.opacity = u < 1 ? (0.4 * Math.sin(Math.PI * u)).toFixed(3) : "0";
-  });
 
   // Pointer: a strip shows its full label; tap toggles on touch.
   strips.forEach((s) => {

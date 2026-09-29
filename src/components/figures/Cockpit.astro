@@ -46,7 +46,8 @@ const antenna = (() => {
 
 // The log: a few frames around the final pose, as the bridge sent them.
 const lines = Array.from({ length: LOG.n }, (_, i) => {
-  const tb = turbulence(i * 0.1 + 3);
+  // The newest frame is the pose itself; older ones carry a little turbulence.
+  const tb = i === LOG.n - 1 ? { roll: 0, pitch: 0, thr: 0 } : turbulence(i * 0.1 + 3);
   return frame(roll + tb.roll, pitch + tb.pitch, thr + tb.thr, false);
 });
 const SEQ0 = 1204;
@@ -81,7 +82,7 @@ const plane = "M0 -7.5L1.3 -2.2L7.5 1.2V2.8L1.3 1.4L1 5.2L3.2 6.8V7.8L0 7L-3.2 7
 const start = FLIGHT.pts[0];
 ---
 
-<Figure name="cockpit" n={8} title="Cardboard Cockpit" label="Webcam marker tracking and a badge button, bridged over a WebSocket to a flight sim" readout={readout(roll, pitch, thr)}>
+<Figure name="cockpit" n={9} title="Cardboard Cockpit" label="Webcam marker tracking and a badge button, bridged over a WebSocket to a flight sim" readout={readout(roll, pitch, thr)}>
   <svg class="ck" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} role="img" aria-label="Three panels. A webcam frame shows a cardboard card with ArUco marker id 23 held in two hands, with its detected corners and pose axes, and a smaller throttle marker on a rail. A Python bridge log streams JSON frames with roll, pitch, throttle and fire over a local WebSocket, next to a Bluetooth badge whose button sets fire. The Godot sim shows the same roll and pitch on an attitude display with speed and altitude tapes and a heading strip, and a map traces the aircraft's path.">
     <defs>
       <pattern id="ck-scan" width="6" height="5" patternUnits="userSpaceOnUse">
@@ -193,6 +194,7 @@ const start = FLIGHT.pts[0];
           <text class="ck-mono ck-bytes" x={LOG.w - 14} y={LOG.top + i * LOG.step} text-anchor="end">{bytes(v)} B</text>
         </g>
       ))}
+      <text class="ck-mono ck-short" x="14" y={LOG.y + 76}>roll <tspan class="v">{lines[LOG.n - 1][0].replace("-", "−")}</tspan>  pitch <tspan class="v">{lines[LOG.n - 1][1].replace("-", "−")}</tspan>  thr <tspan class="v">{lines[LOG.n - 1][2]}</tspan><tspan class="v acc"></tspan></text>
       <text class="ck-mono ck-wait" x="70" y={LOG.top + (LOG.n - 1) * LOG.step} opacity="0">waiting for markers…</text>
       <circle class="dot-accent ck-live" cx="16" cy={LOG.top + (LOG.n - 1) * LOG.step - 3.5} r="2.25" />
     </g>
@@ -300,7 +302,7 @@ const start = FLIGHT.pts[0];
     </g>
   </svg>
   <Fragment slot="caption">
-    OpenCV finds both printed markers in the webcam frame and returns each one's corners, numbered from the top left, and the stick card's pose. A Python bridge merges roll, pitch and throttle with the badge's fire button into small JSON frames on a local WebSocket, and the Godot sim flies them.
+    Read it top to bottom: OpenCV finds the printed markers in the webcam frame, a Python bridge sends their pose and the badge's fire button as JSON over a local WebSocket, and the HUD and map I built in Godot follow. Drag the camera frame to tilt the card yourself.
   </Fragment>
 </Figure>
 
@@ -325,6 +327,7 @@ const start = FLIGHT.pts[0];
   .ck .ck-id { font-size: 11px; }
   .ck .ck-al text { fill: var(--accent); }
   .ck-halo-t { paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
+  .ck-short { display: none; white-space: pre; }
   .ck-hit { fill: transparent; cursor: grab; }
   .ck-hit.dragging { cursor: grabbing; }
 
@@ -337,7 +340,7 @@ const start = FLIGHT.pts[0];
   .ck-btn { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1; }
   .ck-arcs.on { stroke: var(--accent); }
 
-  .ck .ck-mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10.5px; fill: var(--ink-3); letter-spacing: 0; }
+  .ck .ck-mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; fill: var(--ink-3); letter-spacing: 0; }
   .ck .ck-json .v { fill: var(--ink-2); }
   .ck .new .ck-json { fill: var(--ink-2); }
   .ck .new .ck-json .v { fill: var(--ink); }
@@ -346,13 +349,13 @@ const start = FLIGHT.pts[0];
   .ck-sky { fill: var(--panel); }
   .ck-ground { fill: rgb(20 20 19 / 0.05); }
   .ck-rung { stroke: var(--ink-4); stroke-width: 1; }
-  .ck .ck-rl { font-size: 9.5px; }
+  .ck .ck-rl { font-size: 11px; }
   .ck-tick { stroke: var(--ink-4); stroke-width: 1; }
   .ck-index { fill: var(--ink); }
   .ck-plane { stroke: var(--ink); stroke-width: 2.25; fill: none; stroke-linecap: round; stroke-linejoin: round; }
   .ck-tape { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
-  .ck .ck-tl { font-size: 10.5px; }
-  .ck .ck-hl { font-size: 10.5px; }
+  .ck .ck-tl { font-size: 11px; }
+  .ck .ck-hl { font-size: 11px; }
   .ck-box { fill: var(--panel); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
   .ck .ck-bv { font-size: 13px; }
 
@@ -366,20 +369,14 @@ const start = FLIGHT.pts[0];
 
   /* The plate shrinks ~2x on phones: labels grow to stay near 10px on screen,
      the log keeps its three newest frames, and secondary notes step aside. */
+  /* Phones: the plate shrinks ~2x, so nothing below 20 units (about 10px)
+     stays. Micro labels go; the log collapses to one short line. */
   @media (max-width: 560px) {
-    .ck-sec, .ck-seq, .ck-bytes, .ck-live { display: none; }
-    .ck text { font-size: 19px; }
-    .ck text.m { font-size: 20px; }
-    .ck .ck-idx, .ck .ck-id { font-size: 17px; }
-    .ck-tag { r: 10.5px; }
-    .ck .ck-mono { font-size: 17.5px; }
-    .ck-line { transform: translateX(-56px); }
-    .ck-line[data-i="0"], .ck-line[data-i="1"] { display: none; }
-    .ck-line[data-i="2"] { transform: translate(-56px, -18px); }
-    .ck-line[data-i="3"] { transform: translate(-56px, -7px); }
-    .ck-line[data-i="4"], .ck-wait { transform: translate(-56px, 4px); }
-    .ck .ck-rl { font-size: 15px; }
-    .ck .ck-tl, .ck .ck-hl { font-size: 17px; }
-    .ck .ck-bv { font-size: 19px; }
+    .ck-sec, .ck-seq, .ck-bytes, .ck-live, .ck-line, .ck-idx, .ck-al, .ck-tl, .ck-hl, .ck-rl, .ck-tval { display: none; }
+    .ck text { font-size: 20px; }
+    .ck .ck-id, .ck .ck-bv { font-size: 20px; }
+    .ck .ck-short { display: inline; font-size: 20px; fill: var(--ink-3); }
+    .ck .ck-short .v { fill: var(--ink); }
+    .ck .ck-wait { font-size: 20px; transform: translate(-56px, -28px); }
   }
 </style>

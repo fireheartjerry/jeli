@@ -118,30 +118,38 @@ export const pinchOf = (lm: P[]) => dist(lm[4], lm[8]) / dist(lm[0], lm[9]);
 // Where the pinch closes on the mesh, as a screen angle from its centre (y up).
 const GRAB = (186 * Math.PI) / 180;
 const CONTACT: P = [MESH.cx + MESH.R * 1.02 * Math.cos(GRAB), MESH.cy - MESH.R * 1.02 * Math.sin(GRAB)];
-const DRAG = 50; // px the pinch travels after it grabs
+const DRAG = 36; // px the pinch travels after it grabs
 const DRAG_DIR: P = [Math.cos((168 * Math.PI) / 180), -Math.sin((168 * Math.PI) / 180)]; // screen, y down
 const APPROACH: P = [-70, 44]; // where the pinch starts, relative to the contact
 const PULLED: P = [CONTACT[0] + DRAG_DIR[0] * DRAG, CONTACT[1] + DRAG_DIR[1] * DRAG];
-const S_MAX = 1.26;
+const S_MAX = 1.2;
 
 /** Beats, in scroll progress. */
-export const BEATS = { grab: [0.04, 0.3], sculpt: [0.34, 0.6], scale: [0.66, 0.94] } as const;
+export const BEATS = { grab: [0.04, 0.3], sculpt: [0.34, 0.6], scale: [0.66, 0.88] } as const;
 export const TOOLS = ["add", "move", "scale", "sculpt"] as const;
-export const CHIPS = ["pinch to grab", "drag to sculpt", "spread to scale"] as const;
+export const GESTURES = ["pinch to grab", "drag to sculpt", "spread to scale"] as const;
+/** How visible each gesture's caption is at t: they crossfade at the beat changes. */
+export const captionOpacity = (i: number, t: number) => {
+  const cuts = [0.32, 0.63];
+  const inn = i === 0 ? 1 : smooth(cuts[i - 1] - 0.015, cuts[i - 1] + 0.025, t);
+  const out = i === 2 ? 0 : smooth(cuts[i] - 0.025, cuts[i] + 0.015, t);
+  return Math.round(inn * (1 - out) * 100) / 100;
+};
 
 export function gesture(t: number) {
   const close = smooth(0.06, 0.3, t); // open hand -> pinch
   const reachIn = smooth(0.02, 0.3, t); // how far it has come in
   const pull = smooth(BEATS.sculpt[0], BEATS.sculpt[1], t); // how far it has dragged since grabbing
   const spread = smooth(BEATS.scale[0] + 0.02, BEATS.scale[1], t); // pinch -> spread
+  const relax = smooth(0.88, 1, t); // then the hand lets go and rests open
   const S = 1 + (S_MAX - 1) * spread;
 
   // The pinch point: in to the surface, out along the drag, then riding the
   // lump's tip outward as the mesh grows.
   const target: P = spread > 0
-    ? [MESH.cx + (PULLED[0] - MESH.cx) * S + DRAG_DIR[0] * 44 * spread, MESH.cy + (PULLED[1] - MESH.cy) * S + DRAG_DIR[1] * 44 * spread]
+    ? [MESH.cx + (PULLED[0] - MESH.cx) * S + DRAG_DIR[0] * 40 * spread - 18 * relax, MESH.cy + (PULLED[1] - MESH.cy) * S + DRAG_DIR[1] * 40 * spread + 30 * relax]
     : [CONTACT[0] + APPROACH[0] * (1 - reachIn) + DRAG_DIR[0] * DRAG * pull, CONTACT[1] + APPROACH[1] * (1 - reachIn) + DRAG_DIR[1] * DRAG * pull];
-  const pose = spread > 0 ? mix(PINCH, SPREAD, spread) : mix(OPEN, PINCH, close);
+  const pose = spread > 0 ? mix(mix(PINCH, SPREAD, spread), OPEN, relax) : mix(OPEN, PINCH, close);
   const m = tipMid(place(pose, [0, 0]));
   const lm = place(pose, [target[0] - m[0], target[1] - m[1]]);
 
@@ -149,11 +157,11 @@ export function gesture(t: number) {
   // The clay keeps its shape once the pinch lets go.
   const clayAt: P | null = grabbed ? (t < BEATS.sculpt[1] ? tipMid(lm) : PULLED) : null;
   const beat = t < 0.32 ? 0 : t < 0.63 ? 1 : 2;
-  const prog = [smooth(0.02, 0.3, t), smooth(0.34, 0.6, t), smooth(0.66, 0.94, t)][beat];
+  const prog = [smooth(0.02, 0.3, t), smooth(0.34, 0.6, t), smooth(0.66, 0.88, t)][beat];
   const tool = (["move", "sculpt", "scale"] as const)[beat];
   // The view holds still while the hand works on the surface.
   const engage = smooth(0, 0.12, t) * (1 - smooth(0.6, 0.7, t));
-  return { lm, close, pull, spread, S, sculpt: 1 + 0.08 * pull, grabbed, clayAt, pinch: pinchOf(lm), beat, prog, tool, engage };
+  return { lm, close, pull, spread, relax, S, sculpt: 1 + 0.08 * pull, grabbed, clayAt, pinch: pinchOf(lm), beat, prog, tool, engage };
 }
 
 // ---------------------------------------------------------------- the camera
@@ -203,20 +211,20 @@ export function mesh(cam: Cam, S: number, clayAt: P | null, sculpt = 1) {
     g = home.unview([P3[0] / l, P3[1] / l, 0]);
     reach = Math.max(0, l - sculpt);
   }
-  // Falloff: a Gaussian in the angle from the pull direction, normalised so
-  // the vertex nearest the pinch lands on it.
+  // Falloff: a flat-topped bell in the angle from the pull direction,
+  // normalised so the vertex nearest the pinch lands on it.
   const V = ICO.v;
   const cs = V.map((n) => n[0] * g[0] + n[1] * g[1] + n[2] * g[2]);
-  const raw = cs.map((c) => Math.exp(-((Math.acos(Math.min(1, c)) / 0.46) ** 2)));
+  const raw = cs.map((c) => Math.exp(-((Math.acos(Math.min(1, c)) / 0.56) ** 4)));
   const top = Math.max(...raw);
   const w = raw.map((k) => (reach > 0 ? k / top : 0));
   const ramp = Math.min(reach / 0.3, 1);
   const pv: V3[] = V.map((n, i) => {
     const c = cs[i], k = w[i];
-    // Pull along g; the vertex nearest the pinch closes onto the pull axis
-    // (so the tip meets the fingers), and the neck draws in a little.
-    const lat = sculpt * (1 - 0.4 * k * ramp) * (1 - k ** 4 * ramp);
-    const along = c * sculpt + k * (reach + sculpt * (1 - c));
+    // Pull along g: the cap facing the pinch moves out whole, a rounded knob
+    // whose tip meets the fingers, and the neck around it draws in a little.
+    const lat = sculpt * (1 - 0.64 * k * (1 - k) * ramp);
+    const along = c * sculpt + k * reach;
     const p: V3 = [
       ((n[0] - c * g[0]) * lat + g[0] * along) * S,
       ((n[1] - c * g[1]) * lat + g[1] * along) * S,
@@ -294,17 +302,21 @@ export function dimension(lm: P[], gapScale = 1) {
   const l = Math.hypot(dx, dy) || 1;
   let nx = -dy / l, ny = dx / l;
   const m: P = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  // Offset toward the mesh, into the open space in front of the fingers.
-  if (nx * (m[0] - MESH.cx) + ny * (m[1] - MESH.cy) > 0) { nx = -nx; ny = -ny; }
+  // Offset away from the mesh, so the value never sits on the surface.
+  if (nx * (m[0] - MESH.cx) + ny * (m[1] - MESH.cy) < 0) { nx = -nx; ny = -ny; }
   const shut = 1 - smooth(0.25, 0.6, l / 60);
   const o = 12 - 5 * shut;
   const A: P = [a[0] + nx * o, a[1] + ny * o], B: P = [b[0] + nx * o, b[1] + ny * o];
   const tick = (p: P) => `M${r1(p[0] - 3)} ${r1(p[1] + 3)}L${r1(p[0] + 3)} ${r1(p[1] - 3)}`;
-  const lo = o + 14 * gapScale;
+  // The value sits in a break in the line, the way drawings dimension.
+  const M: P = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2], ux = dx / l, uy = dy / l;
+  const g = Math.min(l / 2 - 2, 11 * gapScale);
   return {
+    // Only while there is a gap to measure; a closed pinch reads in the readout.
+    on: smooth(26, 44, l),
     ext: `M${r1(a[0] + nx * 4)} ${r1(a[1] + ny * 4)}L${r1(A[0] + nx * 4)} ${r1(A[1] + ny * 4)}M${r1(b[0] + nx * 4)} ${r1(b[1] + ny * 4)}L${r1(B[0] + nx * 4)} ${r1(B[1] + ny * 4)}`,
-    line: `M${r1(A[0])} ${r1(A[1])}L${r1(B[0])} ${r1(B[1])}${tick(A)}${tick(B)}`,
-    label: [r1(m[0] + nx * lo), r1(m[1] + ny * lo)] as P,
+    line: `M${r1(A[0])} ${r1(A[1])}L${r1(M[0] - ux * g)} ${r1(M[1] - uy * g)}M${r1(M[0] + ux * g)} ${r1(M[1] + uy * g)}L${r1(B[0])} ${r1(B[1])}${tick(A)}${tick(B)}`,
+    label: [r1(M[0]), r1(M[1])] as P,
   };
 }
 

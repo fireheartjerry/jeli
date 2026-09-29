@@ -46,6 +46,7 @@ export default function (root: HTMLElement) {
   const GREEN = col("--s-green", "#2e8a5c");
   const VIOLET = col("--s-violet", "#7657c9");
   const SANS = col("--sans", "sans-serif");
+  const PANEL2 = col("--panel-2", "#f7f6f2");
   const FAM_COL = [INK, GREEN, VIOLET];
 
   const u = createUniverse();
@@ -106,6 +107,19 @@ export default function (root: HTMLElement) {
     return sx;
   }
 
+  // Labels on the grid get a paper-coloured halo so passing orbits never strike through them.
+  function ringLabel(s: string, x: number, y: number, px: number) {
+    const c = ctx!;
+    c.globalAlpha = 1;
+    c.lineJoin = "round";
+    c.lineWidth = 4 * px;
+    c.strokeStyle = PANEL2;
+    c.strokeText(s, x, y);
+    c.globalAlpha = 0.56;
+    c.fillStyle = INK;
+    c.fillText(s, x, y);
+  }
+
   function ring(r: number) {
     ctx!.moveTo(CX + r, CY);
     ctx!.ellipse(CX, CY, r, r * pt, 0, 0, Math.PI * 2);
@@ -149,12 +163,6 @@ export default function (root: HTMLElement) {
     c.stroke();
     c.setLineDash([]);
     c.lineCap = "round";
-    c.globalAlpha = 0.56;
-    c.fillStyle = INK;
-    c.font = labelFont;
-    const sa = Math.sin(RING_LABEL_ANGLE), ca = Math.cos(RING_LABEL_ANGLE);
-    c.fillText(`a = ${A_INNER}`, CX + A_INNER * ca + 3 * px, CY + A_INNER * pt * sa + 13 * px);
-    c.fillText(`a = ${A_OUTER}`, CX + A_OUTER * ca + 3 * px, CY + A_OUTER * pt * sa + 13 * px);
 
     // Trails, by family, oldest pieces faintest.
     c.lineWidth = px;
@@ -196,6 +204,13 @@ export default function (root: HTMLElement) {
     dot(u.accent, u.size[u.accent] * dk);
     c.fill();
 
+    // Band labels sit above the trails, on a halo.
+    c.font = labelFont;
+    const sa = Math.sin(RING_LABEL_ANGLE), ca = Math.cos(RING_LABEL_ANGLE);
+    ringLabel(`a = ${A_INNER}`, CX + A_INNER * ca + 3 * px, CY + A_INNER * pt * sa + 13 * px, px);
+    ringLabel(`a = ${A_OUTER}`, CX + A_OUTER * ca + 3 * px, CY + A_OUTER * pt * sa + 13 * px, px);
+    c.globalAlpha = 1;
+
     // Callout on the planet, flipped to stay inside the viewport.
     const b = (frame * MAX_BODIES + u.accent) * 3;
     const x = xyz[b], y = xyz[b + 1], z = xyz[b + 2];
@@ -214,6 +229,9 @@ export default function (root: HTMLElement) {
     c.fillStyle = ACC;
     c.font = labelFont;
     c.textAlign = dir > 0 ? "left" : "right";
+    c.lineWidth = 4 * px;
+    c.strokeStyle = PANEL2;
+    c.strokeText("planet", sx + dir * 33 * px, sy - 12.5 * px);
     c.fillText("planet", sx + dir * 33 * px, sy - 12.5 * px);
     c.textAlign = "left";
   }

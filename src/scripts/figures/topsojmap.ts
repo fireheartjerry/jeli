@@ -19,13 +19,12 @@ export default function (root: HTMLElement) {
   const canvas = q<HTMLCanvasElement>(stage, "canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  const readout = root.querySelector<HTMLElement>("[data-readout]");
   const css = getComputedStyle(root);
   const INK = css.getPropertyValue("--ink").trim() || "#141413";
   const ACC = css.getPropertyValue("--accent").trim() || "#2743d6";
 
   // ---- data ---------------------------------------------------------------
-  const data = JSON.parse(stage.dataset.map!) as { d: string; n: string[]; s: number[]; max: number };
+  const data = JSON.parse(stage.dataset.map!) as { d: string; n: string[]; s: number[]; w: number[]; max: number };
   const bytes = Uint8Array.from(atob(data.d), (ch) => ch.charCodeAt(0));
   const N = bytes.length / 3;
   const X = new Float32Array(N), Y = new Float32Array(N), D = new Float32Array(N);
@@ -47,7 +46,8 @@ export default function (root: HTMLElement) {
     if (lit[k]) reach[k] = Math.min(reach[k], D[i]);
   }
   const litIdx = [...Array(nC).keys()].filter((k) => lit[k] && members[k].length);
-  const reachSorted = litIdx.map((k) => reach[k]).sort((a, b) => a - b);
+  // One entry per GA country or territory (France also stands for five overseas territories).
+  const reachSorted = litIdx.flatMap((k) => Array<number>(data.w[k]).fill(reach[k])).sort((a, b) => a - b);
   let DMAX = 0;
   for (let i = 0; i < N; i++) if (SH[i] >= 0) DMAX = Math.max(DMAX, D[i]);
   DMAX += 0.01;
@@ -80,14 +80,16 @@ export default function (root: HTMLElement) {
     c.rect(0, 0, VIEW_W, Math.max(0, scanY));
     c.clip();
     c.strokeStyle = INK;
-    c.globalAlpha = 0.06;
     c.lineWidth = 1 / k;
-    c.beginPath();
-    for (const l of gratPaths) {
-      c.moveTo(l[0][0], l[0][1]);
-      for (let j = 1; j < l.length; j++) c.lineTo(l[j][0], l[j][1]);
+    for (const g of gratPaths) {
+      c.globalAlpha = 0.07 * g.a;
+      c.beginPath();
+      for (const l of g.lines) {
+        c.moveTo(l[0][0], l[0][1]);
+        for (let j = 1; j < l.length; j++) c.lineTo(l[j][0], l[j][1]);
+      }
+      c.stroke();
     }
-    c.stroke();
     c.restore();
 
     // Classify dots: 0 hidden, 1 grey, 2 glowing, 3.. lit shade.
@@ -200,7 +202,7 @@ export default function (root: HTMLElement) {
     if (n === shown) return;
     shown = n;
     count.textContent = String(n);
-    if (readout) readout.textContent = `${n} ${n === 1 ? "country" : "countries"}`;
+
   };
 
   for (const el of [torLead, ...callouts.map((c) => c.lead)]) {
@@ -211,7 +213,7 @@ export default function (root: HTMLElement) {
   gsap.set([toronto, torLabel.querySelector("text"), legend, ...keySubs, count, ...callouts.flatMap((c) => [c.pin, ...c.texts])], { opacity: 0 });
 
   // ---- scroll story -------------------------------------------------------
-  const tl = scrubbed(root, { start: "top 85%", end: "center 42%" });
+  const tl = scrubbed(root, { start: "top 85%", end: "center 45%" });
   const at = (d: number) => WAVE[0] + (d / FRONT_END) * (WAVE[1] - WAVE[0]);
   tl.to(st, {
     p: 1,
@@ -227,13 +229,14 @@ export default function (root: HTMLElement) {
   tl.to(count, { opacity: 1, duration: 0.04 }, SCAN[1] - 0.03)
     .to(keySubs, { opacity: 1, duration: 0.04 }, SCAN[1] - 0.02)
     .to(toronto, { opacity: 1, duration: 0.03, ease: "power3.out" }, SCAN[1] - 0.04)
-    .to(torLead, { strokeDashoffset: 0, duration: 0.04 }, SCAN[1] - 0.02)
-    .to(torLabel.querySelector("text"), { opacity: 1, duration: 0.03 }, SCAN[1] + 0.01);
+    .to(torLead, { strokeDashoffset: 0, duration: 0.03 }, SCAN[1] - 0.02)
+    .to(torLabel.querySelector("text"), { opacity: 1, duration: 0.03 }, SCAN[1] - 0.02);
   callouts.forEach((co) => {
     const t = at(reach[co.k]) + 0.01;
+    // Pin, leader and label arrive together.
     tl.to(co.pin, { opacity: 1, duration: 0.02 }, t)
-      .to(co.lead, { strokeDashoffset: 0, duration: 0.035 }, t)
-      .to(co.texts, { opacity: 1, duration: 0.03, ease: "power3.out" }, t + 0.03);
+      .to(co.lead, { strokeDashoffset: 0, duration: 0.03 }, t)
+      .to(co.texts, { opacity: 1, duration: 0.03, ease: "power3.out" }, t);
   });
   tl.to(legend, { opacity: 1, duration: 0.05 }, WAVE[1] + 0.02);
   st.p = 0;
@@ -370,12 +373,12 @@ export default function (root: HTMLElement) {
     pad = small ? 22 : 8;
     tipN.textContent = data.n[kk];
     const showV = lit[kk] && st.p > 0.5;
-    tipV.textContent = showV ? fmt.format(data.s[kk]) : "";
+    tipV.textContent = showV ? `${fmt.format(data.s[kk])} ${data.s[kk] === 1 ? "user" : "users"}` : "";
     const wn = tipN.getComputedTextLength();
     const gap = small ? 20 : 8;
     tipV.setAttribute("x", String(pad + wn + gap));
     tipW = pad * 2 + wn + (showV ? gap + tipV.getComputedTextLength() : 0);
-    tipH = small ? 58 : 22;
+    tipH = small ? 64 : 22;
     tipBox.setAttribute("width", tipW.toFixed(1));
     tipBox.setAttribute("height", String(tipH));
     tipBox.setAttribute("y", String(-tipH * 0.68));

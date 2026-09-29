@@ -131,7 +131,7 @@ function init(fig: HTMLElement) {
   ScrollTrigger.create({
     trigger: wide ? pin : fig,
     start: wide ? "top 60px" : "top 70%", // 60px: under the sticky header
-    end: wide ? "+=120%" : "bottom 30%",
+    end: wide ? "+=85%" : "bottom 30%",
     pin: wide,
     scrub: true,
     onUpdate(self) {

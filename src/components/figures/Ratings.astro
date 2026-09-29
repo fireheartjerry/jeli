@@ -7,11 +7,11 @@ import Figure from "../Figure.astro";
 import data from "../../data/topsoj.json";
 
 const { ratings } = data;
-const W = 640, H = 364;
-const L = 8, R = 474, T = 12, B = 324;
-const AX = R + 8;           // shared rating axis labels
-const HX = R + 66;          // histogram baseline
-const HW = 66;              // longest histogram bar
+const W = 640, H = 360;
+const L = 44, R = 446, T = 14, B = 318;
+const TN = R + 8;           // tier names, just right of the plot
+const HX = R + 76;          // histogram baseline
+const HW = 70;              // longest histogram bar
 const rMin = 600, rMax = 2500;
 const f = (v: number) => v.toFixed(1);
 
@@ -20,43 +20,34 @@ const d0 = day("2023-10-01"), d1 = day("2026-01-31");
 const x = (iso: string) => L + ((day(iso) - d0) / (d1 - d0)) * (R - L);
 const y = (r: number) => B - ((r - rMin) / (rMax - rMin)) * (B - T);
 
-// Tier bands (lower bounds are inclusive at min, so a band spans min-1 to max).
-// Diamond and Crystal are clear stones, so they get no tint.
-const TINT: Record<string, string | null> = {
-  Bronze: "red", Gold: "amber", Emerald: "green", Diamond: null, Sapphire: "blue", Crystal: null, Amethyst: "violet", Obsidian: null,
-};
-const STROKE: Record<string, string | null> = { Gold: "s-amber", Emerald: "s-green" };
+// Tier boundaries (a tier spans min - 1 to max) drawn as hairlines, named at the right.
 const tiers = ratings.tiers
   .map((t) => ({ name: t.tier, lo: Math.max(t.min === null ? rMin : t.min - 1, rMin), hi: Math.min(t.max ?? rMax, rMax) }))
   .filter((t) => t.lo < rMax);
-const tierOf = (r: number) => tiers.find((t) => r > t.lo && r <= t.hi) ?? tiers[0];
 const thresholds = tiers.slice(1).map((t) => t.lo);
 
-// The contestant with the biggest net climb is drawn in accent; everyone else
-// takes the colour of the tier they finished in.
+// Ratings change only at contests, so each history is a step line: it holds
+// its value until the next contest, with a dot where each contest landed.
 type Traj = (typeof ratings.trajectories)[number];
-const climb = (t: Traj) => t.ratings[t.ratings.length - 1] - t.ratings[0];
-const lead = ratings.trajectories.reduce((a, b) => (climb(b) > climb(a) ? b : a));
 const pts = (t: Traj) => t.ratings.map((r, i) => [+f(x(t.dates[i])), +f(y(r))] as [number, number]);
-const toPath = (p: [number, number][]) => p.map(([px, py], i) => `${i ? "L" : "M"}${px} ${py}`).join("");
+const steps = (p: [number, number][]) => p.map(([px, py], i) => (i ? `H${px}V${py}` : `M${px} ${py}`)).join("");
+const dotsD = (p: [number, number][], r: number) => p.map(([px, py]) => `M${f(px - r)} ${py}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`).join("");
+// The protagonist is the top-rated contestant (their final rating is the site's highest).
+const lastOf = (t: Traj) => t.ratings[t.ratings.length - 1];
+const lead = ratings.trajectories.reduce((a, b) => (lastOf(b) > lastOf(a) ? b : a));
 const others = ratings.trajectories
   .filter((t) => t !== lead)
   .sort((a, b) => a.dates[0].localeCompare(b.dates[0]) || b.ratings.length - a.ratings.length)
-  .map((t) => {
-    const last = t.ratings[t.ratings.length - 1];
-    const tier = tierOf(last);
-    return { d: toPath(pts(t)), p: pts(t), last, tier: tier.name, cls: STROKE[tier.name] ?? "s-ink" };
-  });
+  .map((t) => ({ p: pts(t), d: steps(pts(t)) }));
 const leadPts = pts(lead);
-const last = lead.ratings.length - 1;
-const end = { x: x(lead.dates[last]), y: y(lead.ratings[last]), r: lead.ratings[last] };
+const end = { x: leadPts[leadPts.length - 1][0], y: leadPts[leadPts.length - 1][1], r: lastOf(lead) };
 
 // Current-rating distribution, 100 points a bin, on the same axis.
 const hist = ratings.histogram100;
 const maxU = Math.max(...hist.map((h) => h.users));
 const bins = hist.map((h) => ({
-  y: y(h.to + 1) + 3,
-  h: y(h.from) - y(h.to + 1) - 6,
+  y: y(h.to + 1) + 2.5,
+  h: y(h.from) - y(h.to + 1) - 5,
   w: Math.max(1.5, (h.users / maxU) * HW),
   u: h.users,
 }));
@@ -65,107 +56,112 @@ const medY = y(ratings.median);
 const years = ["2024", "2025", "2026"].map((yr) => ({ yr, x: x(`${yr}-01-01`) }));
 const median = Math.round(ratings.median);
 const readout = `${ratings.ratedUsers} rated users, median ${median}`;
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const lines = [...others.map((o) => o.p), leadPts];
+const trajs = [...ratings.trajectories.filter((t) => t !== lead).sort((a, b) => a.dates[0].localeCompare(b.dates[0]) || b.ratings.length - a.ratings.length), lead];
 const payload = JSON.stringify({
-  lines: [...others.map((o) => ({ p: o.p, r: o.last, t: o.tier })), { p: leadPts, r: end.r, t: tierOf(end.r).name }],
-  b: B, t: T, min: rMin, max: rMax,
+  lines: lines.map((p, k) => p.map((q, i) => [q[0], q[1], trajs[k].ratings[i], `${MON[+trajs[k].dates[i].slice(5, 7) - 1]} ${trajs[k].dates[i].slice(0, 4)}`])),
+  b: B, t: T, l: L, r: R, min: rMin, max: rMax,
 });
 ---
 
-<Figure name="ratings" n={5} title="TopsOJ ratings" label="TopsOJ rating histories of eight contestants, with the rating distribution" readout={readout}>
-  <svg class="rt" viewBox={`0 0 ${W} ${H}`} role="img" data-g={payload} aria-label={`Ratings of eight anonymous TopsOJ contestants after each contest from October 2023 to January 2026, drawn over the rating tiers from Bronze to Amethyst. The biggest climber went from ${lead.ratings[0]} to ${end.r}. Beside it, the current ratings of all ${ratings.ratedUsers} rated users in bins of 100, with the median at ${median}.`}>
-    <g class="bands">
-      {tiers.map((t) => (
-        <rect class:list={["band", TINT[t.name] ? `t-${TINT[t.name]}` : "clear"]} x={L} y={f(y(t.hi))} width={HX + HW + 26 - L} height={f(y(t.lo) - y(t.hi))} />
-      ))}
-      {thresholds.map((v) => <line class="rule" x1={L} x2={HX + HW + 26} y1={f(y(v))} y2={f(y(v))} />)}
-    </g>
-
-    <g class="axis">
+<Figure name="ratings" n={6} title="TopsOJ ratings" label="TopsOJ rating histories of eight contestants, with the rating distribution" readout={readout}>
+  <svg class="rt" viewBox={`0 0 ${W} ${H}`} role="img" data-g={payload} aria-label={`Ratings of eight anonymous TopsOJ contestants after each contest from October 2023 to January 2026, as step lines across the rating tiers from Bronze to Amethyst. The top-rated contestant finished at ${end.r}. Beside it, the current ratings of all ${ratings.ratedUsers} rated users in bins of 100, with the median at ${median}.`}>
+    <g class="tiers">
+      {thresholds.map((v) => <line class="rule" x1={L} x2={HX + HW + 20} y1={f(y(v))} y2={f(y(v))} />)}
       {thresholds.map((v) => (
-        <text class:list={["cm", "num", { minor: v % 400 !== 200 }]} x={AX} y={f(y(v) + 4)}>{v}</text>
+        <text class:list={["cm", "num", { minor: v % 400 !== 200 }]} x={L - 7} y={f(y(v) + 4)} text-anchor="end">{v}</text>
       ))}
       {tiers.map((t) => (
-        <text class="tier" x={AX} y={f((y(t.lo) + y(t.hi)) / 2 + 3.5)}>{t.name}</text>
+        <text class="tier" x={TN} y={f((y(t.lo) + y(t.hi)) / 2 + 4)}>{t.name}</text>
       ))}
     </g>
 
     <g class="hist">
+      <text class="hk hk-top" x={HX} y={f(y(2500) + 12)}>{ratings.ratedUsers} rated users</text>
       <line class="faint" x1={HX} x2={HX} y1={f(y(2200))} y2={B} />
       {bins.map((b) => (
         <>
           <rect class="bin" x={HX} y={f(b.y)} width={f(b.w)} height={f(b.h)} data-w={f(b.w)} />
-          <text class="cm cnt" x={f(HX + b.w + 4)} y={f(b.y + b.h / 2 + 3.5)}>{b.u}</text>
+          <text class="cm cnt" x={f(HX + b.w + 4)} y={f(b.y + b.h / 2 + 4)}>{b.u}</text>
         </>
       ))}
-      <line class="med" x1={HX - 9} x2={HX - 2} y1={f(medY)} y2={f(medY)} />
-      <text class="hk" x={HX} y={f(y(2440))}>all {ratings.ratedUsers}</text>
-      <text class="hk" x={HX} y={f(y(2440) + 13)}>rated users</text>
+      <line class="med" x1={HX - 8} x2={HX - 1} y1={f(medY)} y2={f(medY)} />
     </g>
 
     <line class="faint" x1={L} x2={R} y1={B} y2={B} />
     {years.map((t) => (
       <>
         <line class="faint" x1={f(t.x)} x2={f(t.x)} y1={B} y2={B + 5} />
-        <text class="cm" x={f(t.x)} y={B + 22} text-anchor="middle">{t.yr}</text>
+        <text class="cm yr" x={f(t.x)} y={B + 22} text-anchor="middle">{t.yr}</text>
       </>
     ))}
-    <line class="med hk-med" x1={HX - 9} x2={HX - 2} y1={B + 18} y2={B + 18} />
-    <text class="hk" x={HX} y={B + 22}>median {median}</text>
+    <line class="med hk-med" x1={HX - 8} x2={HX - 1} y1={B + 18} y2={B + 18} />
+    <text class="hk" x={HX + 2} y={B + 22}>median {median}</text>
 
     <g class="lines">
-      {others.map((o) => <path class:list={["traj", o.cls]} d={o.d} />)}
+      {others.map((o) => (
+        <g class="traj">
+          <path class="step" d={o.d} />
+          <path class="dots" d={dotsD(o.p, 1.5)} />
+        </g>
+      ))}
     </g>
-    <path class="accent lead traj-lead" d={toPath(leadPts)} />
+    <g class="traj lead">
+      <path class="step" d={steps(leadPts)} />
+      <path class="dots" d={dotsD(leadPts, 1.8)} />
+    </g>
     <g class="head" transform={`translate(${f(end.x)} ${f(end.y)})`}>
-      <circle class="ring" r="6.5" />
-      <circle class="pulse" r="6.5" opacity="0" />
-      <circle class="dot-accent" r="3" />
-      <text class="acc val" x="11" y="4" data-last={end.r}>{end.r}</text>
+      <circle class="pulse" r="4" opacity="0" />
+      <circle class="ring" r="4.5" />
+      <text class="acc val" x="10" y="4.5" data-last={end.r}>{end.r}</text>
+      <text class="acc who" x="10" y="19">top-rated contestant</text>
     </g>
 
     <g class="tag" opacity="0">
-      <rect class="tag-r" x="0" y="-10" width="60" height="20" rx="10" />
-      <circle class="tag-d" cx="0" cy="0" r="3" />
-      <text class="tag-v" x="10" y="4"></text>
-      <text class="tag-t" x="10" y="4"></text>
+      <circle class="tag-d" cx="0" cy="0" r="4" />
+      <rect class="tag-r" x="0" y="-11" width="60" height="22" rx="4" />
+      <text class="tag-v" x="10" y="4.5"></text>
     </g>
     <rect class="hit" x={L} y={T} width={R - L + 4} height={B - T} />
   </svg>
-  <Fragment slot="caption">TopsOJ rates contestants with EloMMR, which I implemented. Each line follows one contestant's rating across the contests they entered, coloured by the tier they finished in; the bars on the right are all current ratings.</Fragment>
+  <Fragment slot="caption">TopsOJ rates contestants with EloMMR, which I implemented. Each step line follows one contestant's rating across the contests they entered; the bars on the right are all current ratings.</Fragment>
 </Figure>
 
 <style>
-  .rt .band { stroke: none; fill-opacity: 0.55; }
-  .rt .band.clear { fill: transparent; }
-  .rt .rule { stroke: var(--panel); stroke-width: 1; }
-  .rt .traj { stroke-width: 1.1; fill: none; stroke-linejoin: round; stroke-linecap: round; stroke-opacity: 0.85; transition: stroke-opacity 0.25s ease; }
-  .rt .traj.s-ink { stroke: var(--ink); stroke-opacity: 0.62; }
-  .rt .lead { stroke-width: 1.6; transition: stroke-opacity 0.25s ease; }
-  .rt .ring { fill: var(--panel); stroke: var(--accent); stroke-width: 1; }
+  .rt .rule { stroke: var(--hair); stroke-width: 1; }
+  .rt .traj .step { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
+  .rt .traj .dots { fill: var(--ink); fill-opacity: 0.32; stroke: none; }
+  .rt .traj { transition: opacity 0.25s ease; }
+  .rt .lead .step { stroke: var(--accent); stroke-width: 1.75; }
+  .rt .lead .dots { fill: var(--accent); fill-opacity: 1; }
+  .rt .ring { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
   .rt .pulse { fill: none; stroke: var(--accent); stroke-width: 1; }
-  .rt .val { font-family: var(--cm); font-size: 13px; letter-spacing: 0; }
-  .rt .tier { font-size: 10.5px; fill: var(--ink-2); }
-  .rt text.cm.num { font-size: 11px; fill: var(--ink-3); }
-  .rt .bin { fill: var(--ink); fill-opacity: 0.5; }
-  .rt text.cm.cnt { font-size: 10.5px; fill: var(--ink-3); }
+  .rt .val { font-family: var(--cm); font-size: 14px; letter-spacing: 0; }
+  .rt .who { font-size: 12.5px; }
+  .rt .tier { font-size: 12.5px; fill: var(--ink-3); }
+  .rt text.cm.num, .rt text.cm.yr { font-size: 12.5px; fill: var(--ink-3); }
+  .rt .bin { fill: var(--ink); fill-opacity: 0.42; }
+  .rt text.cm.cnt { font-size: 12.5px; fill: var(--ink-3); }
   .rt .med { stroke: var(--accent); stroke-width: 1.5; }
-  .rt .hk { font-size: 10.5px; fill: var(--ink-3); }
+  .rt .hk { font-size: 12.5px; fill: var(--ink-3); }
   .rt .tag-r { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
-  .rt .tag-d { fill: var(--panel); stroke-width: 1.5; }
+  .rt .tag-d { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
   .rt .tag-v { font-family: var(--cm); font-size: 13px; fill: var(--ink); letter-spacing: 0; }
-  .rt .tag-t { font-size: 10.5px; fill: var(--ink-3); }
   .rt .hit { fill: transparent; pointer-events: none; }
   .rt[data-live] .hit { pointer-events: all; cursor: crosshair; touch-action: pan-y; }
-  .rt.focus .traj, .rt.focus .lead { stroke-opacity: 0.14; }
-  .rt.focus .traj.on, .rt.focus .lead.on { stroke-opacity: 1; stroke-width: 2; }
+  .rt.focus .traj { opacity: 0.35; }
+  .rt.focus .traj.on { opacity: 1; }
+  .rt .traj.on .step { stroke: var(--ink); stroke-width: 1.5; }
+  .rt .traj.on .dots { fill-opacity: 1; }
+  .rt .lead.on .step { stroke: var(--accent); stroke-width: 2; }
+  /* Phones: the plot shrinks ~2x. Keep one readable label per block, hide the rest. */
   @media (max-width: 560px) {
-    .rt .tier, .rt .cnt, .rt .hk, .rt .hk-med, .rt text.minor { display: none; }
-    .rt text { font-size: 20px; }
-    .rt text.cm, .rt text.cm.num { font-size: 20px; }
-    .rt .val { font-size: 22px; }
-    .rt .traj { stroke-width: 1.5; }
-    .rt .lead { stroke-width: 2.25; }
-    .rt .tag-v { font-size: 22px; }
-    .rt .tag-t { font-size: 19px; }
+    .rt .tier, .rt .cnt, .rt .hk, .rt .hk-med, .rt text.minor, .rt .who { display: none; }
+    .rt text.cm.num, .rt text.cm.yr { font-size: 23px; }
+    .rt .val { font-size: 25px; }
+    .rt .tag-v { font-size: 24px; }
+    .rt .traj .step { stroke-width: 1.5; }
+    .rt .lead .step { stroke-width: 2.5; }
   }
 </style>

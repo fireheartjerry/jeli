@@ -36,6 +36,7 @@ export default function (root: HTMLElement) {
     bytes: q<SVGTextElement>(g, ".ck-bytes"),
   }));
   const live = $(".ck-live"), wait = $(".ck-wait");
+  const shortV = qa<SVGTSpanElement>(root, ".ck-short .v");
 
   // Sim.
   const hz = qa(root, ".ck-horizon"), ptr = $(".ck-pointer");
@@ -58,7 +59,7 @@ export default function (root: HTMLElement) {
   // Labels grow on phones (CSS); push the corner ids out to match. Read on resize only.
   let gap = 1;
   const measure = () => {
-    gap = 1 + Math.max(0, parseFloat(getComputedStyle(idx[0]).fontSize) / 11 - 1) * 0.6;
+    gap = 1 + Math.max(0, parseFloat(getComputedStyle(idTag).fontSize) / 11 - 1) * 0.6;
   };
   measure();
   window.addEventListener("resize", () => {
@@ -221,6 +222,13 @@ export default function (root: HTMLElement) {
       L.bytes.textContent = `${`{"roll":${fr.v[0]},"pitch":${fr.v[1]},"throttle":${fr.v[2]},"fire":${fr.v[3]}}`.length} B`;
     }
     live.style.opacity = buf.length ? "1" : "0";
+    // Phones get one short line: the newest frame's values.
+    const last = buf[buf.length - 1];
+    const sv = last ? [last.v[0], last.v[1], last.v[2]].map((v) => v.replace("-", "−")).concat(last.fire ? "  fire" : "") : ["", "", "", ""];
+    shortV[0].parentElement?.setAttribute("opacity", last ? "1" : "0");
+    sv.forEach((v, j) => {
+      if (shortV[j].textContent !== v) shortV[j].textContent = v;
+    });
     wait.setAttribute("opacity", buf.length ? "0" : "1");
   }
   function push() {
@@ -231,7 +239,7 @@ export default function (root: HTMLElement) {
   writeLog();
 
   render();
-  scrubbed(root).to(state, { t: 1, duration: 1, onUpdate: render });
+  scrubbed(root, { start: "top 85%", end: "center 45%" }).to(state, { t: 1, duration: 1, onUpdate: render });
 
   // ---- ambient: turbulence on the card, frames at ~10 Hz, the REC light,
   // and a short burst of fire every few seconds once the story has played.

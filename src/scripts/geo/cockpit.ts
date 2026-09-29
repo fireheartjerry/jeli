@@ -283,8 +283,11 @@ export const hdgTape = (v: number) => `translate(${r1(-v * HDG.k)} 0)`;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 /** Tape and ladder labels fade as they slide under a value box or out of the window. */
-export const fadeTape = (dy: number) => Math.round(clamp01((Math.abs(dy) - 13) / 7) * 100) / 100;
-export const fadeHdg = (dx: number) => Math.round(clamp01((Math.abs(dx) - 24) / 10) * 100) / 100;
+// Both ends: clear of the value box, and soft at the window's edges rather than clipped.
+export const fadeTape = (dy: number) =>
+  Math.round(Math.min(clamp01((Math.abs(dy) - 13) / 7), clamp01((ADI.hh - 8 - Math.abs(dy)) / 14)) * 100) / 100;
+export const fadeHdg = (dx: number) =>
+  Math.round(Math.min(clamp01((Math.abs(dx) - 24) / 10), clamp01(((HDG.x1 - HDG.x0) / 2 - 10 - Math.abs(dx)) / 18)) * 100) / 100;
 export const fadeRung = (y: number) => Math.round(clamp01((38 - Math.abs(y)) / 8) * 100) / 100;
 
 export const wrap = (h: number) => ((Math.round(h) % 360) + 360) % 360;

@@ -1,7 +1,7 @@
 // Build-time geometry for Fig. "topsojmap": a dot-matrix world on the Equal
 // Earth projection. Land is sampled on a regular hexagonal grid in screen
 // space; each dot belongs to the world-atlas country it falls in, and the
-// countries in the Google Analytics export light up by log(engaged sessions).
+// countries in the Google Analytics export light up by log(active users).
 // Build only (it reads world-atlas); the browser gets the packed result.
 import { feature } from "topojson-client";
 import { rowScale } from "./equalearth";
@@ -32,6 +32,12 @@ const ALIAS: Record<string, string> = {
   "St. Vincent & Grenadines": "St. Vin. and Gren.",
   "Turks & Caicos Islands": "Turks and Caicos Is.",
   "U.S. Virgin Islands": "U.S. Virgin Is.",
+};
+// GA reports five French overseas territories on their own; Natural Earth draws
+// them inside France's shape. They light France's dots and count toward the
+// total, while France keeps its own user count for shading and hover.
+const PART_OF: Record<string, string> = {
+  Guadeloupe: "France", "Réunion": "France", "French Guiana": "France", Martinique: "France", Mayotte: "France",
 };
 // Natural Earth splits a few territories off; fold them into the country GA reports.
 const FOLD: Record<string, string> = { "N. Cyprus": "Cyprus", Somaliland: "Somalia" };
@@ -76,11 +82,13 @@ function mainPoint(c: Country): [number, number] {
   return [lon > 180 ? lon - 360 : lon, lat];
 }
 
-export interface MapCountry { name: string; s: number; lit: boolean }
+/** `s` is active users; `n` how many GA countries/territories the shape stands for; `at` its main landmass. */
+export interface MapCountry { name: string; s: number; lit: boolean; n: number; at: [number, number] }
 export interface MapData {
   countries: MapCountry[];
   /** Packed dots: [row, col, country index] triples. */
   dots: number[];
+  /** GA countries and territories shown lit. */
   lit: number;
   unmatched: string[];
 }
@@ -118,18 +126,26 @@ export function buildMap(): MapData {
   const list = [...byName.values()];
 
   // Match the analytics export.
-  const sessions = new Map<string, { s: number; ga: string }>();
+  const users = new Map<string, { s: number; ga: string; n: number }>();
   const unmatched: string[] = [];
+  const parts: string[] = [];
   for (const g of ga.countries) {
+    if (g.activeUsers < 1) continue;
+    if (PART_OF[g.name]) { parts.push(PART_OF[g.name]); continue; }
     const atlas = ALIAS[g.name] ?? g.name;
     if (!byName.has(atlas)) { unmatched.push(g.name); continue; }
-    sessions.set(atlas, { s: g.engagedSessions, ga: g.name });
+    users.set(atlas, { s: g.activeUsers, ga: g.name, n: 1 });
+  }
+  for (const atlas of parts) {
+    const m = users.get(atlas);
+    if (m) m.n++;
   }
   if (unmatched.length) console.warn(`[topsojmap] GA countries without a world-atlas shape: ${unmatched.join(", ")}`);
 
   const countries: MapCountry[] = list.map((c) => {
-    const m = sessions.get(c.name);
-    return { name: m ? m.ga : pretty(c.name), s: m?.s ?? 0, lit: (m?.s ?? 0) > 0 };
+    const m = users.get(c.name);
+    const at = mainPoint(c).map((v) => Math.round(v * 10) / 10) as [number, number];
+    return { name: m ? m.ga : pretty(c.name), s: m?.s ?? 0, lit: (m?.s ?? 0) > 0, n: m?.n ?? 0, at };
   });
 
   // Sample the grid.
@@ -180,8 +196,11 @@ export function buildMap(): MapData {
   }
 
   const dots: number[] = [];
-  for (const [k, i] of [...owner.entries()].sort((a, b) => a[0] - b[0])) dots.push(k >> 8, k & 255, i);
-  const lit = countries.filter((c, i) => c.lit && count.get(i)).length;
+  // The key sits in the empty South Pacific; keep its box clear of the one
+  // outlying island (New Zealand's Chathams) that would land inside it.
+  const inKey = (k: number) => cellX(k >> 8, k & 255) < 340 && cellY(k >> 8) > 392;
+  for (const [k, i] of [...owner.entries()].sort((a, b) => a[0] - b[0])) if (!inKey(k)) dots.push(k >> 8, k & 255, i);
+  const lit = countries.reduce((a, c) => a + (c.lit ? c.n : 0), 0);
   cache = { countries, dots, lit, unmatched };
   return cache;
 }

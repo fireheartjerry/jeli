@@ -9,7 +9,8 @@ const R = roche(md, ma);
 const map = (x: number, y: number): [number, number] => [100 + x * a, 100 + y * a];
 const donor = toPath(R.donor(), map);
 const acc = toPath(R.accretor(), map);
-const updated = new Date().toLocaleDateString("en-CA", { month: "long", year: "numeric" });
+// Bump when the content changes; a build timestamp would claim updates that never happened.
+const updated = "September 2026";
 ---
 
 <footer class="wrap foot">
@@ -82,7 +83,7 @@ const updated = new Date().toLocaleDateString("en-CA", { month: "long", year: "n
     margin-bottom: 12px;
   }
   .big :global(.mail) {
-    font-size: clamp(28px, 4.6vw, 64px);
+    font-size: clamp(24px, 3.6vw, 48px);
     font-weight: 500;
     letter-spacing: -0.035em;
     line-height: 1.05;
@@ -96,6 +97,11 @@ const updated = new Date().toLocaleDateString("en-CA", { month: "long", year: "n
     margin-top: 14px;
     font-size: 14px;
     color: var(--ink-3);
+  }
+  @media (hover: none) {
+    .hint {
+      display: none;
+    }
   }
   kbd {
     font: 12px var(--sans);
@@ -136,8 +142,12 @@ const updated = new Date().toLocaleDateString("en-CA", { month: "long", year: "n
   }
   @media (max-width: 640px) {
     .foot {
-      grid-template-columns: 1fr;
-      grid-template-areas: "coda" "big" "meta";
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "big coda" "meta meta";
+      gap: 32px 16px;
+    }
+    .coda {
+      width: 72px;
     }
   }
 </style>

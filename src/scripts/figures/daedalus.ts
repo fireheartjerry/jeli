@@ -1,5 +1,5 @@
 import { gsap, scrubbed, whileVisible, q, qa } from "../motion";
-import { VIEW, CAM0, TOOLS, gesture, mesh, floor, gizmo, pip, dimension, bonesPath, fmt, readout, sway } from "../geo/daedalus";
+import { VIEW, CAM0, TOOLS, captionOpacity, gesture, mesh, floor, gizmo, pip, dimension, bonesPath, fmt, readout, sway } from "../geo/daedalus";
 
 const NS = "http://www.w3.org/2000/svg";
 const r1 = (v: number) => (Math.round(v * 10) / 10).toString();
@@ -18,12 +18,8 @@ export default function (root: HTMLElement) {
   // UI.
   const tools = qa<SVGGElement>(root, ".dd-tool");
   const tname = $<SVGTextElement>(".dd-tname");
-  const chips = qa<SVGGElement>(root, ".dd-chip").map((g) => ({
-    g,
-    prog: q<SVGPathElement>(g, ".dd-prog"),
-    w: +(q<SVGRectElement>(g, "rect").getAttribute("width") ?? 0),
-    h: +(q<SVGRectElement>(g, "rect").getAttribute("height") ?? 0),
-  }));
+  const caps = qa<SVGTextElement>(root, ".dd-capt");
+  const dimG = $(".dd-dim");
   const hit = $<SVGRectElement>(".dd-hit");
 
   // Hand, and its copy in the webcam inset.
@@ -62,6 +58,7 @@ export default function (root: HTMLElement) {
     line.setAttribute("d", dim.line);
     val.setAttribute("x", r1(dim.label[0]));
     val.setAttribute("y", r1(dim.label[1]));
+    dimG.setAttribute("opacity", `${Math.round(dim.on * (1 - g.relax) * 100) / 100}`);
     const v = fmt(g.pinch);
     if (val.textContent !== v) val.textContent = v;
 
@@ -72,16 +69,12 @@ export default function (root: HTMLElement) {
       pdots[i].setAttribute("cy", r1(y));
     });
 
-    // The toolbar and chips follow the gesture.
+    // The toolbar and the corner caption follow the gesture.
     const ti = TOOLS.indexOf(g.tool);
     tools.forEach((el, i) => el.classList.toggle("on", i === ti));
     tname.setAttribute("y", `${64 + ti * 30}`);
     if (tname.textContent !== g.tool) tname.textContent = g.tool;
-    chips.forEach((c, i) => {
-      c.g.classList.toggle("on", i === g.beat);
-      const len = i < g.beat ? c.w : i === g.beat ? (c.w - c.h) * g.prog : 0;
-      c.prog.style.strokeDasharray = `${r1(len)} ${c.w}`;
-    });
+    caps.forEach((c, i) => c.setAttribute("opacity", `${captionOpacity(i, state.t)}`));
 
     const text = readout(g.pinch, g.S);
     if (out && text !== prev) out.textContent = text;
@@ -142,7 +135,7 @@ export default function (root: HTMLElement) {
     drawHand();
   });
 
-  scrubbed(root).to(state, { t: 1, duration: 1, onUpdate: render });
+  scrubbed(root, { start: "top 85%", end: "center 45%" }).to(state, { t: 1, duration: 1, onUpdate: render });
 
   // Ambient: the view orbits slowly while the hand is away from the surface.
   whileVisible(root, (dt) => {

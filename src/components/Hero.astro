@@ -37,15 +37,15 @@ const accD = toPath(R.accretor(), map);
         ))}
       </h1>
       <p class="lede">
-        I study computer science at the University of Waterloo as a Schulich Leader. I build the
-        video systems at <a class="ln" href="#work">Mathos AI</a>, run{" "}
+        I study computer science at the University of Waterloo as a Schulich Leader. I work on video
+        export and AI integrations at <a class="ln" href="#work">Mathos AI</a>, run{" "}
         <a class="ln" href="https://topsoj.com" target="_blank" rel="noopener">TopsOJ</a>, a judge for
         competitive math, and write papers about <a class="ln" href="#research">binary stars</a>.
       </p>
     </div>
 
     <figure class="fig hero-fig" data-hero data-g={JSON.stringify(G)} aria-labelledby="hero-cap">
-      <svg viewBox="0 0 520 548" role="img" aria-label="Two stars orbit each other while gas streams from the larger to the smaller. The orbit shrinks, while the classical prediction widens.">
+      <svg viewBox="0 0 520 572" role="img" aria-label="Two stars orbit each other while gas streams from the larger to the smaller. The orbit shrinks, while the classical prediction widens.">
         <circle class="ring-ghost" cx={G.cx} cy={G.cy} r={ac * ma} />
         <circle class="ring" cx={G.cx} cy={G.cy} r={a * ma} />
         <circle class="ring" cx={G.cx} cy={G.cy} r={a * md} />
@@ -67,7 +67,13 @@ const accD = toPath(R.accretor(), map);
             </>
           ))}
           <text class="m" x={G.px0 - 10} y={G.py1} text-anchor="end">a/a<tspan class="sub" dy="4">0</tspan></text>
-          <text class="m ax" x={G.px1} y={G.py0 + 22} text-anchor="end">f = Δm/M<tspan class="sub" dy="4">d</tspan></text>
+          {[0, 0.05, 0.1, 0.15].map((f) => (
+            <>
+              <line class="faint" x1={X(f)} x2={X(f)} y1={G.py0} y2={G.py0 + 4} />
+              <text class="cm tk" x={X(f)} y={G.py0 + 17} text-anchor="middle">{Math.round(f * 100)}%</text>
+            </>
+          ))}
+          <text class="m ax" x={G.px1} y={G.py0 + 36} text-anchor="end">f = Δm/M<tspan class="sub" dy="4">d</tspan></text>
           <path class="dash c-cons" d={curve(aConservative)} />
           <path class="accent c-ball" d={curve(aBallistic)} />
           <line class="cursor" x1={X(dm)} x2={X(dm)} y1={G.py1 - 6} y2={G.py0} />
@@ -117,13 +123,14 @@ const accD = toPath(R.accretor(), map);
   .word {
     display: inline-flex;
     overflow: clip;
-    padding-bottom: 0.08em;
-    margin-bottom: -0.08em;
+    /* Room for descenders (the y) inside the reveal mask. */
+    padding-bottom: 0.24em;
+    margin-bottom: -0.24em;
   }
   .ch {
     display: inline-block;
-    animation: rise 0.9s var(--ease-out) both;
-    animation-delay: calc(80ms + var(--i) * 38ms);
+    animation: rise 0.85s var(--ease-out) both;
+    animation-delay: calc(var(--i) * 26ms);
   }
   @keyframes rise {
     from { transform: translateY(105%); }
@@ -175,7 +182,9 @@ const accD = toPath(R.accretor(), map);
     display: block;
     white-space: pre;
     margin-top: 6px;
-    font-family: var(--cm);
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
     color: var(--ink-3);
     min-height: 1.5em;
   }

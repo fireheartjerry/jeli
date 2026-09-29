@@ -12,7 +12,7 @@ export const S = 7.2;
 export const ROW = (S * Math.sqrt(3)) / 2;
 export const DOT_R = 2.05;
 export const LAT_TOP = 83.7, LAT_BOT = -56.2;
-export const PAD_T = 6;
+export const PAD_T = 18; // headroom above the Arctic
 const Y_TOP = project(0, LAT_TOP)[1];
 export const X0 = CX - Math.floor((CX - 4) / S) * S;
 export const TORONTO = { lon: -79.38, lat: 43.65 };
@@ -30,21 +30,31 @@ export const VIEW_H = Math.ceil(cellY(ROWS - 1) + 8);
 
 type Pt = [number, number];
 
-/** Graticule every 30 degrees, as screen polylines. */
-export function graticule(): Pt[][] {
-  const lines: Pt[][] = [];
+/**
+ * Graticule every 30 degrees, as screen polylines grouped by opacity: the
+ * meridians fade out in steps toward the top and bottom of the frame, so the
+ * crop never reads as a hard edge.
+ */
+export const GRAT_STEPS: [number, number, number][] = [
+  [LAT_BOT, -46, 0.3], [-46, -38, 0.65], [-38, 58, 1], [58, 68, 0.65], [68, 76, 0.35], [76, LAT_TOP, 0.12],
+];
+export function graticule(): { a: number; lines: Pt[][] }[] {
+  const groups = GRAT_STEPS.map(([, , a]) => ({ a, lines: [] as Pt[][] }));
   for (let lon = -180; lon <= 180; lon += 30) {
-    const l: Pt[] = [];
-    for (let lat = LAT_BOT; lat < LAT_TOP; lat += 2) l.push(px(lon, lat));
-    l.push(px(lon, LAT_TOP));
-    lines.push(l);
+    GRAT_STEPS.forEach(([lo, hi], k) => {
+      const l: Pt[] = [];
+      for (let lat = lo; lat < hi; lat += 2) l.push(px(lon, lat));
+      l.push(px(lon, hi));
+      groups[k].lines.push(l);
+    });
   }
+  const full = groups[GRAT_STEPS.findIndex(([, , a]) => a === 1)];
   for (const lat of [-30, 0, 30, 60]) {
     const l: Pt[] = [];
     for (let lon = -180; lon <= 180; lon += 10) l.push(px(lon, lat));
-    lines.push(l);
+    (lat === 60 ? groups[1] : full).lines.push(l);
   }
-  return lines;
+  return groups;
 }
 
 const RAD = Math.PI / 180;

@@ -177,25 +177,25 @@ function bind(root: SVGSVGElement) {
   }
 
   function renderA(p: number): string {
-    const r = seg(p, 0, 0.16);
-    ref.setAttribute("d", partial(refPts, r)[0]);
-    op(ref, r > 0 ? 1 : 0);
-    op(acall, seg(p, 0.12, 0.2));
+    // The reference line and its callout are there from the start; the curves scrub over it.
+    ref.setAttribute("d", partial(refPts, 1)[0]);
+    op(ref, 1);
+    op(acall, 1);
     let text = "L/L₀ = 1 − f";
     let head: Pt | null = null;
     G.a.curves.forEach((pts, i) => {
-      const s = 0.2 + i * 0.24;
-      const u = seg(p, s, s + 0.22);
+      const s = i * 0.3;
+      const u = seg(p, s, s + 0.34);
       const [d, end] = partial(pts, u);
       lcs[i].setAttribute("d", d);
       op(lcs[i], u > 0 ? 1 : 0);
-      op(arows[i], seg(p, s + 0.18, s + 0.24));
+      op(arows[i], seg(p, s + 0.26, s + 0.34));
       if (u > 0) {
         head = end;
         text = `q₀ = ${G.a.q0[i]}  L/L₀ = ${lBallistic(u * G.a.fmax, G.a.q0[i]).toFixed(3)}`;
       }
     });
-    op(alsum, seg(p, 0.9, 0.98));
+    op(alsum, seg(p, 0.92, 1));
     if (head) {
       ha.setAttribute("cx", (head as Pt)[0].toFixed(2));
       ha.setAttribute("cy", (head as Pt)[1].toFixed(2));
@@ -206,17 +206,16 @@ function bind(root: SVGSVGElement) {
   }
 
   function renderB(p: number): string {
-    const t = G.b.tmax * seg(p, 0.02, 0.8);
+    const t = G.b.tmax * seg(p, 0, 0.8);
     const u = t / G.b.tmax;
     const x = xOf(t);
-    noc.setAttribute("d", `M${G.b.x0} ${G.b.yOne}H${x.toFixed(2)}`);
+    // Both references (no closure at 1, the analytic value) are drawn from the start.
+    noc.setAttribute("d", `M${G.b.x0} ${G.b.yOne}H${G.R}`);
     const [d, end] = partial(G.b.curve, u);
     clo.setAttribute("d", d);
-    const on = p > 0 ? 1 : 0;
-    op(noc, on); op(clo, on); op(hn, on); op(hc, on);
-    op(nocl, seg(u, 0.04, 0.12));
-    op(anl, seg(u, 0.06, 0.14));
-    op(clol, seg(u, 0.5, 0.64));
+    op(noc, 1); op(nocl, 1); op(anl, 1);
+    op(clo, 1); op(hn, 1); op(hc, 1);
+    op(clol, seg(u, 0.72, 0.86));
     hn.setAttribute("cx", x.toFixed(2));
     hc.setAttribute("cx", end[0].toFixed(2));
     hc.setAttribute("cy", end[1].toFixed(2));
@@ -275,7 +274,7 @@ function bind(root: SVGSVGElement) {
       op(ects[i], shown);
       op(drops[i], shown);
     });
-    op(ccall, seg(eta, lines[2].ec + 0.02, lines[2].ec + 0.1));
+    op(ccall, 1);
     if (drive) {
       op(cur, 1);
       return placeCursor(drive.eta, drive.qi);
@@ -340,10 +339,11 @@ export default function (root: HTMLElement) {
   };
 
   // Scroll: the three panels draw in turn.
-  const tl = scrubbed(root, { start: "top 65%", end: "bottom 72%" });
-  tl.to(st, { a: 1, duration: 1 })
-    .to(st, { b: 1, duration: 1 }, ">0.08")
-    .to(st, { c: 1, duration: 1 }, ">0.08");
+  // Overlapping tracks, all finished by the time the plate is centred.
+  const tl = scrubbed(root, { start: "top 85%", end: "center 45%" });
+  tl.to(st, { a: 1, duration: 0.42 }, 0)
+    .to(st, { b: 1, duration: 0.46 }, 0.24)
+    .to(st, { c: 1, duration: 0.5 }, 0.5);
   tl.eventCallback("onUpdate", render);
   render();
 

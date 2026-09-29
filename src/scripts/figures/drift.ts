@@ -3,8 +3,8 @@ import { gsap, scrubbed, whileVisible, phase, q, qa } from "../motion";
 // The whole story is a pure function of timeline time t (0..T), so it
 // scrubs backwards exactly. Ambient loops only add motion on top.
 const T = 10;
-const TYPE = [0.1, 1.0];
-const SEND = 1.05;
+const TYPE = [0.0, 0.9];
+const SEND = 0.95;
 const THINK = [1.25, 5.0];
 const POP = [1.7, 2.95];
 const OPEN = 3.0;
@@ -205,7 +205,7 @@ export default function (root: HTMLElement) {
       render();
     });
   };
-  mm.add("(min-width: 561px)", bind({ start: "top 45%", end: "bottom 30%" }));
+  mm.add("(min-width: 561px)", bind({ start: "top 85%", end: "center 45%" }));
   mm.add("(max-width: 560px)", bind({ start: "top 65%", end: "bottom 85%" }));
   render();
 

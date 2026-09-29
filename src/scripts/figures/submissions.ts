@@ -39,7 +39,7 @@ export default function (root: HTMLElement) {
   const D0 = 0.06, DL = 0.84; // the line draws over [D0, D0 + DL]
   const when = (x: number) => D0 + ((x - G.L) / (G.R - G.L)) * DL;
   const state = { d: 0 };
-  const tl = scrubbed(root);
+  const tl = scrubbed(root, { start: "top 85%", end: "center 45%" });
   tl.to(strip, { opacity: 1, duration: 0.06, ease: "power3.out" }, 0)
     .set(head, { opacity: 1 }, D0)
     .to(line, { strokeDashoffset: 0, opacity: 1, duration: DL }, D0)
@@ -112,14 +112,14 @@ export default function (root: HTMLElement) {
     const g = document.createElementNS(NS, "g");
     const r = document.createElementNS(NS, "rect");
     r.setAttribute("class", "chip-r");
-    r.setAttribute("y", "-8");
-    r.setAttribute("width", "28");
-    r.setAttribute("height", "16");
+    r.setAttribute("y", "-9");
+    r.setAttribute("width", "30");
+    r.setAttribute("height", "18");
     r.setAttribute("rx", "3");
     const t = document.createElementNS(NS, "text");
     t.setAttribute("class", "chip-t");
-    t.setAttribute("x", "14");
-    t.setAttribute("y", "3.5");
+    t.setAttribute("x", "15");
+    t.setAttribute("y", "4.3");
     t.setAttribute("text-anchor", "middle");
     g.append(r, t);
     g.style.opacity = "0";
@@ -229,16 +229,24 @@ export default function (root: HTMLElement) {
   const xd = q<SVGCircleElement>(xh, ".xh-d");
   const xp = q<SVGGElement>(xh, ".xh-p");
   const xbox = q<SVGRectElement>(xp, ".xh-box");
-  const [tm, tn, tc] = qa<SVGTextElement>(xp, "text");
+  const tm = q<SVGTextElement>(xp, ".xh-m");
   svg.dataset.live = "";
+  const resting = () => (readout ? readout.textContent : "");
+  let saved = "";
 
   let cur = -1;
+  // The whole series stays drawn; the crosshair only adds a hairline, a dot
+  // on the line and a "Mon YYYY: n" readout for that month.
   function show(i: number) {
     if (i === cur) return;
     if (cur >= 0) bars.find((b) => Number(b.dataset.i) === cur)?.classList.remove("on");
+    if (cur < 0 && i >= 0) saved = resting() ?? "";
     cur = i;
-    svg.classList.toggle("reading", i >= 0);
-    if (i < 0) { xh.setAttribute("opacity", "0"); return; }
+    if (i < 0) {
+      xh.setAttribute("opacity", "0");
+      if (readout && saved) readout.textContent = saved;
+      return;
+    }
     bars.find((b) => Number(b.dataset.i) === i)?.classList.add("on");
     const [lab, mn, mc] = G.m[i];
     const x = xOf(i), y = yOf(mc);
@@ -246,23 +254,20 @@ export default function (root: HTMLElement) {
     xl.setAttribute("x2", x.toFixed(1));
     xd.setAttribute("cx", x.toFixed(1));
     xd.setAttribute("cy", y.toFixed(1));
-    tm.textContent = lab;
-    tn.textContent = `${fmt.format(mn)} this month`;
-    tc.textContent = `${fmt.format(mc)} in total`;
-    const lh = small ? 24 : 15, pad = small ? 12 : 9;
-    [tm, tn, tc].forEach((t, k) => {
-      t.setAttribute("x", String(pad));
-      t.setAttribute("y", String(pad + (small ? 15 : 7) + k * lh));
-    });
-    const w = Math.max(tm.getComputedTextLength(), tn.getComputedTextLength(), tc.getComputedTextLength()) + pad * 2;
-    const h = lh * 3 + pad * 2 - (small ? 4 : 2);
+    const text = `${lab}: ${fmt.format(mn)}`;
+    tm.textContent = text;
+    if (readout) readout.textContent = `${text} submissions`;
+    const fs = parseFloat(getComputedStyle(tm).fontSize) || 13;
+    const pad = fs * 0.6;
+    const w = tm.getComputedTextLength() + pad * 2;
+    const h = fs * 1.7;
+    tm.setAttribute("x", pad.toFixed(1));
+    tm.setAttribute("y", (h / 2 + fs * 0.35).toFixed(1));
     xbox.setAttribute("width", w.toFixed(1));
     xbox.setAttribute("height", h.toFixed(1));
-    // Keep the panel off the line: above it early on, below it once it climbs.
-    const right = x + 10 + w < G.R + 30;
-    const px = right ? x + 10 : x - 10 - w;
-    const py = mc < G.max * 0.45 ? G.T - 10 : G.B - G.BAR - h - 8;
-    xp.setAttribute("transform", `translate(${px.toFixed(1)} ${py.toFixed(1)})`);
+    // The tag sits at the top of the hairline, flipped to stay inside the plot.
+    const px = Math.max(G.L, Math.min(G.R + 40 - w, x - w / 2));
+    xp.setAttribute("transform", `translate(${px.toFixed(1)} ${(G.T - 12 - h).toFixed(1)})`);
     xh.setAttribute("opacity", "1");
   }
 

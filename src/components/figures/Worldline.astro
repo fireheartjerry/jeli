@@ -1,0 +1,359 @@
+---
+// Fig: a seeded, deterministic universe after Worldline Engine, laid out like
+// an engine editor: a viewport, a timeline scrubber and an inspector. The same
+// generator and integrator run here at build time (for the static snapshot of
+// the final frame) and in the browser (for the scrubbable canvas).
+import Figure from "../Figure.astro";
+import {
+  FRAMES, MAX_BODIES, VIEW_W, VIEW_H, CX, CY, TRAIL, ACCENT_TRAIL, TRAIL_ALPHA, ACCENT_ALPHA,
+  A_INNER, A_OUTER, FAMILY_INNER, FAMILY_OUTER,
+  createUniverse, generate, fingerprint, hex, sci, sparkPath, familyCounts, camDeg,
+} from "../../scripts/worldline";
+
+const SEED = "yuzeli";
+const u = generate(SEED, createUniverse());
+const F = FRAMES - 1;
+const f1 = (v: number) => v.toFixed(1);
+const P = (f: number, i: number) => {
+  const b = (f * MAX_BODIES + i) * 2;
+  return `${f1(u.pos[b])} ${f1(u.pos[b + 1])}`;
+};
+const seg = (i: number, from: number, to: number) => {
+  let d = `M${P(Math.max(0, from), i)}`;
+  for (let f = Math.max(0, from) + 1; f <= to; f++) d += `L${P(f, i)}`;
+  return d;
+};
+// Trails split into equal pieces, oldest faintest, as the canvas draws them.
+const pieces = (len: number, k: number, only: (i: number) => boolean) =>
+  Array.from({ length: k }, (_, c) => {
+    const from = F - len + Math.round((c * len) / k);
+    const to = F - len + Math.round(((c + 1) * len) / k);
+    let d = "";
+    for (let i = 1; i < u.n; i++) if (only(i)) d += seg(i, from, to);
+    return d;
+  });
+const FAM = [
+  { cls: "ink", fam: 0 },
+  { cls: "in", fam: FAMILY_INNER },
+  { cls: "out", fam: FAMILY_OUTER },
+];
+const trails = FAM.map(({ cls, fam }) => ({
+  cls,
+  d: pieces(TRAIL, TRAIL_ALPHA.length, (i) => i !== u.accent && u.family[i] === fam),
+}));
+const accentTrail = pieces(ACCENT_TRAIL, ACCENT_ALPHA.length, (i) => i === u.accent);
+
+const at = (i: number) => {
+  const b = (F * MAX_BODIES + i) * 2;
+  return { x: u.pos[b], y: u.pos[b + 1], r: u.size[i] };
+};
+const disc = (i: number) => {
+  const { x, y, r } = at(i);
+  return `M${f1(x - r)} ${f1(y)}a${r.toFixed(2)} ${r.toFixed(2)} 0 1 0 ${(2 * r).toFixed(2)} 0a${r.toFixed(2)} ${r.toFixed(2)} 0 1 0 ${(-2 * r).toFixed(2)} 0`;
+};
+const dots = FAM.map(({ cls, fam }) => ({
+  cls,
+  d: Array.from({ length: u.n - 1 }, (_, k) => k + 1)
+    .filter((i) => i !== u.accent && u.family[i] === fam)
+    .map(disc)
+    .join(""),
+}));
+const core = at(0);
+const lead = at(u.accent);
+const dir = lead.x > VIEW_W - 130 ? -1 : 1;
+const r0 = lead.r + 5;
+
+// Polar grid in the disk plane, seen through the seeded camera.
+const { phi, tilt } = u.cam;
+const RINGS = [60, 120, 180, 240, 300];
+const spokes = Array.from({ length: 12 }, (_, j) => {
+  const a = (j * Math.PI) / 6;
+  const dx = Math.cos(a) * Math.cos(phi) - Math.sin(a) * Math.sin(phi);
+  const dy = (Math.cos(a) * Math.sin(phi) + Math.sin(a) * Math.cos(phi)) * tilt;
+  return `M${f1(CX + 18 * dx)} ${f1(CY + 18 * dy)}L${f1(CX + 300 * dx)} ${f1(CY + 300 * dy)}`;
+}).join("");
+// Band labels sit on the rings, just right of the near side.
+const RING_LABEL_ANGLE = 0.32;
+const ringLabel = (r: number) => ({
+  x: f1(CX + r * Math.cos(RING_LABEL_ANGLE)),
+  y: f1(CY + r * tilt * Math.sin(RING_LABEL_ANGLE)),
+});
+
+const cam = camDeg(phi, tilt);
+const counts = familyCounts(u);
+const SPARK_W = 150, SPARK_H = 36;
+const spark = sparkPath(u, SPARK_W, SPARK_H);
+const readout = `seed ${SEED} → ${hex(fingerprint(SEED))}`;
+const KEYS = Array.from({ length: 10 }, (_, k) => (k === 0 ? 1 : k * 100));
+const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
+---
+
+<Figure name="worldline" n={12} title="Worldline" label="A seeded universe simulation you can scrub through time" readout={readout}>
+  <div class="wl">
+    <div class="wl-main">
+      <div class="wl-stage" role="img" aria-label={`A universe of ${u.n} bodies generated from the seed ${SEED}: one heavy central body with smaller bodies on perturbed orbits, each trailing its recent path, over a polar grid. Inner orbits are green, outer orbits violet, and the one planet is blue with a long trail. Scrolling plays its ${FRAMES} precomputed frames forwards or backwards.`}>
+        <svg class="wl-snap" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} aria-hidden="true">
+          <g class="wl-grid">
+            {RINGS.filter((r) => r !== A_INNER && r !== A_OUTER).map((r) => (
+              <ellipse cx={CX} cy={CY} rx={r} ry={f1(r * tilt)} />
+            ))}
+            <path d={spokes} />
+          </g>
+          <ellipse class="wl-band in" cx={CX} cy={CY} rx={A_INNER} ry={f1(A_INNER * tilt)} />
+          <ellipse class="wl-band out" cx={CX} cy={CY} rx={A_OUTER} ry={f1(A_OUTER * tilt)} />
+          {trails.map((t) => t.d.map((d, c) => <path class={`wl-trail ${t.cls}`} d={d} stroke-opacity={TRAIL_ALPHA[c]} />))}
+          {accentTrail.map((d, c) => <path class="wl-atrail" d={d} stroke-opacity={ACCENT_ALPHA[c]} />)}
+          {dots.map((t) => <path class={`wl-dot ${t.cls}`} d={t.d} />)}
+          <text class="wl-rl" x={ringLabel(A_INNER).x} y={ringLabel(A_INNER).y} dx="4" dy="19">a = {A_INNER}</text>
+          <text class="wl-rl" x={ringLabel(A_OUTER).x} y={ringLabel(A_OUTER).y} dx="4" dy="19">a = {A_OUTER}</text>
+          <circle class="wl-halo" cx={f1(core.x)} cy={f1(core.y)} r="9" />
+          <circle class="dot" cx={f1(core.x)} cy={f1(core.y)} r={core.r} />
+          <circle class="wl-ahalo" cx={f1(lead.x)} cy={f1(lead.y)} r={(lead.r + 3.5).toFixed(2)} />
+          <circle class="dot-accent" cx={f1(lead.x)} cy={f1(lead.y)} r={lead.r.toFixed(2)} />
+          <path class="wl-lead" d={`M${f1(lead.x + dir * r0 * 0.7)} ${f1(lead.y - r0 * 0.7)}L${f1(lead.x + dir * 24)} ${f1(lead.y - 24)}H${f1(lead.x + dir * 45)}`} />
+          <text class="wl-rl wl-pl" x={f1(lead.x + dir * 49)} y={f1(lead.y - 19)} text-anchor={dir > 0 ? "start" : "end"}>planet</text>
+        </svg>
+        <canvas class="wl-canvas" style="display:none" aria-hidden="true"></canvas>
+        <div class="wl-hud" aria-hidden="true">
+          <span class="wl-cam">ortho <span class="num" data-cam>az {cam.az.toFixed(1)}° el {cam.el.toFixed(1)}°</span></span>
+          <span class="wl-int">velocity Verlet, <i>h</i> = 1/3</span>
+          <span class="wl-scale"><span class="wl-bar" style={`width:${((100 / VIEW_W) * 100).toFixed(3)}%`}></span><span class="num">100 u</span></span>
+        </div>
+      </div>
+
+      <div class="wl-tl">
+        <div class="wl-track">
+          <span class="wl-rail"></span>
+          <span class="wl-fill" style="transform:scaleX(1)"></span>
+          {KEYS.map((d) => <span class="wl-key on" style={`left:${pct(d)}`}></span>)}
+          <span class="wl-ghost" hidden><span class="num"></span></span>
+          <span class="wl-head" style="left:100%"><span class="wl-knob"></span></span>
+        </div>
+        <div class="wl-lbl num" aria-hidden="true">
+          {KEYS.map((d) => <span class:list={{ minor: d % 300 !== 0 && d !== 1 }} style={`left:${pct(d)}`}>{d}</span>)}
+        </div>
+      </div>
+    </div>
+
+    <aside class="wl-insp" aria-label="Inspector">
+      <div class="wl-sec">
+        <label class="wl-row wl-seed" for="wl-seed">
+          <span class="k">seed</span>
+          <input id="wl-seed" type="text" value={SEED} maxlength="24" spellcheck="false" autocomplete="off" autocapitalize="off" disabled />
+        </label>
+        <div class="wl-row"><span class="k">hash</span><span class="v num" data-hash>{hex(fingerprint(SEED))}</span></div>
+        <div class="wl-row"><span class="k">bodies</span><span class="v num" data-n>{u.n}</span></div>
+        <div class="wl-row" title="Total mass in units of the central star"><span class="k">mass, star = 1</span><span class="v num" data-mass>{u.totalMass.toFixed(4)}</span></div>
+        <div class="wl-row"><span class="k">frame</span><span class="v num"><span data-frame>{FRAMES}</span> / {FRAMES}</span></div>
+      </div>
+      <div class="wl-sec wl-energy">
+        <div class="wl-row"><span class="k">|Δ<i>E</i>/<i>E</i><sub>0</sub>|</span><span class="v num" data-de set:html={sci(u.dE[F])} /></div>
+        <svg class="wl-spark" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" aria-hidden="true">
+          <line class="wl-sbase" x1="0" x2={SPARK_W} y1={SPARK_H - 2} y2={SPARK_H - 2} />
+          <path class="wl-sline" d={spark} />
+          <line class="wl-scur" x1={SPARK_W} x2={SPARK_W} y1="0" y2={SPARK_H} />
+          <circle class="wl-smax" cx={f1((u.dEmaxFrame / F) * SPARK_W)} cy="2" r="2" />
+        </svg>
+        <div class="wl-row wl-max"><span class="k">max</span><span class="v num" data-demax set:html={sci(u.dEmax)} /></div>
+      </div>
+      <div class="wl-sec wl-fams">
+        <div class="wl-row"><span class="k"><span class="sw in"></span><i>a</i> &lt; {A_INNER}</span><span class="v num" data-c1>{counts[1]}</span></div>
+        <div class="wl-row"><span class="k"><span class="sw ink"></span>{A_INNER} to {A_OUTER}</span><span class="v num" data-c0>{counts[0]}</span></div>
+        <div class="wl-row"><span class="k"><span class="sw out"></span><i>a</i> &gt; {A_OUTER}</span><span class="v num" data-c2>{counts[2]}</span></div>
+        <div class="wl-row"><span class="k"><span class="sw acc"></span>planet</span><span class="v num">1</span></div>
+      </div>
+    </aside>
+  </div>
+  <Fragment slot="caption">Scrolling plays the 900 precomputed frames; drag the playhead to hold one, or type a seed to generate another universe. Orbits are coloured by semi-major axis <i>a</i>, and the trace on the right is the integrator's real energy drift.</Fragment>
+</Figure>
+
+<style>
+  .wl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 138px;
+    gap: 12px;
+    align-items: start;
+  }
+  .wl-main { min-width: 0; }
+
+  /* Viewport */
+  .wl-stage {
+    position: relative;
+    background: var(--panel-2);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .wl-stage::before,
+  .wl-stage::after {
+    content: "";
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border: 0 solid var(--ink-4);
+    pointer-events: none;
+  }
+  .wl-stage::before { top: 5px; left: 5px; border-top-width: 1px; border-left-width: 1px; }
+  .wl-stage::after { bottom: 5px; right: 5px; border-bottom-width: 1px; border-right-width: 1px; }
+  .wl-stage .wl-snap { overflow: hidden; }
+  .wl-stage canvas { aspect-ratio: 640 / 400; height: auto; }
+  .wl-grid { fill: none; stroke: var(--ink); stroke-opacity: 0.07; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .wl-grid path, .wl-grid ellipse { vector-effect: non-scaling-stroke; }
+  .wl-band { fill: none; stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+  .wl-band.in { stroke: var(--s-green); stroke-opacity: 0.45; }
+  .wl-band.out { stroke: var(--s-violet); stroke-opacity: 0.4; }
+  .wl-snap text.wl-rl { font-size: 15px; fill: var(--ink-3); paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
+  .wl-trail { fill: none; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .wl-trail.ink { stroke: var(--ink); }
+  .wl-trail.in { stroke: var(--s-green); }
+  .wl-trail.out { stroke: var(--s-violet); }
+  .wl-atrail { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .wl-dot.ink { fill: var(--ink); }
+  .wl-dot.in { fill: var(--s-green); }
+  .wl-dot.out { fill: var(--s-violet); }
+  .wl-halo { fill: none; stroke: var(--ink); stroke-opacity: 0.14; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .wl-lead { fill: none; stroke: var(--ink); stroke-opacity: 0.5; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .wl-snap text.wl-pl { fill: var(--accent); }
+  .wl-ahalo { fill: none; stroke: var(--accent); stroke-opacity: 0.35; stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+  .wl-hud { position: absolute; inset: 0; pointer-events: none; font-size: 10.5px; color: var(--ink-3); line-height: 1; }
+  .wl-hud > span { position: absolute; white-space: nowrap; }
+  .wl-hud .num { font-family: var(--cm); font-size: 11.5px; color: var(--ink-2); }
+  .wl-hud i { font-family: var(--math); font-size: 12px; }
+  .wl-cam { top: 10px; left: 18px; }
+  .wl-cam .num { margin-left: 6px; }
+  .wl-int { top: 10px; right: 18px; }
+  .wl-scale { left: 18px; bottom: 11px; width: calc(100% - 36px); display: flex; align-items: center; gap: 6px; }
+  .wl-bar {
+    display: block;
+    height: 5px;
+    border: 1px solid var(--ink-3);
+    border-top: 0;
+  }
+
+  /* Timeline scrubber */
+  .wl-tl { position: relative; margin-top: 10px; padding: 0 1px; user-select: none; -webkit-user-select: none; }
+  .wl-track { position: relative; height: 22px; touch-action: pan-y; }
+  .wl-track[data-live] { cursor: ew-resize; }
+  .wl-rail, .wl-fill { position: absolute; left: 0; right: 0; top: 10px; height: 1px; }
+  .wl-rail { background: var(--ink-4); }
+  .wl-fill { background: var(--accent); height: 1.5px; top: 9.75px; transform-origin: left; }
+  .wl-key {
+    position: absolute;
+    top: 7.5px;
+    width: 6px;
+    height: 6px;
+    margin-left: -3px;
+    transform: rotate(45deg);
+    background: var(--panel);
+    border: 1px solid var(--ink-4);
+  }
+  .wl-key.on { background: var(--ink-2); border-color: transparent; }
+  .wl-head {
+    position: absolute;
+    top: 0;
+    width: 0;
+    height: 22px;
+    outline: none;
+  }
+  .wl-head::before { content: ""; position: absolute; left: -0.5px; top: 0; bottom: 0; width: 1px; background: var(--accent); }
+  .wl-knob {
+    position: absolute;
+    left: -5px;
+    top: 4px;
+    width: 10px;
+    height: 13px;
+    border-radius: 3px;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--panel);
+  }
+  .wl-head:focus-visible .wl-knob { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent); }
+  .wl-ghost { position: absolute; top: 2px; bottom: 2px; width: 1px; background: var(--ink-4); pointer-events: none; }
+  .wl-ghost .num {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%, -3px);
+    font-family: var(--cm);
+    font-size: 11px;
+    color: var(--ink-2);
+    background: var(--panel);
+    padding: 0 3px;
+  }
+  .wl-lbl { position: relative; height: 14px; margin-top: 2px; font-family: var(--cm); font-size: 11px; color: var(--ink-3); }
+  .wl-lbl span { position: absolute; transform: translateX(-50%); }
+  .wl-lbl span:first-child { transform: none; }
+  .wl-lbl span:last-child { transform: translateX(-100%); }
+
+  /* Inspector */
+  .wl-insp {
+    font-size: 12px;
+    color: var(--ink-3);
+    border-left: 1px solid var(--hair);
+    padding-left: 12px;
+    align-self: stretch;
+  }
+  .wl-sec + .wl-sec { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hair); }
+  .wl-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-height: 21px; }
+  .wl-row .k { white-space: nowrap; }
+  .wl-row .v { color: var(--ink); font-family: var(--cm); font-size: 13px; white-space: nowrap; }
+  .wl-insp i { font-family: var(--math); font-size: 1.08em; }
+  .wl-insp sub, .wl-insp sup { font-size: max(10px, 0.74em); line-height: 0; }
+  .wl-insp sup { vertical-align: 0.5em; margin-left: 1px; }
+  .wl-seed input {
+    font: inherit;
+    font-family: var(--cm);
+    font-size: 13px;
+    color: var(--ink);
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--ink-4);
+    border-radius: 0;
+    padding: 1px 0 2px;
+    width: 10ch;
+    min-width: 0;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+  .wl-seed input:focus { border-bottom-color: var(--accent); }
+  .wl-seed input:disabled { color: var(--ink-2); border-bottom-style: dotted; }
+  .wl-spark { display: block; width: 100%; height: 36px; margin: 4px 0 2px; overflow: visible; }
+  .wl-sbase { stroke: var(--hair); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .wl-sline { fill: none; stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .wl-scur { stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .wl-smax { fill: var(--ink); }
+  .wl-max .v { color: var(--ink-2); font-size: 12px; }
+  .sw { display: inline-block; width: 12px; height: 2px; margin-right: 7px; vertical-align: 0.3em; background: var(--ink); }
+  .sw.in { background: var(--s-green); }
+  .sw.out { background: var(--s-violet); }
+  .sw.acc { background: var(--accent); height: 2.5px; }
+
+  @media (max-width: 560px) {
+    .wl { grid-template-columns: 1fr; gap: 12px; }
+    .wl-insp {
+      border-left: 0;
+      padding-left: 0;
+      border-top: 1px solid var(--hair);
+      padding-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 18px;
+    }
+    .wl-sec + .wl-sec { margin-top: 0; padding-top: 0; border-top: 0; }
+    .wl-sec:first-child { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
+    .wl-sec:first-child .wl-seed { grid-column: 1 / -1; }
+    .wl-energy, .wl-fams { margin-top: 8px !important; padding-top: 8px !important; border-top: 1px solid var(--hair) !important; }
+    .wl-seed input { width: 14ch; font-size: 16px; }
+    .wl-int { display: none; }
+    .wl-cam { top: 8px; left: 12px; }
+    .wl-scale { left: 12px; bottom: 8px; }
+    .wl-lbl .minor { display: none; }
+    .wl-snap text.wl-rl { font-size: 20px; }
+    .wl-snap .wl-dot, .wl-snap .dot, .wl-snap .dot-accent { stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+    .wl-snap .wl-dot.ink, .wl-snap .dot { stroke: var(--ink); }
+    .wl-snap .wl-dot.in { stroke: var(--s-green); }
+    .wl-snap .wl-dot.out { stroke: var(--s-violet); }
+    .wl-snap .dot-accent { stroke: var(--accent); }
+  }
+</style>

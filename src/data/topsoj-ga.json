@@ -1,0 +1,359 @@
+{
+ "source": "Google Analytics 4, property Tops Online Judge. All-time totals to 2026-09-27; monthly series from June 2024, when the property began recording.",
+ "totals": {
+  "activeUsers": 101950,
+  "newUsers": 101267,
+  "engagedSessions": 30734,
+  "eventCount": 1757916,
+  "countries": 183
+ },
+ "countryCount": 182,
+ "months": [
+  {
+   "m": "2024-06",
+   "users": 359,
+   "newUsers": 355,
+   "engagedSessions": 700,
+   "events": 34706
+  },
+  {
+   "m": "2024-07",
+   "users": 373,
+   "newUsers": 300,
+   "engagedSessions": 1524,
+   "events": 145270
+  },
+  {
+   "m": "2024-08",
+   "users": 428,
+   "newUsers": 363,
+   "engagedSessions": 1610,
+   "events": 107267
+  },
+  {
+   "m": "2024-09",
+   "users": 424,
+   "newUsers": 348,
+   "engagedSessions": 1879,
+   "events": 111768
+  },
+  {
+   "m": "2024-10",
+   "users": 649,
+   "newUsers": 559,
+   "engagedSessions": 1660,
+   "events": 80706
+  },
+  {
+   "m": "2024-11",
+   "users": 418,
+   "newUsers": 314,
+   "engagedSessions": 1048,
+   "events": 56259
+  },
+  {
+   "m": "2024-12",
+   "users": 415,
+   "newUsers": 342,
+   "engagedSessions": 832,
+   "events": 46449
+  },
+  {
+   "m": "2025-01",
+   "users": 453,
+   "newUsers": 350,
+   "engagedSessions": 1144,
+   "events": 114846
+  },
+  {
+   "m": "2025-02",
+   "users": 444,
+   "newUsers": 367,
+   "engagedSessions": 951,
+   "events": 59779
+  },
+  {
+   "m": "2025-03",
+   "users": 595,
+   "newUsers": 516,
+   "engagedSessions": 1021,
+   "events": 66900
+  },
+  {
+   "m": "2025-04",
+   "users": 421,
+   "newUsers": 329,
+   "engagedSessions": 755,
+   "events": 40176
+  },
+  {
+   "m": "2025-05",
+   "users": 350,
+   "newUsers": 288,
+   "engagedSessions": 671,
+   "events": 31465
+  },
+  {
+   "m": "2025-06",
+   "users": 366,
+   "newUsers": 317,
+   "engagedSessions": 571,
+   "events": 23953
+  },
+  {
+   "m": "2025-07",
+   "users": 611,
+   "newUsers": 559,
+   "engagedSessions": 666,
+   "events": 24994
+  },
+  {
+   "m": "2025-08",
+   "users": 2037,
+   "newUsers": 1952,
+   "engagedSessions": 1133,
+   "events": 71877
+  },
+  {
+   "m": "2025-09",
+   "users": 1675,
+   "newUsers": 1609,
+   "engagedSessions": 779,
+   "events": 37651
+  },
+  {
+   "m": "2025-10",
+   "users": 3372,
+   "newUsers": 3258,
+   "engagedSessions": 2136,
+   "events": 80985
+  },
+  {
+   "m": "2025-11",
+   "users": 2719,
+   "newUsers": 2578,
+   "engagedSessions": 1223,
+   "events": 47190
+  },
+  {
+   "m": "2025-12",
+   "users": 3469,
+   "newUsers": 3391,
+   "engagedSessions": 701,
+   "events": 35850
+  },
+  {
+   "m": "2026-01",
+   "users": 12793,
+   "newUsers": 12671,
+   "engagedSessions": 925,
+   "events": 100515
+  },
+  {
+   "m": "2026-02",
+   "users": 9273,
+   "newUsers": 9173,
+   "engagedSessions": 578,
+   "events": 57187
+  },
+  {
+   "m": "2026-03",
+   "users": 3695,
+   "newUsers": 3626,
+   "engagedSessions": 467,
+   "events": 28198
+  },
+  {
+   "m": "2026-04",
+   "users": 1833,
+   "newUsers": 1766,
+   "engagedSessions": 285,
+   "events": 13276
+  },
+  {
+   "m": "2026-05",
+   "users": 1860,
+   "newUsers": 1813,
+   "engagedSessions": 402,
+   "events": 19534
+  },
+  {
+   "m": "2026-06",
+   "users": 6568,
+   "newUsers": 6477,
+   "engagedSessions": 261,
+   "events": 27643
+  },
+  {
+   "m": "2026-07",
+   "users": 3763,
+   "newUsers": 3731,
+   "engagedSessions": 336,
+   "events": 20845
+  },
+  {
+   "m": "2026-08",
+   "users": 39274,
+   "newUsers": 39168,
+   "engagedSessions": 6047,
+   "events": 248270
+  },
+  {
+   "m": "2026-09",
+   "users": 4893,
+   "newUsers": 4830,
+   "engagedSessions": 438,
+   "events": 24897
+  }
+ ],
+ "pages": [
+  {
+   "path": "/problems",
+   "label": "Problems",
+   "views": 56073,
+   "users": 7186,
+   "avgEngagementSec": 58
+  },
+  {
+   "path": "/submissions",
+   "label": "Submissions",
+   "views": 31894,
+   "users": 18546,
+   "avgEngagementSec": 7
+  },
+  {
+   "path": "/contests",
+   "label": "Contests",
+   "views": 22815,
+   "users": 2924,
+   "avgEngagementSec": 86
+  },
+  {
+   "path": "/",
+   "label": "Home",
+   "views": 19998,
+   "users": 2424,
+   "avgEngagementSec": 65
+  },
+  {
+   "path": "/rankings",
+   "label": "Rankings",
+   "views": 13098,
+   "users": 1773,
+   "avgEngagementSec": 72
+  },
+  {
+   "path": "/mathgym",
+   "label": "Math Gym",
+   "views": 8158,
+   "users": 1879,
+   "avgEngagementSec": 27
+  },
+  {
+   "path": "/mathgym/mockgenerator",
+   "label": "Mock generator",
+   "views": 6737,
+   "users": 936,
+   "avgEngagementSec": 947
+  },
+  {
+   "path": "/mathgym/triangulate",
+   "label": "Triangulate",
+   "views": 4334,
+   "users": 496,
+   "avgEngagementSec": 184
+  },
+  {
+   "path": "/organizations/public",
+   "label": "Organizations",
+   "views": 3489,
+   "users": 780,
+   "avgEngagementSec": 23
+  },
+  {
+   "path": "/team",
+   "label": "Team",
+   "views": 1928,
+   "users": 1111,
+   "avgEngagementSec": 101
+  },
+  {
+   "path": "/summer",
+   "label": "Summer Contest",
+   "views": 1566,
+   "users": 431,
+   "avgEngagementSec": 49
+  },
+  {
+   "path": "/mathgym/mentalmath",
+   "label": "Mental math",
+   "views": 1077,
+   "users": 274,
+   "avgEngagementSec": 225
+  }
+ ],
+ "channels": [
+  {
+   "name": "Direct",
+   "sessions": 115475,
+   "engagedSessions": 23478,
+   "avgEngagementSec": 71
+  },
+  {
+   "name": "Organic Search",
+   "sessions": 7911,
+   "engagedSessions": 5062,
+   "avgEngagementSec": 202
+  },
+  {
+   "name": "Referral",
+   "sessions": 3506,
+   "engagedSessions": 2620,
+   "avgEngagementSec": 373
+  },
+  {
+   "name": "Unassigned",
+   "sessions": 483,
+   "engagedSessions": 20,
+   "avgEngagementSec": 184
+  },
+  {
+   "name": "Organic Social",
+   "sessions": 237,
+   "engagedSessions": 164,
+   "avgEngagementSec": 98
+  },
+  {
+   "name": "AI Assistant",
+   "sessions": 45,
+   "engagedSessions": 29,
+   "avgEngagementSec": 74
+  }
+ ],
+ "browsers": [
+  {
+   "name": "Chrome",
+   "users": 96480
+  },
+  {
+   "name": "Edge",
+   "users": 2568
+  },
+  {
+   "name": "Safari",
+   "users": 2531
+  },
+  {
+   "name": "Firefox",
+   "users": 189
+  },
+  {
+   "name": "Opera",
+   "users": 188
+  },
+  {
+   "name": "Samsung Internet",
+   "users": 73
+  }
+ ]
+}

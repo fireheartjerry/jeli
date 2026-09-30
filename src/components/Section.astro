@@ -1,0 +1,45 @@
+---
+interface Props {
+  id: string;
+  title: string;
+  lede?: string;
+}
+const { id, title, lede } = Astro.props;
+---
+
+<section id={id} aria-labelledby={`${id}-h`} class="wrap" data-section={title}>
+  <header class="sec-h">
+    <h2 id={`${id}-h`}>{title}</h2>
+    {lede && <p>{lede}</p>}
+  </header>
+  <slot />
+</section>
+
+<style>
+  section {
+    padding-top: clamp(64px, 8.5vw, 128px);
+  }
+  .sec-h {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: clamp(32px, 6vw, 96px);
+    align-items: baseline;
+    padding-bottom: clamp(20px, 3vw, 36px);
+  }
+  h2 {
+    font-size: clamp(36px, 4.4vw, 60px);
+    line-height: 1;
+    letter-spacing: -0.035em;
+  }
+  .sec-h p {
+    font-size: 17px;
+    color: var(--ink-3);
+    max-width: 44ch;
+  }
+  @media (max-width: 880px) {
+    .sec-h {
+      grid-template-columns: 1fr;
+      row-gap: 12px;
+    }
+  }
+</style>

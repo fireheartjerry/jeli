@@ -1,0 +1,230 @@
+---
+// Fig: contest record, drawn as three instruments.
+// 1. USACO: a staircase from Bronze to Platinum with drawn division badges.
+//    The Gold step holds 1,000 cells, one per point of a perfect 1,000 / 1,000
+//    Gold contest, flipped in a sweep like test cases passing; USACO contests
+//    have three problems, so three verdicts land as the sweep completes.
+// 2. Two rank strips on a log scale with minor ticks: PhysicsBowl Division II
+//    (1st in Canada, 7th in the world) and the Sir Isaac Newton Exam (4th in
+//    Canada, 9th in the world).
+// 3. AIME qualifier in 2024, 2025 and 2026, as a three-year timeline.
+import Figure from "../Figure.astro";
+
+const W = 640, H = 604;
+const f = (v: number) => +v.toFixed(2);
+
+// ---------- 1. USACO ----------
+const G = 240, RISE = 44;
+const treads = [
+  { name: "Bronze", x0: 20, x1: 120 },
+  { name: "Silver", x0: 120, x1: 220 },
+  { name: "Gold", x0: 220, x1: 500 },
+  { name: "Platinum", x0: 500, x1: 624 },
+].map((t, i) => ({ ...t, y: G - RISE * (i + 1), level: i + 1 }));
+const [, , gold, plat] = treads;
+const stair = `M${treads[0].x0} ${G}` + treads.map((t) => `V${t.y}H${t.x1}`).join("");
+const lengths: number[] = [];
+let run = 0;
+for (const t of treads) {
+  run += RISE;
+  lengths.push(run);
+  run += t.x1 - t.x0;
+}
+const total = run;
+const goldEnd = lengths[2] + (gold.x1 - gold.x0);
+
+// Hexagonal badge with one pip per division level.
+const hex = (cx: number, cy: number, r: number) =>
+  Array.from({ length: 6 }, (_, i) => {
+    const a = (Math.PI / 3) * i - Math.PI / 2;
+    return `${i ? "L" : "M"}${f(cx + r * Math.cos(a))} ${f(cy + r * Math.sin(a))}`;
+  }).join("") + "Z";
+const pips = (cx: number, cy: number, n: number) =>
+  ({ 1: [[0, 0]], 2: [[-2.2, 0], [2.2, 0]], 3: [[0, -2.2], [-2.1, 1.4], [2.1, 1.4]], 4: [[-2.1, -2.1], [2.1, -2.1], [-2.1, 2.1], [2.1, 2.1]] })[n]!.map(
+    ([dx, dy]) => ({ cx: f(cx + dx), cy: f(cy + dy) }),
+  );
+
+// The Gold grid: 50 x 20 cells. Cells are ordered along a diagonal sweep
+// from the bottom-left, so "the first n cells" is one substring of a path.
+const COLS = 50, ROWS = 20, PITCH = 5, CELL = 3.6;
+const gx = gold.x0 + 12, gyB = G - 8;
+const cells: { x: number; y: number; key: number }[] = [];
+for (let r = 0; r < ROWS; r++)
+  for (let c = 0; c < COLS; c++)
+    cells.push({
+      x: f(gx + c * PITCH + (PITCH - CELL) / 2),
+      y: f(gyB - (r + 1) * PITCH + (PITCH - CELL) / 2),
+      key: c + r * 1.35 + ((c * 7 + r * 13) % 5) * 0.18,
+    });
+cells.sort((a, b) => a.key - b.key);
+const cellD = (c: { x: number; y: number }) => `M${c.x} ${c.y}h${CELL}v${CELL}h-${CELL}z`;
+const allCells = cells.map(cellD).join("");
+const grid = { x0: gx, x1: gx + COLS * PITCH, y0: gyB - ROWS * PITCH, y1: gyB };
+// Verdicts, one per problem, under the grid.
+const verdictY = G + 20;
+const verdicts = [0, 1, 2].map((i) => ({ cx: grid.x0 + 6 + i * 17, cy: verdictY }));
+
+// ---------- 2. rank strips, log scale 1 to 20 ----------
+const XL = 40, XR = 604;
+const xr = (rank: number) => f(XL + (Math.log10(rank) / Math.log10(20)) * (XR - XL));
+const strips = [
+  { y: 358, short: "PhysicsBowl", full: "AAPT PhysicsBowl, Division II: 1st in Canada, 7th in the world", ca: 1, world: 7 },
+  { y: 454, short: "Sir Isaac Newton", full: "Sir Isaac Newton Exam: 4th in Canada, 9th in the world", ca: 4, world: 9 },
+];
+const major = [1, 2, 5, 10, 20];
+const minor = [3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+const tickPath = (y: number) =>
+  major.map((r) => `M${xr(r)} ${y}v-8`).join("") + minor.map((r) => `M${xr(r)} ${y}v-4`).join("");
+
+// ---------- 3. AIME ----------
+const AY = 562;
+const aime = [2024, 2025, 2026].map((yr, i) => ({ yr, x: 100 + i * 220 }));
+
+const geo = {
+  total, goldEnd, lengths, n: COLS * ROWS, cells: cells.map((c) => [c.x, c.y]),
+  XL, XR, start: xr(20), cell: CELL,
+};
+---
+
+<Figure name="contests" n={13} title="Contest record" label="Contest record: USACO Platinum with a perfect Gold contest, PhysicsBowl and Sir Isaac Newton Exam ranks, and three AIME qualifications" readout="AIME ×3">
+  <svg
+    class="cs"
+    viewBox={`0 0 ${W} ${H}`}
+    role="img"
+    data-g={JSON.stringify(geo)}
+    aria-label="USACO: Bronze, Silver, Gold and Platinum drawn as a staircase; the Gold step is a grid of 1,000 cells, all accepted, for a perfect 1,000 out of 1,000 on the Gold contest, with all three problems accepted. PhysicsBowl Division II: 1st in Canada, 7th in the world. Sir Isaac Newton Exam: 4th in Canada, 9th in the world. Ranks on a log scale. AIME qualifier in 2024, 2025 and 2026."
+  >
+
+    <!-- ===== 1. USACO ===== -->
+    <text class="sec" x="0" y="2" dominant-baseline="hanging"><tspan class="k">USACO</tspan></text>
+    <line class="hair" x1="0" x2={W} y1={G} y2={G} />
+    {treads.map((t) => <line class="hair riser" x1={t.x0} x2={t.x0} y1={t.y} y2={G} />)}
+    <defs>
+      <pattern id="cs-cell-bg" patternUnits="userSpaceOnUse" x={grid.x0 + (PITCH - CELL) / 2} y={grid.y0 + (PITCH - CELL) / 2} width={PITCH} height={PITCH}>
+        <rect class="pc-bg" width={CELL} height={CELL} />
+      </pattern>
+    </defs>
+    {/* The backdrop is a regular grid, so a pattern draws them in a few bytes. */}
+    <rect class="cells-bg" x={grid.x0} y={grid.y0} width={grid.x1 - grid.x0} height={grid.y1 - grid.y0} fill="url(#cs-cell-bg)" />
+    <path class="cells-on" d={allCells} />
+    <path class="cells-front" d="" />
+    <path class="ink stair" d={stair} />
+    <path class="accent plat" d={`M${plat.x0} ${gold.y}V${plat.y}H${plat.x1}`} />
+    {treads.map((t, i) => (
+      <g class={`div${i === 3 ? " top" : ""}`} data-i={i}>
+        <g class="bdg">
+          <path class="badge" d={hex(t.x0 + 12, t.y - 14, 7)} />
+          {pips(t.x0 + 12, t.y - 14, t.level).map((p) => <circle class="pip" cx={p.cx} cy={p.cy} r="1.05" />)}
+        </g>
+        <text class="step" x={t.x0 + 25} y={t.y - 10}>{t.name}</text>
+      </g>
+    ))}
+    <text class="cm strong count" x={gold.x1 - 10} y={gold.y - 10} text-anchor="end">1,000 / 1,000</text>
+    <g class="verdicts">
+      {verdicts.map((v, i) => (
+        <g class="vd" data-i={i}>
+          <g class="vdi">
+            <circle class="vd-c" cx={v.cx} cy={v.cy} r="6" />
+            <path class="vd-k" d={`M${v.cx - 2.6} ${v.cy + 0.2}l1.8 1.9l3.4 -3.8`} />
+          </g>
+        </g>
+      ))}
+    </g>
+
+    <!-- ===== 2. rank strips ===== -->
+    {strips.map((s, si) => (
+      <g class="strip" data-i={si} data-full={s.full}>
+        <rect class="hit" x="0" y={s.y - 74} width={W} height="92" />
+        <text class="sec nm" x="0" y={s.y - 60}><tspan class="k short">{s.short}</tspan></text>
+        <text class="sec nm full" x="0" y={s.y - 60}><tspan class="k">{s.full}</tspan></text>
+        <line class="track" x1={XL} x2={XR} y1={s.y} y2={s.y} />
+        <path class="ticks" d={tickPath(s.y)} />
+        {[{ r: s.ca, k: "ca" }, { r: s.world, k: "world" }].map((m) => (
+          <g class={`mk ${m.k}${si === 0 && m.k === "ca" ? " best" : ""}`} data-x={xr(m.r)} data-y={s.y}>
+            <g class="needle" transform={`translate(${xr(m.r)} ${s.y})`}>
+              <circle class="mk-c" r="4.25" />
+            </g>
+            <g class="call">
+              <path class="lead" d={`M${xr(m.r)} ${s.y - 7}V${s.y - (m.k === "ca" ? 20 : 36)}H${xr(m.r) + 6}`} />
+              <text class="cl" x={xr(m.r) + 9} y={s.y - (m.k === "ca" ? 16.5 : 32.5)}>{m.k === "ca" ? "Canada" : "world"}</text>
+            </g>
+          </g>
+        ))}
+      </g>
+    ))}
+    {major.map((r) => <text class="cm tk" x={xr(r)} y={strips[1].y + 10} text-anchor="middle" dominant-baseline="hanging">{r}</text>)}
+    <text class="axl" x={XR} y={strips[1].y - 60} text-anchor="end">rank, log</text>
+
+    <!-- ===== 3. AIME ===== -->
+    <text class="sec" x="0" y={AY - 44}><tspan class="k">AIME</tspan></text>
+    <line class="hair" x1={XL} x2={XR} y1={AY} y2={AY} />
+    <path class="faint" d={`M${XL} ${AY - 3}v6M${XR} ${AY - 3}v6`} />
+    <line class="aline" x1={aime[0].x} x2={aime[2].x} y1={AY} y2={AY} />
+    {aime.map((a, i) => (
+      <g class="ay" data-i={i}>
+        <circle class="ay-o" cx={a.x} cy={AY} r="5" />
+        <circle class="ay-c" cx={a.x} cy={AY} r="5" />
+        <path class="ay-k" d={`M${a.x - 2.2} ${AY + 0.2}l1.5 1.6l2.9 -3.2`} />
+        <text class="cm yl" x={a.x} y={AY + 14} text-anchor="middle" dominant-baseline="hanging">{a.yr}</text>
+      </g>
+    ))}
+  </svg>
+  <Fragment slot="caption">
+    Each step is a USACO division, and the Gold step holds one cell per point of my perfect contest. On the two log rulers a
+    filled dot is my rank in Canada and an open dot my rank in the world; the last row marks each year I qualified for the AIME.
+  </Fragment>
+</Figure>
+
+<style is:global>
+  /* --u is 1px on desktop, about 1.9px on a phone, so labels stay near 10px. */
+  .fig svg.cs {
+    --u: clamp(1px, calc(3.49px - 0.4036vw), 1.914px);
+  }
+  .fig svg.cs text { font-size: calc(11 * var(--u)); fill: var(--ink-3); }
+  .fig svg.cs text.cm { font-size: calc(11.5 * var(--u)); }
+  .fig svg.cs text.count { font-size: calc(12 * var(--u)); fill: var(--ink); }
+  .fig svg.cs tspan.k { fill: var(--ink); font-weight: 500; }
+  .fig svg.cs text.step { fill: var(--ink-2); }
+  .fig svg.cs .div.top text.step { fill: var(--accent); }
+  .fig svg.cs .badge { fill: var(--panel); stroke: var(--ink); stroke-width: 1.1; stroke-linejoin: round; }
+  .fig svg.cs .pip { fill: var(--ink); }
+  .fig svg.cs .div.top .badge { fill: var(--accent); stroke: var(--accent); }
+  .fig svg.cs .div.top .pip { fill: var(--panel); }
+  .fig svg.cs .riser { stroke-dasharray: 2 3; }
+  .fig svg.cs .pc-bg { fill: var(--ink); opacity: 0.06; }
+  .fig svg.cs .cells-on { fill: var(--accent); opacity: 0.72; }
+  .fig svg.cs .cells-front { fill: var(--accent); }
+  .fig svg.cs .vd-c { fill: var(--accent); }
+  .fig svg.cs .vd-k { fill: none; stroke: var(--panel); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+
+  .fig svg.cs .hit { fill: transparent; }
+  .fig svg.cs .strip .full { opacity: 0; }
+  .fig svg.cs .strip.on .full { opacity: 1; }
+  .fig svg.cs .strip.on .short { opacity: 0; }
+  .fig svg.cs .nm { transition: opacity 0.2s; }
+  .fig svg.cs .strip .short, .fig svg.cs .strip .full { transition: opacity 0.2s; }
+  .fig svg.cs .track { stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.cs .strip.on .track { stroke: var(--ink); }
+  .fig svg.cs .ticks { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.cs .mk-c { fill: var(--panel); stroke: var(--ink); stroke-width: 1.4; }
+  .fig svg.cs .mk.ca .mk-c { fill: var(--ink); }
+  .fig svg.cs .mk.best .mk-c { fill: var(--accent); stroke: var(--accent); }
+  .fig svg.cs .lead { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.cs text.cl { fill: var(--ink-2); font-size: calc(11 * var(--u)); }
+  .fig svg.cs .mk.best text.cl { fill: var(--accent); }
+  .fig svg.cs text.tk { font-size: calc(11 * var(--u)); }
+  .fig svg.cs text.axl { font-size: calc(11 * var(--u)); }
+  .fig svg.cs .ay-o { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1.25; }
+
+  .fig svg.cs .aline { stroke: var(--ink); stroke-width: 1.25; }
+  .fig svg.cs .ay-c { fill: var(--ink); }
+  .fig svg.cs .ay-k { fill: none; stroke: var(--panel); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.cs text.yl { fill: var(--ink-2); }
+  @media (max-width: 560px) {
+    .fig svg.cs .bdg, .fig svg.cs .vdi { transform-box: fill-box; transform-origin: center; transform: scale(1.55); }
+    .fig svg.cs .bdg { transform: translateX(-3px) scale(1.55); }
+    .fig svg.cs .vd[data-i="1"] .vdi { transform: translateX(8px) scale(1.55); }
+    .fig svg.cs .vd[data-i="2"] .vdi { transform: translateX(16px) scale(1.55); }
+    .fig svg.cs .mk-c { stroke-width: 2; }
+  }
+</style>

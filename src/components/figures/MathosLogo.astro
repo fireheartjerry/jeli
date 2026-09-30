@@ -1,0 +1,48 @@
+---
+import Figure from "../Figure.astro";
+---
+
+<Figure name="mathoslogo" n={2} title="Mathos AI" label="The Mathos AI logo" screen>
+  <div class="stage">
+    <img src="/logos/mathos.svg" alt="Mathos AI" width="438" height="108" loading="lazy" decoding="async" />
+  </div>
+</Figure>
+
+<style>
+  .stage {
+    display: grid;
+    place-items: center;
+    gap: 18px;
+    padding: clamp(48px, 7vw, 88px) 16px;
+  }
+  img {
+    width: min(360px, 78%);
+    height: auto;
+  }
+  .yc {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    letter-spacing: 0.01em;
+  }
+  /* A quiet entrance tied to scroll position, with no JS. Browsers without
+     scroll-driven animations simply show the logo. */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      img,
+      .yc {
+        animation: settle linear both;
+        animation-timeline: view();
+        animation-range: entry 10% cover 40%;
+      }
+      .yc {
+        animation-range: entry 25% cover 45%;
+      }
+    }
+  }
+  @keyframes settle {
+    from {
+      opacity: 0;
+      transform: translateY(14px) scale(0.985);
+    }
+  }
+</style>

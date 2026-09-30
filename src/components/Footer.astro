@@ -1,0 +1,153 @@
+---
+import CopyEmail from "./CopyEmail.astro";
+import { masses, aBallistic, roche, toPath, F_MAX } from "../scripts/binary";
+
+// The binary after the transfer: the hero's end state, now simply orbiting.
+const { md, ma } = masses(F_MAX);
+const a = aBallistic(F_MAX) * 70;
+const R = roche(md, ma);
+const map = (x: number, y: number): [number, number] => [100 + x * a, 100 + y * a];
+const donor = toPath(R.donor(), map);
+const acc = toPath(R.accretor(), map);
+// Bump when the content changes; a build timestamp would claim updates that never happened.
+const updated = "September 2026";
+---
+
+<footer class="wrap foot">
+  <div class="big">
+    <p class="k">Get in touch</p>
+    <CopyEmail label="fireheartjerry@gmail.com" class="mail" />
+    <p class="hint">Click to copy, or press <kbd>e</kbd> anywhere.</p>
+  </div>
+  <svg class="coda" viewBox="0 0 200 200" aria-hidden="true" data-coda>
+    <g class="spin">
+      <circle class="ring" cx="100" cy="100" r={a * ma} />
+      <circle class="ring" cx="100" cy="100" r={a * md} />
+      <path class="lobe" d={acc} />
+      <path class="donor" d={donor} />
+      <circle class="acc" cx={100 + a * md} cy="100" r="3.5" />
+    </g>
+  </svg>
+  <div class="meta">
+    <p>Toronto and Waterloo, Canada</p>
+    <nav aria-label="Elsewhere">
+      <a class="q" href="/resume.pdf">Résumé</a>
+      <a class="q" href="https://github.com/fireheartjerry" rel="me noopener" target="_blank">GitHub</a>
+      <a class="q" href="https://www.linkedin.com/in/fireheartjerry/" rel="me noopener" target="_blank">LinkedIn</a>
+      <a class="q" href="https://topsoj.com" target="_blank" rel="noopener">TopsOJ</a>
+    </nav>
+    <p class="num">Updated {updated}</p>
+  </div>
+</footer>
+
+<script>
+  // A slow, real-time orbit that only runs while the footer is on screen.
+  const svg = document.querySelector<SVGSVGElement>("[data-coda]");
+  const g = svg?.querySelector<SVGGElement>(".spin");
+  if (svg && g && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    let on = false;
+    let raf = 0;
+    let angle = 0;
+    let last = 0;
+    const tick = (t: number) => {
+      angle = (angle + ((t - (last || t)) / 1000) * 14) % 360;
+      last = t;
+      g.setAttribute("transform", `rotate(${angle.toFixed(2)} 100 100)`);
+      if (on) raf = requestAnimationFrame(tick);
+    };
+    new IntersectionObserver(([e]) => {
+      on = e.isIntersecting;
+      last = 0;
+      cancelAnimationFrame(raf);
+      if (on) raf = requestAnimationFrame(tick);
+    }).observe(svg);
+  }
+</script>
+
+<style>
+  .foot {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "big coda" "meta meta";
+    align-items: end;
+    gap: 48px 32px;
+    padding-top: clamp(120px, 16vw, 220px);
+    padding-bottom: 40px;
+  }
+  .big {
+    grid-area: big;
+  }
+  .k {
+    font-size: 15px;
+    color: var(--ink-3);
+    margin-bottom: 12px;
+  }
+  .big :global(.mail) {
+    font-size: clamp(24px, 3.6vw, 48px);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+    background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+    transition: background-size 0.5s var(--ease-out);
+  }
+  .big :global(.mail:hover) {
+    background-size: 100% 1px;
+  }
+  .hint {
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--ink-3);
+  }
+  @media (hover: none) {
+    .hint {
+      display: none;
+    }
+  }
+  kbd {
+    font: 12px var(--sans);
+    padding: 1px 6px;
+    border: 1px solid var(--hair);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--panel);
+    color: var(--ink-2);
+  }
+  .coda {
+    grid-area: coda;
+    width: clamp(120px, 14vw, 180px);
+    height: auto;
+    overflow: visible;
+  }
+  .ring { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .lobe { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 2 3; }
+  .donor { fill: var(--paper); stroke: var(--ink); stroke-width: 1.25; }
+  .acc { fill: var(--accent); }
+  .meta {
+    grid-area: meta;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--hair);
+    font-size: 14px;
+    color: var(--ink-3);
+  }
+  nav {
+    display: flex;
+    gap: 22px;
+  }
+  .q:hover {
+    color: var(--ink);
+  }
+  @media (max-width: 640px) {
+    .foot {
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "big coda" "meta meta";
+      gap: 32px 16px;
+    }
+    .coda {
+      width: 72px;
+    }
+  }
+</style>

@@ -1,0 +1,152 @@
+---
+import CopyEmail from "./CopyEmail.astro";
+---
+
+<header class="bar" data-bar>
+  <div class="wrap inner">
+    <a class="name" href="#top" aria-label="Jerry Li, back to top">
+      Jerry Li
+      <span class="crumb" aria-hidden="true">
+        <span class="sep">/</span>
+        <span class="track"><span class="cur" data-crumb></span><span class="next" data-crumb-next></span></span>
+      </span>
+    </a>
+    <nav aria-label="Elsewhere">
+      <a class="q" href="/resume.pdf">Résumé</a>
+      <a class="q" href="https://github.com/fireheartjerry" rel="me noopener" target="_blank">GitHub</a>
+      <a class="q hide-sm" href="https://www.linkedin.com/in/fireheartjerry/" rel="me noopener" target="_blank">LinkedIn</a>
+      <span class="q"><CopyEmail /></span>
+    </nav>
+  </div>
+</header>
+
+<script>
+  const bar = document.querySelector<HTMLElement>("[data-bar]")!;
+  const cur = bar.querySelector<HTMLElement>("[data-crumb]")!;
+  const next = bar.querySelector<HTMLElement>("[data-crumb-next]")!;
+  const crumb = bar.querySelector<HTMLElement>(".crumb")!;
+
+  // Hairline under the bar only once the page has moved.
+  const onScroll = () => bar.toggleAttribute("data-scrolled", window.scrollY > 8);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // The breadcrumb names the section under the middle of the screen. A new
+  // name rolls up from below while the old one leaves through the top.
+  let shown = "";
+  let busy: Animation[] = [];
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function show(name: string) {
+    if (name === shown) return;
+    const first = !shown;
+    shown = name;
+    crumb.toggleAttribute("data-on", !!name);
+    busy.forEach((a) => a.finish());
+    if (first || reduce) {
+      cur.textContent = name;
+      return;
+    }
+    next.textContent = name;
+    const opts = { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" as const };
+    busy = [
+      cur.animate([{ transform: "translateY(0)", opacity: 1 }, { transform: "translateY(-100%)", opacity: 0 }], opts),
+      next.animate([{ transform: "translateY(100%)", opacity: 0 }, { transform: "translateY(0)", opacity: 1 }], opts),
+    ];
+    busy[1].onfinish = () => {
+      cur.textContent = name;
+      busy.forEach((a) => a.cancel());
+      next.textContent = "";
+    };
+  }
+
+  const sections = document.querySelectorAll<HTMLElement>("[data-section]");
+  const visible = new Map<Element, boolean>();
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) visible.set(e.target, e.isIntersecting);
+      const active = [...sections].find((s) => visible.get(s));
+      show(active?.dataset.section ?? "");
+    },
+    { rootMargin: "-45% 0px -54% 0px" },
+  );
+  sections.forEach((s) => io.observe(s));
+</script>
+
+<style>
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--paper) 94%, transparent);
+    -webkit-backdrop-filter: saturate(1.4) blur(12px);
+    backdrop-filter: saturate(1.4) blur(12px);
+    box-shadow: 0 1px 0 transparent;
+    transition: box-shadow 0.3s ease;
+  }
+  .bar[data-scrolled] {
+    box-shadow: 0 1px 0 var(--hair);
+  }
+  .inner {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    font-size: 15px;
+  }
+  .name {
+    display: inline-flex;
+    align-items: baseline;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+  .crumb {
+    display: inline-flex;
+    align-items: baseline;
+    color: var(--ink-3);
+    font-weight: 400;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+      opacity 0.3s ease,
+      transform 0.4s var(--ease-out);
+  }
+  .crumb[data-on] {
+    opacity: 1;
+    transform: none;
+  }
+  .sep {
+    margin: 0 0.5em;
+    color: var(--ink-4);
+  }
+  .track {
+    position: relative;
+    display: inline-grid;
+    overflow: hidden;
+    height: 1.35em;
+    line-height: 1.35;
+  }
+  .track > span {
+    grid-area: 1 / 1;
+  }
+  nav {
+    display: flex;
+    gap: clamp(14px, 2.4vw, 28px);
+    color: var(--ink-3);
+  }
+  .q {
+    transition: color 0.2s ease;
+  }
+  .q:hover,
+  .q:focus-within {
+    color: var(--ink);
+  }
+  @media (max-width: 560px) {
+    .hide-sm,
+    .crumb {
+      display: none;
+    }
+  }
+</style>

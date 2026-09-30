@@ -1,0 +1,473 @@
+---
+// Fig: Quoted Tech Computers. Two halves of the same summer: Playwright
+// scrapers that turn competitor catalogs into a pricing table, and a
+// Node/Express endpoint that renders a real Code 128 label and prints it
+// through CUPS. The product names, SKUs and prices are illustrative; the
+// barcode is a real, checksummed Code 128B encoding of QT-2025-0718, and the
+// only metric is the real one: 70% less manual processing time.
+//
+// Layout: four blocks of 304 units (scrape, table, request+queue, printer)
+// in a 2 x 2 grid plus a full-width timeline band. Under 560px each block is
+// re-stacked at 1.85x (CSS transforms from --m) so its text stays legible.
+import Figure from "../Figure.astro";
+
+// ---------- Code 128 (subset B) ----------
+// Symbol patterns: bar, space, bar, space, bar, space widths in modules,
+// indexed by symbol value. 106 is the stop pattern (7 elements).
+const PATTERNS = [
+  "212222", "222122", "222221", "121223", "121322", "131222", "122213", "122312", "132212", "221213",
+  "221312", "231212", "112232", "122132", "122231", "113222", "123122", "123221", "223211", "221132",
+  "221231", "213212", "223112", "312131", "311222", "321122", "321221", "312212", "322112", "322211",
+  "212123", "212321", "232121", "111323", "131123", "131321", "112313", "132113", "132311", "211313",
+  "231113", "231311", "112133", "112331", "132131", "113123", "113321", "133121", "313121", "211331",
+  "231131", "213113", "213311", "213131", "311123", "311321", "331121", "312113", "312311", "332111",
+  "314111", "221411", "431111", "111224", "111422", "121124", "121421", "141122", "141221", "112214",
+  "112412", "122114", "122411", "142112", "142211", "241211", "221114", "413111", "241112", "134111",
+  "111242", "121142", "121241", "114212", "124112", "124211", "411212", "421112", "421211", "212141",
+  "214121", "412121", "111143", "111341", "131141", "114113", "114311", "411113", "411311", "113141",
+  "114131", "311141", "411131", "211412", "211214", "211232", "2331112",
+];
+const START_B = 104, STOP = 106;
+
+function code128B(text: string) {
+  const values = [...text].map((ch) => {
+    const c = ch.charCodeAt(0);
+    if (c < 32 || c > 127) throw new Error(`not in Code 128 set B: ${ch}`);
+    return c - 32;
+  });
+  // Checksum: start value plus each symbol value times its position, mod 103.
+  const check = (START_B + values.reduce((s, v, i) => s + v * (i + 1), 0)) % 103;
+  const symbols = [START_B, ...values, check, STOP];
+  const bars: { m: number; w: number }[] = [];
+  let m = 0;
+  for (const s of symbols) {
+    [...PATTERNS[s]].map(Number).forEach((w, i) => {
+      if (i % 2 === 0) bars.push({ m, w });
+      m += w;
+    });
+  }
+  return { bars, modules: m };
+}
+
+// Sanity checks on the table, run at build: every symbol is 11 modules with an
+// even bar total, and all 107 patterns are distinct.
+if (PATTERNS.length !== 107 || new Set(PATTERNS).size !== 107) throw new Error("Code 128 table size");
+PATTERNS.forEach((p, i) => {
+  const w = [...p].map(Number);
+  const total = w.reduce((a, b) => a + b, 0);
+  const barSum = w.filter((_, k) => k % 2 === 0).reduce((a, b) => a + b, 0);
+  if (total !== (i === STOP ? 13 : 11) || barSum % 2 !== 0) throw new Error(`Code 128 pattern ${i}`);
+});
+
+const SKU = "QT-2025-0718";
+const code = code128B(SKU);
+const f = (v: number) => +v.toFixed(2);
+
+// ---------- geometry ----------
+const W = 640, H = 612;
+const BW = 304; // block width
+const BX = 336; // right column x
+const S = 1.85; // phone scale for each block
+
+// 1. Scrape: three catalog windows, two product cards each.
+const GPU = "RTX 4070 Ti 12GB", CPU = "Ryzen 7 7800X3D";
+const winY = (i: number) => 22 + i * 72;
+const WIN_H = 64;
+const windows = [
+  { url: "competitor-a.example/components", cards: [{ p: 0, price: "$1,099.99", sku: "A-40712" }, { p: 1, price: "$599.99", sku: "A-78003" }] },
+  { url: "competitor-b.example/c/pc-parts", cards: [{ p: 1, price: "$579.00", sku: "B-11902" }, { p: 0, price: "$1,049.99", sku: "B-11846" }] },
+  { url: "competitor-c.example/search?q=4070", cards: [{ p: 0, price: "$1,129.00", sku: "C-5530" }, { p: 1, price: "$619.99", sku: "C-5561" }] },
+];
+const cards = windows.flatMap((w, wi) =>
+  w.cards.map((c, j) => {
+    const x = 8 + j * 148, y = winY(wi) + 22;
+    return { ...c, wi, x, y, w: 140, h: 36, px: x + 36, py: y + 21, name: c.p === 0 ? GPU : CPU, value: Number(c.price.replace(/[$,]/g, "")) };
+  }),
+);
+
+// 2. Pricing table and a per-product dot plot.
+const TB = { x: BX, y: 22, w: BW, head: 36, top: 42, row: 17 };
+const rowY = (i: number) => TB.top + i * TB.row;
+const TB_H = TB.top + 6 * TB.row + 8 - TB.y;
+const DP = { x0: 424, x1: 626 };
+const plots = [
+  { p: 0, label: "4070 Ti", y: 191, lo: 1000, hi: 1150, ticks: [1000, 1050, 1100, 1150], qt: 1069.99 },
+  { p: 1, label: "7800X3D", y: 225, lo: 550, hi: 700, ticks: [550, 600, 650, 700], qt: 589.99 },
+].map((r) => {
+  const sx = (v: number) => f(DP.x0 + ((v - r.lo) / (r.hi - r.lo)) * (DP.x1 - DP.x0));
+  const own = cards.map((c, i) => ({ ...c, i })).filter((c) => c.p === r.p);
+  const xs = own.map((c) => sx(c.value));
+  return { ...r, sx, dots: own.map((c) => ({ i: c.i, x: sx(c.value) })), lo_x: Math.min(...xs), hi_x: Math.max(...xs), qx: sx(r.qt) };
+});
+
+// 3. Request and CUPS queue.
+const RQ = { y: 286, h: 30 };
+const QU = { y: 330, h: 112, rows: 356, row: 21 };
+
+// 4. Printer and the 4 x 2 in label (60 units per inch).
+const PR = { x: 346, y: 294, w: 284, h: 62, slot: 324 };
+const LB = { x: 368, y: PR.slot + 4, w: 240, h: 120 };
+const MOD = 1.2;
+const bx0 = (LB.w - code.modules * MOD) / 2;
+const BAR = { y: 70, h: 30 };
+const barPath = code.bars.map((b) => `M${f(bx0 + b.m * MOD)} ${BAR.y}h${f(b.w * MOD)}v${BAR.h}h${f(-b.w * MOD)}z`).join("");
+const tear = Array.from({ length: 63 }, (_, i) => `${i ? "L" : "M"}${360 + i * 4} ${PR.slot + 3 + (i % 2 ? 2 : 0)}`).join("");
+
+// 5. Manual vs automated, the same task in steps (only the totals are real).
+const C = { y1: 508, y2: 560, gap: 2 };
+const manual = [
+  { k: "Look up item", w: 0.24 },
+  { k: "Type fields", w: 0.32 },
+  { k: "Lay out barcode", w: 0.26 },
+  { k: "Print", w: 0.18 },
+];
+const auto = [
+  { k: "SKU", w: 0.07 },
+  { k: "", w: 0 },
+  { k: "POST", w: 0.08 },
+  { k: "CUPS print", w: 0.15 },
+];
+const segs = (ws: number[]) => {
+  let x = 0;
+  return ws.map((w) => {
+    const len = w * W;
+    const s = { x0: f(x), x1: f(x + Math.max(0, len - C.gap)), cx: f(x + Math.max(0, len - C.gap) / 2) };
+    x += len;
+    return s;
+  });
+};
+const mSeg = segs(manual.map((s) => s.w));
+const aSeg = segs(auto.map((s) => s.w));
+const aEnd = 0.3 * W;
+
+// Phone layout: blocks stacked at S, centred; the timeline band keeps full width.
+const ox = f((W - BW * S) / 2);
+const blocks = [
+  { id: "b-scrape", x: 0, y: 0, h: 232 },
+  { id: "b-table", x: BX, y: 0, h: 242 },
+  { id: "b-queue", x: 0, y: 264, h: 180 },
+  { id: "b-print", x: BX, y: 264, h: 212 },
+];
+let my = 0;
+const mt: Record<string, string> = {};
+for (const b of blocks) {
+  mt[b.id] = `translate(${ox}px, ${f(my)}px) scale(${S}) translate(${-b.x}px, ${-b.y}px)`;
+  my += b.h * S + 26;
+}
+const bandY = f(my - 480);
+const HM = Math.ceil(my + 164);
+mt["b-time"] = `translate(0px, ${bandY}px)`;
+const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, gap: C.gap };
+---
+
+<Figure name="quoted" n={7} title="Pricing and labels" label="Quoted Tech Computers: Playwright scrapers turn competitor catalogs into pricing data, and a Node.js and Express service prints Code 128 labels through CUPS, cutting manual processing time by 70%" readout="−70% time">
+  <svg
+    class="qt"
+    viewBox={`0 0 ${W} ${H}`}
+    preserveAspectRatio="xMidYMin meet"
+    role="img"
+    data-g={JSON.stringify(geo)}
+    style={`--hm:${HM}`}
+    aria-label={`Left: three competitor catalog pages; a Playwright selector reads each price into a table of SKU, item and price, and a dot plot compares the prices per product. Right: POST /labels returns 200, a CUPS job moves from pending to processing to completed, and a thermal printer feeds out a 4 by 2 inch label for ${GPU} with a Code 128 barcode reading ${SKU}. Bottom: the same labelling task broken into steps takes 30% of the manual time when automated, a 70% cut.`}
+  >
+    <defs>
+      <clipPath id="qt-slot"><rect x={PR.x - 10} y={PR.slot + 1} width={PR.w + 20} height="200" /></clipPath>
+      <clipPath id="qt-q"><rect x="0" y={QU.rows} width={BW} height={QU.row * 4} /></clipPath>
+      <clipPath id="qt-rq"><rect class="rq-clip" x="0" y={RQ.y} width={BW} height={RQ.h} /></clipPath>
+    </defs>
+
+    <!-- ===== 1. scrape ===== -->
+    <g class="blk b-scrape" style={`--m:${mt["b-scrape"]}`}>
+      <text class="hd" x="0" y="11"><tspan class="k">Scrape</tspan><tspan dx="8">Playwright, three catalogs</tspan></text>
+      {windows.map((w, wi) => (
+        <g class="win">
+          <rect class="inset" x="0.5" y={winY(wi) + 0.5} width={BW - 1} height={WIN_H} rx="6" />
+          {[10, 17, 24].map((cx) => <circle class="wdot" cx={cx} cy={winY(wi) + 8.5} r="2" />)}
+          <rect class="url" x="34" y={winY(wi) + 3.5} width={BW - 42} height="10" rx="5" />
+          <text class="url-t" x="42" y={winY(wi) + 11.4}>{w.url}</text>
+          <line class="hair" x1="0.5" x2={BW - 0.5} y1={winY(wi) + 17} y2={winY(wi) + 17} />
+        </g>
+      ))}
+      {cards.map((c, i) => (
+        <g class="card" data-i={i}>
+          <rect class="card-r" x={c.x} y={c.y} width={c.w} height={c.h} rx="4" />
+          <rect class="thumb" x={c.x + 5} y={c.y + 5} width="26" height="26" rx="3" />
+          {c.p === 0 ? (
+            <path class="glyph" d={`M${c.x + 9} ${c.y + 12}h18v12h-18z M${c.x + 11} ${c.y + 24}v2.5M${c.x + 25} ${c.y + 24}v2.5`} />
+          ) : (
+            <path class="glyph" d={`M${c.x + 12} ${c.y + 12}h12v12h-12z M${c.x + 15} ${c.y + 15}h6v6h-6z M${c.x + 15} ${c.y + 10}v2M${c.x + 18} ${c.y + 10}v2M${c.x + 21} ${c.y + 10}v2M${c.x + 15} ${c.y + 24}v2M${c.x + 18} ${c.y + 24}v2M${c.x + 21} ${c.y + 24}v2`} />
+          )}
+          {c.p === 0 ? (
+            <>
+              <circle class="glyph" cx={c.x + 14} cy={c.y + 18} r="3.6" />
+              <circle class="glyph" cx={c.x + 22} cy={c.y + 18} r="3.6" />
+            </>
+          ) : null}
+          <text class="cname" x={c.x + 37} y={c.y + 14}>{c.p === 0 ? "RTX 4070 Ti" : "Ryzen 7 7800X3D"}</text>
+          <text class="cm price" x={c.x + 38} y={c.y + 30.5}>{c.price}</text>
+        </g>
+      ))}
+      <!-- the Playwright selector highlight; the script hops it across price fields -->
+      <g class="sel" opacity="0">
+        <rect class="sel-r" x="0" y="0" width="1" height="1" vector-effect="non-scaling-stroke" />
+        <g class="sel-tg">
+          <rect class="sel-tag" x="0" y="-16" width="42" height="14" rx="2" />
+          <text class="sel-t" x="5" y="-5.5">.price</text>
+        </g>
+      </g>
+    </g>
+
+    <!-- ===== 2. pricing table + dot plot ===== -->
+    <g class="blk b-table" style={`--m:${mt["b-table"]}`}>
+      <text class="hd" x={BX} y="11"><tspan class="k">Pricing data</tspan><tspan dx="8" class="rows-n">6 rows</tspan></text>
+      <rect class="inset" x={BX + 0.5} y={TB.y + 0.5} width={BW - 1} height={TB_H} rx="6" />
+      <text class="th" x={BX + 12} y={TB.head}>SKU</text>
+      <text class="th" x={BX + 76} y={TB.head}>Item</text>
+      <text class="th" x={BX + BW - 12} y={TB.head} text-anchor="end">Price</text>
+      <line class="hair" x1={BX + 0.5} x2={W - 0.5} y1={TB.top} y2={TB.top} />
+      {cards.map((c, i) => (
+        <g class="row" data-i={i}>
+          <rect class="row-bg" x={BX + 1} y={rowY(i) + 0.5} width={BW - 2} height={TB.row} />
+          <text class="cm td sku" x={BX + 12} y={rowY(i) + 12.5}>{c.sku}</text>
+          <text class="td nm" x={BX + 76} y={rowY(i) + 12.5}>{c.name}</text>
+          <text class="cm td pr" x={BX + BW - 12} y={rowY(i) + 12.5} text-anchor="end">{c.price}</text>
+        </g>
+      ))}
+      <g class="plot">
+        <text class="lg" x={BX} y="170">Price spread per item</text>
+        <circle class="pdot lg-d" cx={W - 104} cy="166.5" r="2.9" />
+        <text class="lg" x={W - 97} y="170">competitor</text>
+        <line class="accent" x1={W - 31} x2={W - 31} y1="161" y2="172" />
+        <text class="lg acc" x={W - 25} y="170">QT</text>
+        {plots.map((r) => (
+          <g class="prow">
+            <text class="pl" x={BX} y={r.y + 3.5}>{r.label}</text>
+            <line class="hair ptrack" x1={DP.x0} x2={DP.x1} y1={r.y} y2={r.y} />
+            {r.ticks.map((t, k) => (
+              <>
+                <line class="faint ptick" x1={r.sx(t)} x2={r.sx(t)} y1={r.y + 3} y2={r.y + 6} />
+                <text class="cm tk" x={r.sx(t)} y={r.y + 16} text-anchor="middle">{k === 0 ? "$" : ""}{t.toLocaleString("en-US")}</text>
+              </>
+            ))}
+            <line class="range" x1={r.lo_x} x2={r.hi_x} y1={r.y} y2={r.y} />
+            {r.dots.map((d) => <circle class="pdot" data-i={d.i} cx={d.x} cy={r.y} r="2.9" />)}
+            <g class="qtm" data-x={r.qx}>
+              <line class="accent" x1={r.qx} x2={r.qx} y1={r.y - 6} y2={r.y + 6} />
+              <text class="acc qtl" x={r.qx} y={r.y - 9} text-anchor="middle">QT</text>
+            </g>
+          </g>
+        ))}
+      </g>
+    </g>
+
+    <!-- ===== 3. request + CUPS queue ===== -->
+    <g class="blk b-queue" style={`--m:${mt["b-queue"]}`}>
+      <text class="hd" x="0" y="275"><tspan class="k">Label</tspan><tspan dx="8">Node.js and Express, then CUPS</tspan></text>
+      <rect class="inset" x="0.5" y={RQ.y + 0.5} width={BW - 1} height={RQ.h} rx="6" />
+      <g clip-path="url(#qt-rq)">
+        <text class="req" x="10" y={RQ.y + 19.5}><tspan class="k">POST</tspan><tspan dx="6">/labels</tspan><tspan dx="7" class="jb">{`{"sku":"`}<tspan class="rq-sku">{SKU}</tspan>{`"}`}</tspan></text>
+      </g>
+      <g class="status">
+        <circle class="f-green" cx={BW - 44} cy={RQ.y + 15.5} r="2.6" />
+        <text class="cm ok" x={BW - 10} y={RQ.y + 19.5} text-anchor="end">200</text>
+      </g>
+      <path class="hair" d={`M22 ${RQ.y + RQ.h + 1}V${QU.y}`} />
+      <path class="flow" d={`M22 ${RQ.y + RQ.h + 1}V${QU.y}`} />
+      <g class="pk-layer"></g>
+      <rect class="inset" x="0.5" y={QU.y + 0.5} width={BW - 1} height={QU.h} rx="6" />
+      <text class="qh" x="12" y={QU.y + 17}><tspan class="k">CUPS queue</tspan></text>
+      <text class="cm qp" x={BW - 12} y={QU.y + 17} text-anchor="end">label-4x2</text>
+      <line class="hair" x1="0.5" x2={BW - 0.5} y1={QU.rows - 2} y2={QU.rows - 2} />
+      <g clip-path="url(#qt-q)">
+        {[0, 1, 2, 3, 4].map((k) => {
+          const y0 = QU.rows + k * QU.row;
+          const done = k === 0, proc = k === 1;
+          return (
+            <g class="job" data-k={k} transform={`translate(0 ${y0})`} opacity={k < 4 ? 1 : 0}>
+              <circle class={`st-pend${done || proc ? " off" : ""}`} cx="18" cy="10.5" r="3.4" />
+              <g class={`st-proc${proc ? "" : " off"}`}>
+                <circle class="ring" cx="18" cy="10.5" r="3.4" />
+                <path class="arc" d="M18 7.1A3.4 3.4 0 0 1 21.4 10.5" />
+              </g>
+              <path class={`st-done${done ? "" : " off"}`} d="M14.8 10.8l2.2 2.2 4.2-4.6" />
+              <text class="cm jid" x="32" y="14.5">{412 + k}</text>
+              <text class="jf" x="64" y="14.5">QT-2025-{String(718 + k).padStart(4, "0")}.pdf</text>
+              <text class={`js${proc ? " acc" : ""}`} x={BW - 12} y="14.5" text-anchor="end">{done ? "completed" : proc ? "processing" : "pending"}</text>
+            </g>
+          );
+        })}
+      </g>
+    </g>
+
+    <!-- ===== 4. printer + label ===== -->
+    <g class="blk b-print" style={`--m:${mt["b-print"]}`}>
+      <text class="hd" x={BX} y="275"><tspan class="k">Print</tspan><tspan dx="8">4 × 2 in thermal label</tspan></text>
+      <path class="lid" d={`M${PR.x + 6} ${PR.y + 4}L${PR.x + 30} ${PR.y - 9}H${PR.x + PR.w - 30}L${PR.x + PR.w - 6} ${PR.y + 4}`} />
+      <path class="hair" d={`M${PR.x + 44} ${PR.y - 4}H${PR.x + PR.w - 44}`} />
+      <rect class="body" x={PR.x} y={PR.y} width={PR.w} height={PR.h} rx="9" />
+      <path class="hair" d={`M${PR.x + 10} ${PR.y + 13}H${PR.x + PR.w - 10}`} />
+      <rect class="btn" x={PR.x + PR.w - 38} y={PR.y + 19} width="14" height="7" rx="2" />
+      <circle class="led" cx={PR.x + PR.w - 14} cy={PR.y + 22.5} r="2.6" />
+      <line class="slot" x1={PR.x + 12} x2={PR.x + PR.w - 12} y1={PR.slot} y2={PR.slot} />
+      <g clip-path="url(#qt-slot)">
+        <g class="paper-g" data-feed={LB.h + 10}>
+          <rect class="liner" x={LB.x - 6} y={PR.slot - 10} width={LB.w + 12} height={LB.h + 20} />
+          <g transform={`translate(${LB.x} ${LB.y})`}>
+            <rect class="label" x="0" y="0" width={LB.w} height={LB.h} rx="4" />
+            <rect class="mono" x="10" y="9" width="23" height="21" rx="2.5" />
+            <text class="mono-t" x="21.5" y="23.3" text-anchor="middle">QT</text>
+            <text class="cm lsku" x={LB.w - 10} y="23" text-anchor="end">{SKU}</text>
+            <text class="lname" x="10" y="47">{GPU}</text>
+            <text class="lsub" x="10" y="62">Graphics card</text>
+            <text class="cm lprice" x={LB.w - 10} y="59" text-anchor="end">$1,069.99</text>
+            <path class="bars" d={barPath} />
+            <text class="cm hri" x={LB.w / 2} y={BAR.y + BAR.h + 11} text-anchor="middle">{SKU}</text>
+          </g>
+        </g>
+      </g>
+      <path class="tear" d={tear} />
+      <g class="dims">
+        <path class="faint" d={`M${LB.x} ${LB.y + LB.h + 8}v6M${LB.x + LB.w} ${LB.y + LB.h + 8}v6M${LB.x} ${LB.y + LB.h + 11}H${LB.x + LB.w}`} />
+        <rect class="paper" x={LB.x + LB.w / 2 - 14} y={LB.y + LB.h + 5} width="28" height="12" />
+        <text class="cm dim" x={LB.x + LB.w / 2} y={LB.y + LB.h + 15} text-anchor="middle">4 in</text>
+      </g>
+    </g>
+
+    <!-- flying extraction pills live outside the blocks -->
+    <g class="fly-layer">
+      {cards.map((_, i) => <rect class="fly" data-i={i} x="-29" y="-7.5" width="58" height="15" rx="2" opacity="0" />)}
+    </g>
+
+    <!-- ===== 5. manual vs automated ===== -->
+    <g class="blk band" style={`--m:${mt["b-time"]}`}>
+      <line class="hair" x1="0" x2={W} y1="484" y2="484" />
+      <line class="seg-g" x1="0" x2={W} y1={C.y1 + 20} y2={C.y1 + 20} />
+      <line class="seg-g r2g" x1="0" x2={W} y1={C.y2 + 20} y2={C.y2 + 20} />
+      <text class="bl strong" x="0" y={C.y1}>Manual</text>
+      <text class="cm bl-r" x={W} y={C.y1} text-anchor="end">100%</text>
+      <g class="r1">
+      {manual.map((s, i) => (
+        <>
+          <line class="seg-m" x1={mSeg[i].x0} x2={mSeg[i].x1} y1={C.y1 + 20} y2={C.y1 + 20} />
+          <text class="seg-t" x={mSeg[i].cx} y={C.y1 + 20} text-anchor="middle">{s.k}</text>
+        </>
+      ))}
+      </g>
+      <g class="r2">
+      <text class="bl strong" x="0" y={C.y2}>Automated</text>
+      <text class="cm acc bl-r cut" x={W} y={C.y2} text-anchor="end">−70%</text>
+      {auto.map((s, i) => (
+        <g class="aseg" data-i={i}>
+          <line class="seg-a" x1={aSeg[i].x0} x2={aSeg[i].x1} y1={C.y2 + 20} y2={C.y2 + 20} />
+          <text class="seg-t m-name" x={mSeg[i].cx} y={C.y2 + 20} text-anchor="middle" opacity="0">{manual[i].k}</text>
+          <text class="seg-t a-name" x={aSeg[i].cx} y={C.y2 + 20} text-anchor="middle">{s.k}</text>
+        </g>
+      ))}
+      <g class="saved">
+        <text class="cm pct" x={aEnd + 6} y={C.y2 + 24}>30%</text>
+        <line class="dash sv" x1={aEnd + 40} x2={W - 4} y1={C.y2 + 20} y2={C.y2 + 20} />
+        <path class="faint" d={`M${W - 0.5} ${C.y2 + 12}v16`} />
+      </g>
+      </g>
+    </g>
+  </svg>
+  <Fragment slot="caption">Read it top to bottom: my scrapers lift each price into the table and the per-item dot plot, then one request renders the label that CUPS prints. The bars below split the same task into steps, by hand and automated; items and prices are examples.</Fragment>
+</Figure>
+
+<style is:global>
+  .fig svg.qt text { font-size: 11px; }
+  .fig svg.qt text.cm { font-size: 11.5px; }
+  .fig svg.qt tspan.k { fill: var(--ink); font-weight: 500; }
+  .fig svg.qt .hd { fill: var(--ink-3); }
+  .fig svg.qt .wdot { fill: var(--hair); }
+  .fig svg.qt .url { fill: var(--panel); stroke: var(--hair); }
+  .fig svg.qt .url-t { font-size: 11px; fill: var(--ink-3); letter-spacing: 0.01em; }
+  .fig svg.qt .card-r { fill: var(--panel); stroke: var(--hair); transition: stroke 0.2s; }
+  .fig svg.qt .card.hl .card-r { stroke: var(--accent); stroke-width: 1.25; }
+  .fig svg.qt .thumb { fill: rgb(20 20 19 / 0.045); }
+  .fig svg.qt .glyph { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.qt text.cname { font-size: 11px; fill: var(--ink-2); }
+  .fig svg.qt text.price { font-size: 11.5px; fill: var(--ink); }
+  .fig svg.qt .sel-r { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.25; }
+  .fig svg.qt .sel-tag { fill: var(--accent); }
+  .fig svg.qt text.sel-t { font-size: 11px; fill: var(--panel); font-weight: 500; }
+  .fig svg.qt .fly { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+
+  .fig svg.qt .th { font-size: 11px; fill: var(--ink-3); }
+  .fig svg.qt .td { fill: var(--ink-2); }
+  .fig svg.qt text.cm.td { font-size: 11.5px; }
+  .fig svg.qt text.td.nm { fill: var(--ink); }
+  .fig svg.qt .row-bg { fill: transparent; pointer-events: all; }
+  .fig svg.qt .row { cursor: default; }
+  .fig svg.qt .row.hl .row-bg { fill: var(--accent-soft); }
+  .fig svg.qt .row.hl text { fill: var(--accent); }
+  .fig svg.qt .pl { fill: var(--ink-2); }
+  .fig svg.qt text.lg { font-size: 11px; fill: var(--ink-3); }
+  .fig svg.qt text.lg.acc { fill: var(--accent); font-weight: 500; }
+  .fig svg.qt text.tk { font-size: 11px; fill: var(--ink-3); }
+  .fig svg.qt .range { stroke: rgb(20 20 19 / 0.16); stroke-width: 5; stroke-linecap: round; }
+  .fig svg.qt .pdot { fill: var(--ink); stroke: var(--panel); stroke-width: 1.25; }
+  .fig svg.qt .pdot.hl { fill: var(--accent); }
+  .fig svg.qt text.qtl { font-size: 11px; font-weight: 500; }
+
+  .fig svg.qt .req { font-size: 11px; fill: var(--ink-2); }
+  .fig svg.qt .req .jb { fill: var(--ink-3); }
+  .fig svg.qt text.ok { font-size: 12px; fill: var(--s-green); }
+  .fig svg.qt .flow { stroke: none; fill: none; }
+  .fig svg.qt .qh { fill: var(--ink-3); }
+  .fig svg.qt text.qp { font-size: 11px; }
+  .fig svg.qt .jid { fill: var(--ink-3); }
+  .fig svg.qt .jf { fill: var(--ink-2); font-size: 11px; }
+  .fig svg.qt .js { fill: var(--ink-3); font-size: 11px; }
+  .fig svg.qt .js.acc { fill: var(--accent); }
+  .fig svg.qt .st-pend { fill: none; stroke: var(--ink-4); stroke-width: 1.1; }
+  .fig svg.qt .st-proc .ring { fill: none; stroke: var(--accent-soft); stroke-width: 1.6; }
+  .fig svg.qt .st-proc .arc { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; }
+  .fig svg.qt .st-done { fill: none; stroke: var(--s-green); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.qt .off { display: none; }
+
+  .fig svg.qt .body { fill: var(--panel); stroke: var(--ink); stroke-width: 1.25; }
+  .fig svg.qt .lid { fill: var(--panel-2); stroke: var(--ink); stroke-width: 1.25; stroke-linejoin: round; }
+  .fig svg.qt .btn { fill: none; stroke: var(--ink-4); }
+  .fig svg.qt .led { fill: var(--ink-4); }
+  .fig svg.qt .led.on { fill: var(--accent); }
+  .fig svg.qt .slot { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+  .fig svg.qt .tear { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.qt .liner { fill: var(--panel-2); stroke: var(--hair); }
+  .fig svg.qt .label { fill: var(--panel); stroke: var(--ink-4); }
+  .fig svg.qt .mono { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+  .fig svg.qt text.mono-t { font-size: 11px; font-weight: 600; fill: var(--ink); letter-spacing: 0.02em; }
+  .fig svg.qt text.lsku { font-size: 11px; fill: var(--ink-3); }
+  .fig svg.qt text.lname { font-size: 13.5px; font-weight: 500; fill: var(--ink); }
+  .fig svg.qt text.lsub { font-size: 11px; fill: var(--ink-3); }
+  .fig svg.qt text.lprice { font-size: 20px; fill: var(--ink); }
+  .fig svg.qt .bars { fill: var(--ink); shape-rendering: crispEdges; }
+  .fig svg.qt text.hri { font-size: 11px; fill: var(--ink); letter-spacing: 0.1em; }
+  .fig svg.qt text.dim { font-size: 11px; }
+
+  .fig svg.qt .bl { fill: var(--ink); }
+  .fig svg.qt text.bl-r { font-size: 12px; }
+  .fig svg.qt .seg-m { stroke: rgb(20 20 19 / 0.1); stroke-width: 18; }
+  .fig svg.qt .seg-a { stroke: var(--accent); stroke-width: 18; }
+  .fig svg.qt .seg-g { stroke: rgb(20 20 19 / 0.035); stroke-width: 18; }
+  .fig svg.qt .seg-t { font-size: 11px; fill: var(--ink-2); dominant-baseline: central; }
+  .fig svg.qt .a-name, .fig svg.qt .aseg .m-name { fill: var(--panel); font-weight: 500; }
+  .fig svg.qt text.pct { font-size: 12px; fill: var(--accent); }
+
+  @media (max-width: 560px) {
+    .fig svg.qt { aspect-ratio: 640 / var(--hm); }
+    .fig svg.qt .blk { transform: var(--m); }
+    .fig svg.qt .band text { font-size: 20px; }
+    .fig svg.qt .band text.cm { font-size: 20px; }
+    .fig svg.qt .band .seg-t { font-size: 20px; }
+    .fig svg.qt .url-t, .fig svg.qt .sel-tg { display: none; }
+    .fig svg.qt .band .r2g { transform: translateY(34px); }
+    .fig svg.qt .band .seg-g:not(.r2g) { transform: translateY(4px); }
+    .fig svg.qt .band .bl, .fig svg.qt .band .bl-r { transform: translateY(-6px); }
+    .fig svg.qt .seg-m, .fig svg.qt .seg-a, .fig svg.qt .seg-g { stroke-width: 30; }
+    .fig svg.qt .band .a-name { display: none; }
+    .fig svg.qt .band text.pct { transform: translateY(2px); }
+    .fig svg.qt .band .r1 { transform: translateY(4px); }
+    .fig svg.qt .band .r2 { transform: translateY(34px); }
+  }
+</style>

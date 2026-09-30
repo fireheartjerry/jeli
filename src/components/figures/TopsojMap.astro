@@ -1,0 +1,176 @@
+---
+// Fig: where TopsOJ is used. A dot-matrix world on the Equal Earth projection,
+// land sampled on a regular hexagonal grid at build time. Countries in the
+// Google Analytics export light up by log(active users). The server
+// renders the finished map as SVG; the script swaps in a canvas that scans
+// the land in, then lights countries in waves spreading out from Toronto.
+import Figure from "../Figure.astro";
+import { buildMap } from "../../scripts/geo/topsojmap";
+import gaSite from "../../data/topsoj-ga.json";
+import {
+  VIEW_W, VIEW_H, DOT_R, TORONTO, px, cellX, cellY, graticule, polyline, litAlpha,
+} from "../../scripts/geo/topsojgrid";
+
+const map = buildMap();
+const { countries, dots, lit } = map;
+const max = Math.max(...countries.map((c) => c.s));
+const f = (v: number) => v.toFixed(1);
+const fmt = (v: number) => v.toLocaleString("en-US");
+
+// Static dots, one path per shade: "M x y h0" with round caps draws a dot.
+const BUCKETS = 10;
+const grey: string[] = [];
+const shades: string[][] = Array.from({ length: BUCKETS }, () => []);
+for (let i = 0; i < dots.length; i += 3) {
+  const [r, c, k] = [dots[i], dots[i + 1], dots[i + 2]];
+  const d = `M${f(cellX(r, c))} ${f(cellY(r))}h0`;
+  const co = countries[k];
+  if (!co.lit) grey.push(d);
+  else shades[Math.min(BUCKETS - 1, Math.floor(((litAlpha(co.s, max) - 0.24) / 0.76) * BUCKETS))].push(d);
+}
+const shadeAlpha = (b: number) => (0.24 + (0.76 * (b + 0.5)) / BUCKETS).toFixed(2);
+const grat = graticule().map((g) => ({ a: g.a, d: g.lines.map(polyline).join("") }));
+
+// Pack dots for the canvas: [row, col, country] bytes, base64.
+const packed = btoa(String.fromCharCode(...dots));
+const payload = JSON.stringify({
+  d: packed,
+  n: countries.map((c) => c.name),
+  s: countries.map((c) => c.s),
+  w: countries.map((c) => c.n),
+  max,
+});
+if (countries.length > 255) throw new Error("topsojmap: country index overflows a byte");
+const idx = (name: string) => countries.findIndex((c) => c.name === name);
+
+// Callouts: the six largest audiences, labelled out in open water.
+type Callout = { name: string; at: [number, number]; lab: [number, number]; side: "start" | "end" };
+const CALLOUTS: Callout[] = [
+  { name: "Canada", at: [-104, 57], lab: [-153, 45], side: "end" },
+  { name: "United States", at: [-100, 39], lab: [-134, 27], side: "end" },
+  { name: "Brazil", at: [-50, -9], lab: [-24, -14], side: "start" },
+  { name: "Vietnam", at: [106, 15], lab: [136, 20], side: "start" },
+  { name: "Singapore", at: [103.8, 1.35], lab: [98, -16], side: "start" },
+  { name: "China", at: [104, 34], lab: [152, 41], side: "start" },
+];
+const callouts = CALLOUTS.map((c) => {
+  const [ax, ay] = px(...c.at);
+  const [lx, ly] = px(...c.lab);
+  const k = idx(c.name);
+  return { ...c, ax, ay, lx, ly, k, s: countries[k].s, tx: c.side === "start" ? lx + 5 : lx - 5 };
+});
+const [tx, ty] = px(TORONTO.lon, TORONTO.lat);
+const [tlx, tly] = px(-52, 35);
+
+// Legend ramp at round session counts.
+const ramp = [1, 10, 100, 1000, 10000].map((v, i) => ({ v, x: 134 + i * 34, a: litAlpha(v, max).toFixed(2), t: v >= 1000 ? `${v / 1000}k` : String(v) }));
+// The big counter carries the country count, so the header reports users instead.
+const readout = `${gaSite.totals.activeUsers.toLocaleString("en-US")} users`;
+---
+
+<Figure name="topsojmap" n={3} size="stage" title="TopsOJ by country" label="World map of TopsOJ active users by country and territory" readout={readout}>
+  <div class="tm" data-map={payload} role="img" aria-label={`A dot map of the world. The ${lit} countries and territories where TopsOJ has active users are lit, shaded by active users on a log scale: Singapore ${fmt(countries[idx("Singapore")].s)}, China ${fmt(countries[idx("China")].s)}, the United States ${fmt(countries[idx("United States")].s)}, Brazil ${fmt(countries[idx("Brazil")].s)}, Canada ${fmt(countries[idx("Canada")].s)} and Vietnam ${fmt(countries[idx("Vietnam")].s)}. Toronto is marked.`}>
+    <canvas aria-hidden="true" style="display:none"></canvas>
+    <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} aria-hidden="true">
+      <g class="tm-static">
+        {grat.map((g) => <path class="tm-grat" d={g.d} stroke-opacity={(0.07 * g.a).toFixed(3)} />)}
+        <path class="tm-grey" d={grey.join("")} stroke-width={DOT_R * 2} />
+        {shades.map((d, b) => d.length > 0 && <path class="tm-lit" d={d.join("")} stroke-width={DOT_R * 2} stroke-opacity={shadeAlpha(b)} />)}
+      </g>
+
+      <g class="tm-ann">
+        {callouts.map((c) => (
+          <g class="tm-co" data-k={c.k}>
+            <path class="tm-lead" d={`M${f(c.ax)} ${f(c.ay)}L${f(c.lx)} ${f(c.ly)}`} />
+            <circle class="tm-pin" cx={f(c.ax)} cy={f(c.ay)} r="2.2" />
+            <text class="tm-name" x={f(c.tx)} y={f(c.ly - 2)} text-anchor={c.side}>{c.name}</text>
+            <text class="tm-val" x={f(c.tx)} y={f(c.ly + 13)} text-anchor={c.side}>{fmt(c.s)}</text>
+          </g>
+        ))}
+      </g>
+
+      <g class="tm-key">
+        <text class="tm-count" x="124" y="404">{lit}</text>
+        <text class="tm-sub tm-wide" x="126" y="424">countries and territories</text>
+        <text class="tm-sub tm-narrow" x="126" y="450">countries and</text>
+        <text class="tm-sub tm-narrow" x="126" y="494">territories</text>
+        <g class="tm-legend">
+          <text class="tm-sub" x="126" y="458">Active users, log scale</text>
+          <line class="tm-rule" x1="134" x2={ramp[ramp.length - 1].x} y1="474" y2="474" />
+          {ramp.map((r) => (
+            <>
+              <circle class="tm-sw" cx={r.x} cy="474" r="3.4" fill-opacity={r.a} />
+              <text class="tm-tick" x={r.x} y="494" text-anchor="middle">{r.t}</text>
+            </>
+          ))}
+        </g>
+      </g>
+
+      <g class="tm-arcs"></g>
+
+      <g class="tm-to" transform={`translate(${f(tx)} ${f(ty)})`}>
+        <circle class="tm-halo" r="7.5" />
+        <circle class="tm-ring" r="5.5" />
+        <circle class="dot-accent" r="2.2" />
+      </g>
+      <g class="tm-tol">
+        <path class="tm-lead acc" d={`M${f(tx + 8)} ${f(ty + 3)}L${f(tlx)} ${f(tly)}`} />
+        <text class="tm-name acc" x={f(tlx + 5)} y={f(tly + 4)}>Toronto</text>
+      </g>
+
+      <g class="tm-tip" opacity="0">
+        <rect class="tm-tipbox" x="0" y="-15" width="80" height="22" rx="4" />
+        <text class="tm-tipn" x="8" y="0"></text>
+        <text class="tm-tipv" x="8" y="0"></text>
+      </g>
+    </svg>
+  </div>
+  <Fragment slot="caption">Active users by country and territory, all time. Source: Google Analytics.</Fragment>
+</Figure>
+
+<style>
+  .tm { position: relative; touch-action: pan-y; }
+  :global(.fig) .tm canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  :global(.fig) .tm svg { position: relative; }
+
+  .tm-grat { fill: none; stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .tm-grey, .tm-lit { fill: none; stroke-linecap: round; }
+  .tm-grey { stroke: var(--ink); stroke-opacity: 0.13; }
+  .tm-lit { stroke: var(--accent); }
+
+  :global(.fig) .tm text { font-size: 12.5px; }
+  :global(.fig) .tm .tm-name { fill: var(--ink-2); }
+  :global(.fig) .tm .tm-name.acc { fill: var(--accent); font-weight: 500; }
+  :global(.fig) .tm .tm-val, :global(.fig) .tm .tm-tick, :global(.fig) .tm .tm-tipv { font-family: var(--cm); font-size: 13px; fill: var(--ink-3); letter-spacing: 0; }
+  :global(.fig) .tm .tm-count { font-family: var(--cm); font-size: 40px; fill: var(--ink); letter-spacing: -0.01em; }
+  :global(.fig) .tm .tm-sub { fill: var(--ink-3); }
+  :global(.fig) .tm .tm-tipn { fill: var(--ink); font-weight: 500; }
+  .tm-narrow { display: none; }
+  .tm-lead { fill: none; stroke: var(--ink-4); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .tm-lead.acc { stroke: var(--accent); stroke-opacity: 0.55; }
+  .tm-pin { fill: var(--panel); stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .tm-rule { stroke: var(--hair); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .tm-sw { fill: var(--accent); }
+  .tm-halo { fill: var(--panel); fill-opacity: 0.9; }
+  .tm-ring { fill: none; stroke: var(--accent); stroke-width: 1.25; vector-effect: non-scaling-stroke; }
+  .tm-tip { pointer-events: none; }
+  .tm-tipbox { fill: var(--panel); stroke: var(--hair); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .tm-arcs :global(.tm-arc) { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .tm-arcs :global(.tm-pulse) { fill: none; stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+  /* On phones the 1200-wide plot shrinks ~3.5x: keep Toronto and the count, drop the rest. */
+  @media (max-width: 560px) {
+    .tm-co, .tm-legend, .tm-wide { display: none; }
+    .tm-narrow { display: inline; }
+    /* The 1200-wide plot is ~0.27x on a phone: 42 units is about 11px. */
+    :global(.fig) .tm text { font-size: 42px; }
+    :global(.fig) .tm .tm-count { font-size: 84px; }
+    :global(.fig) .tm .tm-tipv { font-size: 42px; }
+    .tm-key { transform: translateX(-86px); }
+    .tm-grey { stroke-opacity: 0.17; }
+    .tm-grey, .tm-lit { stroke-width: 5.4px; }
+    .tm-halo { r: 13px; }
+    .tm-ring { r: 10px; stroke-width: 1.5; }
+    .tm-to .dot-accent { r: 4.5px; }
+  }
+</style>

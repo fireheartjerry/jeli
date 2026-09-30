@@ -1,0 +1,232 @@
+---
+import { aBallistic, aConservative, masses, roche, toPath, F_MAX as DM_MAX } from "../scripts/binary";
+
+// Geometry shared with src/scripts/hero.ts through data attributes, so the
+// server-rendered frame and the animated one can never disagree.
+const G = {
+  cx: 260, cy: 200, S: 185, // orbit centre and pixels per a0
+  px0: 44, px1: 476, py0: 520, py1: 404, amin: 0.84, amax: 1.26, // plot box
+};
+const X = (dm: number) => G.px0 + (dm / DM_MAX) * (G.px1 - G.px0);
+const Y = (a: number) => G.py0 - ((a - G.amin) / (G.amax - G.amin)) * (G.py0 - G.py1);
+const curve = (f: (dm: number) => number) =>
+  Array.from({ length: 61 }, (_, i) => {
+    const dm = (i / 60) * DM_MAX;
+    return `${i ? "L" : "M"}${X(dm).toFixed(1)} ${Y(f(dm)).toFixed(1)}`;
+  }).join("");
+
+// Server-rendered frame: the end state, at a fixed orbital phase.
+const dm = DM_MAX;
+const { md, ma } = masses(dm);
+const a = aBallistic(dm) * G.S;
+const ac = aConservative(dm) * G.S;
+const R = roche(md, ma);
+const map = (x: number, y: number): [number, number] => [G.cx + x * a, G.cy + y * a];
+const donorD = toPath(R.donor(), map);
+const accD = toPath(R.accretor(), map);
+---
+
+<section class="hero" aria-labelledby="hero-h">
+  <div class="pin wrap">
+    <div class="copy">
+      <h1 id="hero-h" aria-label="Jerry Li">
+        {["Jerry", "Li"].map((word, w) => (
+          <span class="word" aria-hidden="true">
+            {[...word].map((ch, i) => <span class="ch" style={`--i:${w * 5 + i}`}>{ch}</span>)}
+          </span>
+        ))}
+      </h1>
+      <p class="lede">
+        I study computer science at the University of Waterloo as a Schulich Leader. I work on video
+        export and AI integrations at <a class="ln" href="#work">Mathos AI</a>, run{" "}
+        <a class="ln" href="https://topsoj.com" target="_blank" rel="noopener">TopsOJ</a>, a judge for
+        competitive math, and write papers about <a class="ln" href="#research">binary stars</a>.
+      </p>
+    </div>
+
+    <figure class="fig hero-fig" data-hero data-g={JSON.stringify(G)} aria-labelledby="hero-cap">
+      <svg viewBox="0 0 520 572" role="img" aria-label="Two stars orbit each other while gas streams from the larger to the smaller. The orbit shrinks, while the classical prediction widens.">
+        <circle class="ring-ghost" cx={G.cx} cy={G.cy} r={ac * ma} />
+        <circle class="ring" cx={G.cx} cy={G.cy} r={a * ma} />
+        <circle class="ring" cx={G.cx} cy={G.cy} r={a * md} />
+        <path class="com" d={`M${G.cx - 4} ${G.cy}h8M${G.cx} ${G.cy - 4}v8`} />
+        <g class="stream"></g>
+        <path class="lobe" d={accD} />
+        <path class="donor" d={donorD} />
+        <circle class="accretor" cx={G.cx + a * md} cy={G.cy} r="6" />
+        <text class="lab ghost-lab" x={G.cx} y={G.cy - ac * ma - 8} text-anchor="middle">classical prediction</text>
+
+        <g class="plot">
+          <line class="hair" x1={G.px0} x2={G.px1} y1={Y(1)} y2={Y(1)} />
+          <line class="faint" x1={G.px0} x2={G.px0} y1={G.py1 - 6} y2={G.py0} />
+          <line class="faint" x1={G.px0} x2={G.px1} y1={G.py0} y2={G.py0} />
+          {[0.9, 1, 1.1, 1.2].map((v) => (
+            <>
+              {v !== 1 && <line class="tick-h" x1={G.px0} x2={G.px1} y1={Y(v)} y2={Y(v)} />}
+              <text class="cm tk" x={G.px0 - 10} y={Y(v) + 4} text-anchor="end">{v.toFixed(1)}</text>
+            </>
+          ))}
+          <text class="m" x={G.px0 - 10} y={G.py1} text-anchor="end">a/a<tspan class="sub" dy="4">0</tspan></text>
+          {[0, 0.05, 0.1, 0.15].map((f) => (
+            <>
+              <line class="faint" x1={X(f)} x2={X(f)} y1={G.py0} y2={G.py0 + 4} />
+              <text class="cm tk" x={X(f)} y={G.py0 + 17} text-anchor="middle">{Math.round(f * 100)}%</text>
+            </>
+          ))}
+          <text class="m ax" x={G.px1} y={G.py0 + 36} text-anchor="end">f = Δm/M<tspan class="sub" dy="4">d</tspan></text>
+          <path class="dash c-cons" d={curve(aConservative)} />
+          <path class="accent c-ball" d={curve(aBallistic)} />
+          <line class="cursor" x1={X(dm)} x2={X(dm)} y1={G.py1 - 6} y2={G.py0} />
+          <circle class="dot h-cons" cx={X(dm)} cy={Y(aConservative(dm))} r="2.5" />
+          <circle class="dot-accent h-ball" cx={X(dm)} cy={Y(aBallistic(dm))} r="3.5" />
+          <text class="lab end-lab lab-cons" x={G.px1 + 8} y={Y(aConservative(DM_MAX)) + 4}>classical</text>
+          <text class="lab acc end-lab lab-ball" x={G.px1 + 8} y={Y(aBallistic(DM_MAX)) + 4}>ballistic</text>
+          <text class="hint" x={(G.px0 + G.px1) / 2} y={(G.py0 + G.py1) / 2 + 4} text-anchor="middle">Scroll to move mass between the stars</text>
+        </g>
+      </svg>
+      <figcaption id="hero-cap">
+        <span class="n num">Fig. 1</span>
+        Gas flows from one star to its companion. Classical theory says this orbit widens; following the
+        gas as a ballistic stream shows it <em>shrinks</em>.{" "}
+        <a class="ln" href="https://doi.org/10.3847/2515-5172/ae4513" target="_blank" rel="noopener">Li, RNAAS 2026</a>
+        <span class="readout num" aria-hidden="true"></span>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<script>
+  import "../scripts/hero";
+</script>
+
+<style>
+  .hero {
+    position: relative;
+  }
+  .pin {
+    min-height: calc(100svh - 60px);
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    column-gap: clamp(32px, 6vw, 96px);
+    align-items: center;
+    padding-block: 32px 48px;
+  }
+  h1 {
+    font-size: clamp(56px, 8vw, 116px);
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 0.24em;
+  }
+  /* Page-load choreography is pure CSS, so it runs before any JS and costs nothing. */
+  .word {
+    display: inline-flex;
+    overflow: clip;
+    /* Room for descenders (the y) inside the reveal mask. */
+    padding-bottom: 0.24em;
+    margin-bottom: -0.24em;
+  }
+  .ch {
+    display: inline-block;
+    animation: rise 0.85s var(--ease-out) both;
+    animation-delay: calc(var(--i) * 26ms);
+  }
+  @keyframes rise {
+    from { transform: translateY(105%); }
+  }
+  .lede {
+    animation: fade-up 0.9s var(--ease-out) 0.45s both;
+  }
+  .hero-fig {
+    animation: fade-in 1.4s ease 0.25s both;
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ch, .lede, .hero-fig { animation: none; }
+  }
+  .lede {
+    margin-top: 28px;
+    font-size: clamp(18px, 1.55vw, 21px);
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 34ch;
+  }
+  .hero-fig svg {
+    display: block;
+    width: 100%;
+    max-height: 72svh;
+    overflow: visible;
+  }
+  figcaption {
+    margin-top: 8px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-3);
+    max-width: 58ch;
+  }
+  figcaption em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .n {
+    color: var(--ink);
+    margin-right: 0.5em;
+  }
+  .readout {
+    display: block;
+    white-space: pre;
+    margin-top: 6px;
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--ink-3);
+    min-height: 1.5em;
+  }
+
+  .ring { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .ring-ghost { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 2 5; }
+  .com { stroke: var(--ink-3); stroke-width: 1; }
+  .donor { fill: var(--paper); stroke: var(--ink); stroke-width: 1.25; }
+  .accretor { fill: var(--ink); }
+  .lobe { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 2 3; }
+  .stream :global(circle) { fill: var(--accent); }
+  .cursor { stroke: var(--hair); stroke-width: 1; }
+  .hair { stroke: var(--hair); stroke-width: 1; }
+  .faint { stroke: var(--ink-4); stroke-width: 1; }
+  .dash { fill: none; stroke: var(--ink-3); stroke-width: 1.25; stroke-dasharray: 3 4; }
+  .accent { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; }
+  .dot { fill: var(--ink-3); }
+  .dot-accent { fill: var(--accent); }
+  text { font-family: var(--sans); font-size: 11.5px; fill: var(--ink-3); }
+  text.m { font-family: var(--math); font-style: italic; font-size: 15px; fill: var(--ink-2); }
+  text.m .sub { font-family: var(--cm); font-style: normal; font-size: 10px; }
+  text.acc { fill: var(--accent); }
+  text.cm { font-family: var(--cm); font-size: 12px; fill: var(--ink-3); }
+  .tick-h { stroke: var(--hair); stroke-width: 1; stroke-dasharray: 1 4; }
+  .hint { opacity: 0; transition: opacity 0.4s ease; }
+  :global([data-hero][data-idle]) .hint { opacity: 1; }
+
+  @media (max-width: 600px) {
+    text { font-size: 17px; }
+    text.m { font-size: 21px; }
+    text.cm { font-size: 16px; }
+    .hint { display: none; }
+  }
+  @media (max-width: 880px) {
+    .pin {
+      grid-template-columns: 1fr;
+      row-gap: 40px;
+      min-height: 0;
+      padding-top: 56px;
+    }
+    .hero-fig svg {
+      max-height: none;
+    }
+  }
+</style>

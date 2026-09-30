@@ -1,0 +1,118 @@
+---
+interface Props {
+  title: string;
+  href?: string;
+  role?: string;
+  period: string;
+  tags?: string;
+  /** Feature entries put their figure full-width under the text. */
+  feature?: boolean;
+}
+const { title, href, role, period, tags, feature = false } = Astro.props;
+---
+
+<article class:list={["entry", { feature }]}>
+  <div class="text">
+    <header>
+      <h3>
+        {href ? <a class="ln" href={href} target="_blank" rel="noopener">{title}</a> : title}
+      </h3>
+      <p class="meta">
+        {role && <span>{role}</span>}
+        <span class="num">{period}</span>
+      </p>
+    </header>
+    <div class="body"><slot /></div>
+    {tags && <p class="tags">{tags}</p>}
+  </div>
+  {Astro.slots.has("figure") && <div class="figure"><slot name="figure" /></div>}
+</article>
+
+<style>
+  .entry {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: clamp(32px, 6vw, 96px);
+    align-items: start;
+    padding-block: clamp(40px, 5.5vw, 80px);
+    border-top: 1px solid var(--hair);
+  }
+  .entry.no-fig {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+  .text {
+    position: sticky;
+    top: 96px;
+  }
+  .figure {
+    display: grid;
+    gap: 20px;
+  }
+  /* The rule above each entry draws itself in as the entry arrives. */
+  .entry {
+    position: relative;
+  }
+  .entry::before {
+    content: "";
+    position: absolute;
+    inset: -1px 0 auto;
+    height: 1px;
+    background: var(--ink-4);
+    transform: scaleX(var(--rule, 1));
+    transform-origin: left;
+  }
+  h3 {
+    font-size: 21px;
+    line-height: 1.25;
+    letter-spacing: -0.012em;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.9em;
+    margin-top: 4px;
+    font-size: 14.5px;
+    color: var(--ink-3);
+  }
+  .body {
+    margin-top: 18px;
+    color: var(--ink-2);
+    max-width: 46ch;
+  }
+  .body :global(p + p) {
+    margin-top: 0.8em;
+  }
+  .tags {
+    margin-top: 18px;
+    font-size: 13.5px;
+    color: var(--ink-3);
+  }
+  /* Feature layout: text spans a wide measure, the figure takes the full row below. */
+  .entry.feature {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    row-gap: clamp(32px, 4vw, 56px);
+  }
+  .entry.feature .text {
+    position: static;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: clamp(32px, 6vw, 96px);
+    align-items: start;
+  }
+  .entry.feature .text > header { grid-column: 1; }
+  .entry.feature .body { grid-column: 2; margin-top: 0; max-width: 60ch; }
+  .entry.feature .tags { grid-column: 2; }
+  .entry.feature .figure { grid-column: 1 / -1; }
+  @media (max-width: 880px) {
+    .entry.feature .text { grid-template-columns: 1fr; }
+    .entry.feature .body, .entry.feature .tags { grid-column: 1; margin-top: 18px; }
+    .entry {
+      grid-template-columns: 1fr;
+      row-gap: 36px;
+    }
+    .text {
+      position: static;
+    }
+  }
+</style>

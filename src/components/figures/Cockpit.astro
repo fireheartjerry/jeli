@@ -1,0 +1,382 @@
+---
+// Fig: Cardboard Cockpit. The whole pipeline: a webcam finds two printed ArUco
+// markers (DICT_4X4_50; id 23 is the stick, a smaller card on a rail is the
+// throttle), a Python bridge merges their pose with the BLE badge's fire button
+// into JSON frames over a local WebSocket, and the Godot sim flies them.
+// The server renders the last frame of the scroll timeline.
+import Figure from "../Figure.astro";
+import {
+  VIEW, CAMV, THR, BADGE, LOG, PFD, ADI, SPD, ALT, HDG, MAP, FLIGHT,
+  flight, scene, throttleCard, thrY, trend, horizon, pointer, spdTape, altTape, hdgTape,
+  hdgText, hdgName, speedOf, frame, readout, turbulence, fadeTape, fadeHdg, fadeRung,
+} from "../../scripts/geo/cockpit";
+
+const f = flight(1);
+const { roll, pitch, thr } = f;
+const s = scene(roll, pitch);
+const tc = throttleCard(thr);
+const spd = speedOf(thr);
+const r1 = (v: number) => Math.round(v * 10) / 10;
+const { cx, cy, hw, hh, k } = ADI;
+
+// Webcam furniture.
+const vf = (() => {
+  const i = 12, a = 14, { x, y, w, h } = CAMV;
+  return `M${x + i} ${y + i + a}V${y + i}H${x + i + a}M${x + w - i - a} ${y + i}H${x + w - i}V${y + i + a}M${x + w - i} ${y + h - i - a}V${y + h - i}H${x + w - i - a}M${x + i + a} ${y + h - i}H${x + i}V${y + h - i - a}`;
+})();
+const railTicks = [0, 0.25, 0.5, 0.75, 1].map((v) => `M${THR.x + 12} ${r1(thrY(v))}h${v % 0.5 === 0 ? 6 : 4}`).join("");
+const idTag = (() => {
+  // OpenCV's drawDetectedMarkers labels each marker with its id; set the tag below the card.
+  const dx = s.corners[3][0] - s.corners[0][0], dy = s.corners[3][1] - s.corners[0][1];
+  const m = [(s.corners[2][0] + s.corners[3][0]) / 2, (s.corners[2][1] + s.corners[3][1]) / 2];
+  const l = Math.hypot(dx, dy);
+  return [r1(m[0] + (dx / l) * 34), r1(m[1] + (dy / l) * 34)];
+})();
+
+// The badge.
+const B = BADGE, bx = B.cx - B.w / 2, by = B.cy - B.h / 2;
+const FIREB = { x: B.cx - 20, y: B.cy + 30 }, ALTB = { x: B.cx + 22, y: B.cy + 30 };
+// A meandered PCB antenna on the radio module, the way BLE modules print them.
+const antenna = (() => {
+  const x0 = B.cx - 14, y0 = by + 30;
+  let d = `M${x0} ${y0 + 10}V${y0}`;
+  for (let i = 0; i < 4; i++) d += `h3.5v${i % 2 ? -7 : 7}`;
+  return d + `h3.5v10`;
+})();
+
+// The log: a few frames around the final pose, as the bridge sent them.
+const lines = Array.from({ length: LOG.n }, (_, i) => {
+  // The newest frame is the pose itself; older ones carry a little turbulence.
+  const tb = i === LOG.n - 1 ? { roll: 0, pitch: 0, thr: 0 } : turbulence(i * 0.1 + 3);
+  return frame(roll + tb.roll, pitch + tb.pitch, thr + tb.thr, false);
+});
+const SEQ0 = 1204;
+const bytes = (v: readonly string[]) => `{"roll":${v[0]},"pitch":${v[1]},"throttle":${v[2]},"fire":${v[3]}}`.length;
+
+// Instrument furniture.
+const bank = [-60, -45, -30, -20, -10, 10, 20, 30, 45, 60];
+const rungs = [-20, -15, -10, -5, 5, 10, 15, 20];
+const spdVals: number[] = [], altVals: number[] = [], hdgVals: number[] = [];
+for (let v = 60; v <= 220; v += 5) spdVals.push(v);
+for (let v = 1200; v <= 2300; v += 50) altVals.push(v);
+for (let v = Math.floor(FLIGHT.hdgRange[0] / 5) * 5 - 60; v <= FLIGHT.hdgRange[1] + 60; v += 5) hdgVals.push(v);
+const spdTicks = spdVals.map((v) => `M${SPD.x1 - (v % 10 ? 4 : 7)} ${r1(cy - v * SPD.k)}H${SPD.x1}`).join("");
+const altTicks = altVals.map((v) => `M${ALT.x0} ${r1(cy - v * ALT.k)}h${v % 100 ? 4 : 7}`).join("");
+const hmid = (HDG.x0 + HDG.x1) / 2;
+const hdgTicks = hdgVals.map((v) => `M${r1(hmid + v * HDG.k)} ${HDG.y0}v${v % 10 ? 3 : 6}`).join("");
+
+// The map: a generic street grid, one avenue, a shoreline and a park.
+const M = MAP;
+const grid = (() => {
+  const a = (-9 * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+  const ox = M.x + M.w / 2, oy = M.y + M.h / 2;
+  const rot = (u: number, v: number) => `${r1(ox + u * ca - v * sa)} ${r1(oy + u * sa + v * ca)}`;
+  let d = "";
+  for (let u = -220; u <= 220; u += 21) d += `M${rot(u, -200)}L${rot(u, 200)}`;
+  for (let v = -200; v <= 200; v += 15) d += `M${rot(-220, v)}L${rot(220, v)}`;
+  return { d, ave: `M${rot(-190, 150)}L${rot(170, -150)}`, park: `M${rot(84, 45)}L${rot(126, 45)}L${rot(126, 75)}L${rot(84, 75)}Z` };
+})();
+const shore = `M${M.x + 196} ${M.y}C${M.x + 214} ${M.y + 30} ${M.x + 250} ${M.y + 44} ${M.x + 276} ${M.y + 62}S${M.x + 302} ${M.y + 92} ${M.x + M.w} ${M.y + 98}`;
+const water = `${shore}V${M.y}Z`;
+const plane = "M0 -7.5L1.3 -2.2L7.5 1.2V2.8L1.3 1.4L1 5.2L3.2 6.8V7.8L0 7L-3.2 7.8V6.8L-1 5.2L-1.3 1.4L-7.5 2.8V1.2L-1.3 -2.2Z";
+const start = FLIGHT.pts[0];
+---
+
+<Figure name="cockpit" n={9} title="Cardboard Cockpit" label="Webcam marker tracking and a badge button, bridged over a WebSocket to a flight sim" readout={readout(roll, pitch, thr)}>
+  <svg class="ck" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} role="img" aria-label="Three panels. A webcam frame shows a cardboard card with ArUco marker id 23 held in two hands, with its detected corners and pose axes, and a smaller throttle marker on a rail. A Python bridge log streams JSON frames with roll, pitch, throttle and fire over a local WebSocket, next to a Bluetooth badge whose button sets fire. The Godot sim shows the same roll and pitch on an attitude display with speed and altitude tapes and a heading strip, and a map traces the aircraft's path.">
+    <defs>
+      <pattern id="ck-scan" width="6" height="5" patternUnits="userSpaceOnUse">
+        <path class="ck-scanline" d="M0 0.5H6" />
+      </pattern>
+      <clipPath id="ck-cam"><rect x={CAMV.x + 1} y={CAMV.y + 1} width={CAMV.w - 2} height={CAMV.h - 2} rx="8" /></clipPath>
+      <clipPath id="ck-adi"><rect x={cx - hw} y={cy - hh} width={hw * 2} height={hh * 2} rx="6" /></clipPath>
+      <clipPath id="ck-spd"><rect x={SPD.x0} y={cy - hh} width={SPD.x1 - SPD.x0} height={hh * 2} /></clipPath>
+      <clipPath id="ck-alt"><rect x={ALT.x0} y={cy - hh} width={ALT.x1 - ALT.x0} height={hh * 2} /></clipPath>
+      <clipPath id="ck-hdg"><rect x={HDG.x0} y={HDG.y0} width={HDG.x1 - HDG.x0} height={HDG.y1 - HDG.y0} /></clipPath>
+      <clipPath id="ck-map"><rect x={M.x + 0.5} y={M.y + 0.5} width={M.w - 1} height={M.h - 1} rx="8" /></clipPath>
+    </defs>
+
+    <!-- ============================================ 1. the webcam -->
+    <g class="cam">
+      <rect class="inset" x={CAMV.x + 0.5} y={CAMV.y + 0.5} width={CAMV.w - 1} height={CAMV.h - 1} rx="8" />
+      <rect class="ck-scan" x={CAMV.x + 1} y={CAMV.y + 1} width={CAMV.w - 2} height={CAMV.h - 2} rx="8" fill="url(#ck-scan)" />
+      <path class="faint" d={vf} />
+      <text class="ck-rec" x="26" y="31">REC <tspan class="ck-recdot">●</tspan> 30 fps</text>
+      <text class="ck-sec" x={CAMV.w - 26} y="31" text-anchor="end">ArUco DICT_4X4_50</text>
+
+      <!-- The stick: a card held in two hands. -->
+      <g class="card" clip-path="url(#ck-cam)">
+        <path class="ck-palm" d={s.palms} />
+        <path class="ck-back" d={s.back} />
+        <path class="ck-card" d={s.card} />
+        <path class="ck-ink" d={s.ink} />
+        <path class="ck-grid" d={s.grid} />
+        <path class="ck-palm ck-thumb" d={s.thumbs} />
+      </g>
+
+      <!-- The throttle: a smaller card on a cardboard rail. -->
+      <g class="thr">
+        <rect class="ck-rail" x={THR.x - 7} y={THR.y0 - 26} width="14" height={THR.y1 - THR.y0 + 52} rx="7" />
+        <path class="hair" d={`M${THR.x} ${THR.y0 - 16}V${THR.y1 + 16}`} />
+        <path class="faint" d={railTicks} />
+        <path class="ck-card ck-tcard" d={tc.card} />
+        <path class="ck-ink ck-tink" d={tc.ink} />
+        <path class="accent ck-tquad" d={tc.quad} />
+        <text class="cm ck-tval ck-sec" x={THR.x + 22} y={r1(thrY(thr))} dominant-baseline="central">{thr.toFixed(2)}</text>
+        <text x={THR.x} y={CAMV.h - 14} text-anchor="middle">throttle</text>
+      </g>
+
+      <!-- What the detector returns: corners in OpenCV order, and the pose. -->
+      <g class="det">
+        <path class="accent ck-quad" d={s.quad} />
+        <rect class="ck-c0" x={r1(s.corners[0][0]) - 3} y={r1(s.corners[0][1]) - 3} width="6" height="6" />
+        {s.cornerLabels.map(([x, y], i) => (
+          <text class="cm acc ck-idx" x={r1(x)} y={r1(y)} text-anchor="middle" dominant-baseline="central">{i}</text>
+        ))}
+        {(["x", "y", "z"] as const).map((a) => (
+          <>
+            <line class="ck-halo" x1={r1(s.o[0])} y1={r1(s.o[1])} x2={r1(s.axes[a][0])} y2={r1(s.axes[a][1])} />
+            <line class="ck-axis" x1={r1(s.o[0])} y1={r1(s.o[1])} x2={r1(s.axes[a][0])} y2={r1(s.axes[a][1])} />
+          </>
+        ))}
+        {(["x", "y", "z"] as const).map((a) => (
+          <g class="ck-al" transform={`translate(${r1(s.axisLabels[a][0])} ${r1(s.axisLabels[a][1])})`}>
+            <circle class="paper ck-tag" r="7" />
+            <text class="m" text-anchor="middle" dominant-baseline="central">{a}</text>
+          </g>
+        ))}
+        <circle class="ck-o" cx={r1(s.o[0])} cy={r1(s.o[1])} r="2.5" />
+        <text class="cm acc ck-id" x={idTag[0]} y={idTag[1]} text-anchor="middle" dominant-baseline="central">id=23</text>
+      </g>
+      <text class="ck-hint ck-sec" x="14" y={LOG.y - 9}>drag the frame to tilt the card</text>
+      <rect class="ck-hit" x={CAMV.x} y={CAMV.y} width={CAMV.w} height={CAMV.h} rx="8" />
+    </g>
+
+    <!-- ============================================ 2. the bridge -->
+    <g class="badge">
+      <text x={B.cx} y={by - 12} text-anchor="middle">BLE badge</text>
+      <rect class="ck-body" x={bx} y={by} width={B.w} height={B.h} rx="14" />
+      <rect class="inset" x={B.cx - 14} y={by + 8} width="28" height="7" rx="3.5" />
+      <rect class="hair" x={B.cx - 22} y={by + 24} width="44" height="30" rx="3" />
+      <path class="faint" d={antenna} />
+      <circle class="ck-led" cx={bx + B.w - 16} cy={by + 14} r="2.4" />
+      <circle class="ck-fire-ring" cx={FIREB.x} cy={FIREB.y} r="14" />
+      <circle class="faint" cx={FIREB.x} cy={FIREB.y} r="14" />
+      <circle class="ck-fire" cx={FIREB.x} cy={FIREB.y} r="9" />
+      <circle class="faint" cx={ALTB.x} cy={ALTB.y} r="10" />
+      <circle class="ck-btn" cx={ALTB.x} cy={ALTB.y} r="6" />
+      <path class="hair" d={`M${FIREB.x - 16} ${FIREB.y}H${FIREB.x - 30}`} />
+      <text x={FIREB.x - 34} y={FIREB.y} text-anchor="end" dominant-baseline="central">fire</text>
+      <!-- Radio: arcs opening toward the bridge. -->
+      <path class="faint ck-arcs" d={`M${B.cx - 6} ${by + B.h + 8}a8.5 8.5 0 0 0 12 0M${B.cx - 11} ${by + B.h + 11}a15.5 15.5 0 0 0 22 0`} />
+    </g>
+
+    <g class="links">
+      <path class="faint ck-wire" d={`M200 ${CAMV.h + 2}V${LOG.y - 2}`} />
+      <path class="faint ck-wire" d={`M${B.cx} ${by + B.h + 20}V${LOG.y - 2}`} />
+      <path class="faint ck-wire" d={`M${PFD.x + PFD.w / 2} ${LOG.y + LOG.h + 2}V${PFD.y - 2}`} />
+      <path class="faint ck-wire" d={`M${M.x + M.w / 2} ${LOG.y + LOG.h + 2}V${PFD.y - 2}`} />
+      <path class="faint" d={[200, B.cx].map((x) => `M${x - 3.5} ${LOG.y - 6}L${x} ${LOG.y - 2}L${x + 3.5} ${LOG.y - 6}`).join("") + [PFD.x + PFD.w / 2, M.x + M.w / 2].map((x) => `M${x - 3.5} ${PFD.y - 6}L${x} ${PFD.y - 2}L${x + 3.5} ${PFD.y - 6}`).join("")} />
+      <text x="208" y={LOG.y - 9}>pose</text>
+      <text x={B.cx + 8} y={LOG.y - 9}>BLE</text>
+      <g class="ck-pk"></g>
+    </g>
+
+    <g class="log">
+      <rect class="inset" x={LOG.x + 0.5} y={LOG.y + 0.5} width={LOG.w - 1} height={LOG.h - 1} rx="8" />
+      <text class="ck-lh" x="14" y={LOG.y + 20}>Python bridge, WebSocket to Godot</text>
+      <text class="ck-sec" x={LOG.w - 14} y={LOG.y + 20} text-anchor="end">ws, localhost</text>
+      <path class="hair" d={`M14 ${LOG.y + 30}H${LOG.w - 14}`} />
+      {lines.map((v, i) => (
+        <g class:list={["ck-line", { new: i === LOG.n - 1 }]} data-i={i}>
+          <text class="ck-mono ck-seq" x="28" y={LOG.top + i * LOG.step}>{SEQ0 + i}</text>
+          <text class="ck-mono ck-json" x="70" y={LOG.top + i * LOG.step}>{"{"}"roll":<tspan class="v">{v[0]}</tspan>,"pitch":<tspan class="v">{v[1]}</tspan>,"throttle":<tspan class="v">{v[2]}</tspan>,"fire":<tspan class="v ck-fv">{v[3]}</tspan>{"}"}</text>
+          <text class="ck-mono ck-bytes" x={LOG.w - 14} y={LOG.top + i * LOG.step} text-anchor="end">{bytes(v)} B</text>
+        </g>
+      ))}
+      <text class="ck-mono ck-short" x="14" y={LOG.y + 76}>roll <tspan class="v">{lines[LOG.n - 1][0].replace("-", "−")}</tspan>  pitch <tspan class="v">{lines[LOG.n - 1][1].replace("-", "−")}</tspan>  thr <tspan class="v">{lines[LOG.n - 1][2]}</tspan><tspan class="v acc"></tspan></text>
+      <text class="ck-mono ck-wait" x="70" y={LOG.top + (LOG.n - 1) * LOG.step} opacity="0">waiting for markers…</text>
+      <circle class="dot-accent ck-live" cx="16" cy={LOG.top + (LOG.n - 1) * LOG.step - 3.5} r="2.25" />
+    </g>
+
+    <!-- ============================================ 3. the sim -->
+    <g class="pfd">
+      <rect class="inset" x={PFD.x + 0.5} y={PFD.y + 0.5} width={PFD.w - 1} height={PFD.h - 1} rx="8" />
+      <text x="12" y={PFD.y + 18}>Godot HUD</text>
+
+      <!-- Attitude. -->
+      <rect class="ck-sky" x={cx - hw} y={cy - hh} width={hw * 2} height={hh * 2} rx="6" />
+      <g clip-path="url(#ck-adi)">
+        <g class="ck-horizon" transform={horizon(roll, pitch)}>
+          <rect class="ck-ground" x="-300" y="0" width="600" height="300" />
+          <line class="accent ck-hz" x1="-300" x2="300" y1="0" y2="0" />
+        </g>
+      </g>
+      <g clip-path="url(#ck-adi)">
+        <g class="ck-horizon" transform={horizon(roll, pitch)}>
+          {rungs.map((d) => {
+            const w = d % 10 === 0 ? 20 : 9;
+            return (
+              <g class="ck-rg" data-d={d} opacity={fadeRung((pitch - d) * k)}>
+                <line class="ck-rung" x1={-w} x2={w} y1={-d * k} y2={-d * k} />
+                {d % 10 === 0 && <text class="cm ck-rl" x={w + 5} y={-d * k} dominant-baseline="central">{Math.abs(d)}</text>}
+                {d % 10 === 0 && <text class="cm ck-rl" x={-w - 5} y={-d * k} text-anchor="end" dominant-baseline="central">{Math.abs(d)}</text>}
+              </g>
+            );
+          })}
+        </g>
+      </g>
+      <rect class="ink" x={cx - hw} y={cy - hh} width={hw * 2} height={hh * 2} rx="6" />
+      {bank.map((a) => {
+        const t = (a * Math.PI) / 180, R = ADI.bank, len = Math.abs(a) % 30 === 0 ? 7 : 4;
+        return <line class="ck-tick" x1={r1(cx + R * Math.sin(t))} y1={r1(cy - R * Math.cos(t))} x2={r1(cx + (R + len) * Math.sin(t))} y2={r1(cy - (R + len) * Math.cos(t))} />;
+      })}
+      <path class="ck-tick" fill="none" d={`M${r1(cx - ADI.bank * Math.sin(Math.PI / 3))} ${r1(cy - ADI.bank * 0.5)}A${ADI.bank} ${ADI.bank} 0 0 1 ${r1(cx + ADI.bank * Math.sin(Math.PI / 3))} ${r1(cy - ADI.bank * 0.5)}`} />
+      <path class="ck-index" d={`M${cx} ${cy - ADI.bank}l-3.5 -7h7z`} />
+      <g class="ck-pointer" transform={pointer(roll)}>
+        <path class="dot-accent" d={`M0 ${-ADI.bank + 1}l-4 7h8z`} />
+      </g>
+      <path class="ck-plane" d={`M${cx - 46} ${cy}H${cx - 17}l5 6M${cx + 46} ${cy}H${cx + 17}l-5 6`} />
+      <circle class="dot" cx={cx} cy={cy} r="2.5" />
+
+      <!-- Speed and altitude tapes. -->
+      <rect class="ck-tape" x={SPD.x0} y={cy - hh} width={SPD.x1 - SPD.x0} height={hh * 2} />
+      <g clip-path="url(#ck-spd)">
+        <g class="ck-spd" transform={spdTape(spd)}>
+          <path class="faint" d={spdTicks} />
+          {spdVals.filter((v) => v % 10 === 0).map((v) => (
+            <text class="cm ck-tl ck-sl" data-v={v} opacity={fadeTape((spd - v) * SPD.k)} x={SPD.x1 - 10} y={r1(cy - v * SPD.k)} text-anchor="end" dominant-baseline="central">{v}</text>
+          ))}
+        </g>
+      </g>
+      <path class="ck-box" d={`M${SPD.x0 - 2} ${cy - 11}H${SPD.x1 - 2}L${SPD.x1 + 4} ${cy}L${SPD.x1 - 2} ${cy + 11}H${SPD.x0 - 2}Z`} />
+      <text class="cm strong ck-bv ck-spdv" x={(SPD.x0 + SPD.x1) / 2 - 2} y={cy} text-anchor="middle" dominant-baseline="central">{Math.round(spd)}</text>
+      <text x={(SPD.x0 + SPD.x1) / 2} y={HDG.y1 - 5} text-anchor="middle">kt</text>
+
+      <rect class="ck-tape" x={ALT.x0} y={cy - hh} width={ALT.x1 - ALT.x0} height={hh * 2} />
+      <g clip-path="url(#ck-alt)">
+        <g class="ck-alt" transform={altTape(f.alt)}>
+          <path class="faint" d={altTicks} />
+          {altVals.filter((v) => v % 100 === 0).map((v) => (
+            <text class="cm ck-tl ck-al2" data-v={v} opacity={fadeTape((f.alt - v) * ALT.k)} x={ALT.x0 + 10} y={r1(cy - v * ALT.k)} dominant-baseline="central">{v}</text>
+          ))}
+        </g>
+      </g>
+      <path class="ck-box" d={`M${ALT.x1 + 2} ${cy - 11}H${ALT.x0 + 2}L${ALT.x0 - 4} ${cy}L${ALT.x0 + 2} ${cy + 11}H${ALT.x1 + 2}Z`} />
+      <text class="cm strong ck-bv ck-altv" x={(ALT.x0 + ALT.x1) / 2 + 2} y={cy} text-anchor="middle" dominant-baseline="central">{Math.round(f.alt / 10) * 10}</text>
+      <text x={(ALT.x0 + ALT.x1) / 2} y={HDG.y1 - 5} text-anchor="middle">ft</text>
+
+      <!-- Heading. -->
+      <rect class="ck-tape" x={HDG.x0} y={HDG.y0} width={HDG.x1 - HDG.x0} height={HDG.y1 - HDG.y0} />
+      <g clip-path="url(#ck-hdg)">
+        <g class="ck-hdg" transform={hdgTape(f.hdg)}>
+          <path class="faint" d={hdgTicks} />
+          {hdgVals.filter((v) => v % 30 === 0).map((v) => (
+            <text class="cm ck-hl" data-v={v} opacity={fadeHdg((v - f.hdg) * HDG.k)} x={r1(hmid + v * HDG.k)} y={HDG.y1 - 5} text-anchor="middle">{hdgName(v)}</text>
+          ))}
+        </g>
+      </g>
+      <rect class="ck-box" x={hmid - 19} y={HDG.y0 - 1} width="38" height={HDG.y1 - HDG.y0 + 2} />
+      <text class="cm strong ck-bv ck-hdgv" x={hmid} y={(HDG.y0 + HDG.y1) / 2} text-anchor="middle" dominant-baseline="central">{hdgText(f.hdg)}</text>
+    </g>
+
+    <g class="map">
+      <rect class="inset" x={M.x + 0.5} y={M.y + 0.5} width={M.w - 1} height={M.h - 1} rx="8" />
+      <g clip-path="url(#ck-map)">
+        <path class="hair" d={grid.d} />
+        <path class="faint" d={grid.ave} />
+        <path class="ck-park" d={grid.park} />
+        <path class="ck-water" d={water} />
+        <path class="faint" d={shore} />
+      </g>
+      <text class="ck-halo-t" x={M.x + 12} y={M.y + 18}>Godot map</text>
+      <g transform={`translate(${M.x + M.w - 18} ${M.y + 26})`}>
+        <path class="ink" d="M0 -8V6M-3.5 -4L0 -8L3.5 -4" />
+        <text class="cm ck-halo-t" x="-9" y="-2" text-anchor="end" dominant-baseline="central">N</text>
+      </g>
+      <circle class="ck-start" cx={r1(start[0])} cy={r1(start[1])} r="3" />
+      <path class="ck-track" d={FLIGHT.d} />
+      <path class="ck-trend" d={trend(f.pos, f.hdg, roll, thr)} />
+      <path class="ck-tracer" d="" />
+      <path class="ck-plane-map" d={plane} transform={`translate(${r1(f.pos[0])} ${r1(f.pos[1])}) rotate(${r1(f.hdg)})`} />
+    </g>
+  </svg>
+  <Fragment slot="caption">
+    Read it top to bottom: OpenCV finds the printed markers in the webcam frame, a Python bridge sends their pose and the badge's fire button as JSON over a local WebSocket, and the HUD and map I built in Godot follow. Drag the camera frame to tilt the card yourself.
+  </Fragment>
+</Figure>
+
+<style>
+  .ck { touch-action: pan-y; }
+  .ck-scanline { stroke: var(--hair); stroke-width: 0.6; opacity: 0.55; }
+  .ck-rec .ck-recdot { fill: var(--s-red); }
+  .ck-card { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
+  .ck-back { fill: var(--hair); stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
+  .ck-palm { fill: var(--panel-2); stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
+  .ck-thumb { fill: var(--panel); }
+  .ck-ink { fill: var(--ink); fill-rule: evenodd; }
+  .ck-grid { stroke: var(--hair); stroke-width: 1; fill: none; }
+  .ck-rail { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1; }
+  .ck-tcard { stroke-width: 0.8; }
+  .ck-c0 { fill: none; stroke: var(--accent); stroke-width: 1.25; }
+  .ck-halo { stroke: var(--panel); stroke-width: 3.5; stroke-linecap: round; }
+  .ck-axis { stroke: var(--accent); stroke-width: 1.25; stroke-linecap: round; }
+  .ck-o { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+  .ck-idx, .ck-id, .ck-tval { paint-order: stroke; stroke: var(--panel-2); stroke-width: 3px; stroke-linejoin: round; }
+  .ck .ck-idx { font-size: 11px; }
+  .ck .ck-id { font-size: 11px; }
+  .ck .ck-al text { fill: var(--accent); }
+  .ck-halo-t { paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
+  .ck-short { display: none; white-space: pre; }
+  .ck-hit { fill: transparent; cursor: grab; }
+  .ck-hit.dragging { cursor: grabbing; }
+
+  .ck-body { fill: var(--panel); stroke: var(--ink); stroke-width: 1.25; }
+  .ck-led { fill: var(--ink-4); }
+  .ck-led.on { fill: var(--accent); }
+  .ck-fire { fill: var(--panel-2); stroke: var(--ink); stroke-width: 1.25; }
+  .ck-fire.on { fill: var(--accent); stroke: var(--accent); }
+  .ck-fire-ring { fill: none; stroke: var(--accent); stroke-width: 1; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .ck-btn { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1; }
+  .ck-arcs.on { stroke: var(--accent); }
+
+  .ck .ck-mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; fill: var(--ink-3); letter-spacing: 0; }
+  .ck .ck-json .v { fill: var(--ink-2); }
+  .ck .new .ck-json { fill: var(--ink-2); }
+  .ck .new .ck-json .v { fill: var(--ink); }
+  .ck .ck-json .v.acc { fill: var(--accent); }
+
+  .ck-sky { fill: var(--panel); }
+  .ck-ground { fill: rgb(20 20 19 / 0.05); }
+  .ck-rung { stroke: var(--ink-4); stroke-width: 1; }
+  .ck .ck-rl { font-size: 11px; }
+  .ck-tick { stroke: var(--ink-4); stroke-width: 1; }
+  .ck-index { fill: var(--ink); }
+  .ck-plane { stroke: var(--ink); stroke-width: 2.25; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .ck-tape { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
+  .ck .ck-tl { font-size: 11px; }
+  .ck .ck-hl { font-size: 11px; }
+  .ck-box { fill: var(--panel); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
+  .ck .ck-bv { font-size: 13px; }
+
+  .ck-water { fill: var(--panel-2); }
+  .ck-park { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 2 2.5; }
+  .ck-start { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1.25; }
+  .ck-track { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .ck-trend { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2.5 3; stroke-linecap: round; }
+  .ck-tracer { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
+  .ck-plane-map { fill: var(--ink); stroke: var(--panel-2); stroke-width: 1; paint-order: stroke; }
+
+  /* The plate shrinks ~2x on phones: labels grow to stay near 10px on screen,
+     the log keeps its three newest frames, and secondary notes step aside. */
+  /* Phones: the plate shrinks ~2x, so nothing below 20 units (about 10px)
+     stays. Micro labels go; the log collapses to one short line. */
+  @media (max-width: 560px) {
+    .ck-sec, .ck-seq, .ck-bytes, .ck-live, .ck-line, .ck-idx, .ck-al, .ck-tl, .ck-hl, .ck-rl, .ck-tval { display: none; }
+    .ck text { font-size: 20px; }
+    .ck .ck-id, .ck .ck-bv { font-size: 20px; }
+    .ck .ck-short { display: inline; font-size: 20px; fill: var(--ink-3); }
+    .ck .ck-short .v { fill: var(--ink); }
+    .ck .ck-wait { font-size: 20px; transform: translate(-56px, -28px); }
+  }
+</style>

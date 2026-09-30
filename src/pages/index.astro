@@ -1,0 +1,215 @@
+---
+import Base from "../layouts/Base.astro";
+import Header from "../components/Header.astro";
+import Section from "../components/Section.astro";
+import Entry from "../components/Entry.astro";
+import Hero from "../components/Hero.astro";
+import Footer from "../components/Footer.astro";
+import Submissions from "../components/figures/Submissions.astro";
+import TopsojMap from "../components/figures/TopsojMap.astro";
+import TopsojGA from "../components/figures/TopsojGA.astro";
+import MathosLogo from "../components/figures/MathosLogo.astro";
+import Quoted from "../components/figures/Quoted.astro";
+import Ratings from "../components/figures/Ratings.astro";
+import Drift from "../components/figures/Drift.astro";
+import Worldline from "../components/figures/Worldline.astro";
+import Research from "../components/figures/Research.astro";
+import Contests from "../components/figures/Contests.astro";
+import Cockpit from "../components/figures/Cockpit.astro";
+import Daedalus from "../components/figures/Daedalus.astro";
+import topsoj from "../data/topsoj.json";
+
+const fmt = (n: number) => n.toLocaleString("en-US");
+---
+
+<Base>
+  <Header />
+
+  <main id="top">
+    <Hero />
+
+    <Section id="work" title="Work" lede="Production systems for AI video, and the contest platform I run.">
+      <Entry title="Mathos AI" href="https://mathos.ai" role="Software engineering intern" period="2026 to now" tags="Python, Celery, Remotion, AWS Fargate, SES, Next.js, OAuth 2.0, MCP">
+        <p>
+          Mathos (YC W24) turns math questions into narrated video lessons. I shipped MP4 export, where
+          every render runs in its own locked-down AWS Fargate sandbox, and the lifecycle email pipeline on SES.
+        </p>
+        <p>
+          I built an OAuth and MCP server so people can make Mathos videos from inside ChatGPT and Claude,
+          and rebuilt how the AI tutor grades each step of a student's work.
+        </p>
+        <MathosLogo slot="figure" />
+      </Entry>
+
+      <Entry feature title="TopsOJ" href="https://topsoj.com" role="Founder" period="2023 to now" tags="Python, Flask, SQLite, EloMMR">
+        <p>
+          A judge for competitive math that I started in high school. Google Analytics counts over 100,000
+          users from 180+ countries. It holds {fmt(topsoj.totals.publicProblems)} problems from the AMC, AIME, CEMC
+          contests, HMMT and our own setters, and has taken over 120,000 submissions.
+        </p>
+        <p>
+          I designed its EloMMR ratings and led a team of 30 setters, developers and organizers,
+          with partners including 3Blue1Brown.
+        </p>
+        <div slot="figure" class="topsoj-figs">
+          <TopsojMap />
+          <TopsojGA />
+          <div class="pair">
+            <Submissions />
+            <Ratings />
+          </div>
+        </div>
+      </Entry>
+
+      <Entry title="Quoted Tech Computers" role="Software engineering intern" period="Summer 2025" tags="Node.js, Express, CUPS, Playwright">
+        <p>
+          I automated barcode label generation and printing, which cut manual processing time by 70%,
+          and wrote scrapers that turned competitor catalogs into pricing data.
+        </p>
+        <Quoted slot="figure" />
+      </Entry>
+    </Section>
+
+    <Section id="research" title="Research" lede="Three sole-authored papers on how binary stars trade mass.">
+      <Entry title="Mass transfer in binary stars" role="Sole author, supervised by Dr. Alexander Mushtukov, Oxford" period="2024 to 2026">
+        <p>
+          When one star in a close pair spills gas onto its companion, the textbook answer is that the
+          orbit usually widens. I showed that if the gas keeps the velocity it left with, the orbit loses
+          angular momentum and shrinks, for every mass ratio.
+        </p>
+        <ol class="papers">
+          <li>
+            <a class="ln" href="https://doi.org/10.3847/2515-5172/ae4513" target="_blank" rel="noopener">Ballistic mass transfer necessarily contracts orbits in binary star systems</a>
+            <span>Research Notes of the AAS, February 2026</span>
+          </li>
+          <li>
+            <a class="ln" href="https://doi.org/10.64336/001c.159153" target="_blank" rel="noopener">On the conditions under which instantaneous mass-transfer mappings reproduce conservative limits</a>
+            <span>Journal of High School Science, March 2026. Best Manuscript.</span>
+          </li>
+          <li>
+            <a class="ln" href="https://arxiv.org/abs/2608.19107" target="_blank" rel="noopener">The effective velocity of transferred mass</a>
+            <span>arXiv, under review at Astronomische Nachrichten</span>
+          </li>
+        </ol>
+        <Research slot="figure" />
+      </Entry>
+    </Section>
+
+    <Section id="projects" title="Projects" lede="Hackathon builds and things I made because I wanted them.">
+      <Entry title="Cardboard Cockpit" href="https://devpost.com/software/wad" role="Hack the North" period="2026" tags="Godot, OpenCV, ArUco, BLE, WebSockets">
+        <p>
+          A flight simulator you fly with a cardboard cockpit, printed markers and a webcam. I built most
+          of the Godot sim: the map, weapons, HUD, landing, tutorial, and the Bluetooth badge controls.
+        </p>
+        <Cockpit slot="figure" />
+      </Entry>
+      <Entry title="Daedalus" href="https://devpost.com/software/glebber-stometric" role="JAMHacks 10, Best Non-GenAI Hack" period="2026" tags="TypeScript, Three.js, MediaPipe">
+        <p>3D sculpting with your hands in the air, tracked through a webcam. We built it in under 24 hours.</p>
+        <Daedalus slot="figure" />
+      </Entry>
+      <Entry title="Drift" href="https://chromewebstore.google.com/detail/drift/agihdlojchhjpflceecmfknffggofdhf" role="Chrome extension, Featured on the Web Store" period="2026" tags="JavaScript, Chrome Extensions API">
+        <p>
+          While ChatGPT, Claude or Gemini is thinking, Drift offers you a focused window for whatever you'd
+          scroll anyway, then brings you back the moment the answer lands.
+        </p>
+        <Drift slot="figure" />
+      </Entry>
+      <Entry title="Worldline Engine" href="https://github.com/fireheartjerry/worldline-engine" role="Simulation" period="2026" tags="C++, raylib, CMake">
+        <p>
+          A seeded universe simulator. The same seed always produces the same universe, down to the
+          last particle, so any run can be saved, replayed and scrubbed through.
+        </p>
+        <Worldline slot="figure" />
+      </Entry>
+    </Section>
+
+    <Section id="contests" title="Contests" lede="Results from programming, physics and math competitions.">
+      <div class="contest-grid">
+        <ul class="results">
+          <li><span>USACO</span><span>Platinum, with a perfect score on Gold</span></li>
+          <li><span>AAPT PhysicsBowl</span><span class="num">1st in Canada, 7th in the world</span></li>
+          <li><span>Sir Isaac Newton Exam</span><span class="num">4th in Canada, 9th in the world</span></li>
+          <li><span>AIME</span><span>Qualified three times</span></li>
+        </ul>
+        <Contests />
+      </div>
+    </Section>
+  </main>
+
+  <Footer />
+
+  <script>
+    import "../scripts/figures";
+    import "../scripts/page";
+  </script>
+</Base>
+
+<style>
+  .papers {
+    margin-top: 22px;
+    display: grid;
+    gap: 14px;
+    font-size: 15px;
+  }
+  .papers a {
+    color: var(--ink);
+  }
+  .papers span {
+    display: block;
+    margin-top: 2px;
+    font-size: 13.5px;
+    color: var(--ink-3);
+  }
+  .topsoj-figs {
+    display: grid;
+    gap: 20px;
+  }
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: stretch;
+  }
+  @media (max-width: 980px) {
+    .pair {
+      grid-template-columns: 1fr;
+    }
+  }
+  .contest-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: clamp(32px, 6vw, 96px);
+    align-items: start;
+    border-top: 1px solid var(--hair);
+    padding-top: clamp(32px, 5vw, 64px);
+  }
+  .results {
+    position: sticky;
+    top: 96px;
+  }
+  .results li {
+    display: grid;
+    gap: 2px;
+    padding-block: 16px;
+    border-bottom: 1px solid var(--hair);
+  }
+  .results li:first-child {
+    padding-top: 0;
+  }
+  .results li span:first-child {
+    font-size: 17px;
+  }
+  .results li span:last-child {
+    color: var(--ink-3);
+    font-size: 15px;
+  }
+  @media (max-width: 880px) {
+  .contest-grid {
+      grid-template-columns: 1fr;
+      row-gap: 36px;
+    }
+    .results {
+      position: static;
+    }
+  }
+</style>

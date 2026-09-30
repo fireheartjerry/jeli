@@ -1,0 +1,915 @@
+{
+"source": "Google Analytics 4, all time to 2026-09-27",
+"countries": [
+{
+"name": "Singapore",
+"activeUsers": 57174,
+"engagedSessions": 4920
+},
+{
+"name": "China",
+"activeUsers": 27498,
+"engagedSessions": 845
+},
+{
+"name": "United States",
+"activeUsers": 11521,
+"engagedSessions": 5592
+},
+{
+"name": "Brazil",
+"activeUsers": 5786,
+"engagedSessions": 740
+},
+{
+"name": "Canada",
+"activeUsers": 4727,
+"engagedSessions": 17260
+},
+{
+"name": "Vietnam",
+"activeUsers": 2028,
+"engagedSessions": 259
+},
+{
+"name": "Pakistan",
+"activeUsers": 1871,
+"engagedSessions": 242
+},
+{
+"name": "India",
+"activeUsers": 1660,
+"engagedSessions": 602
+},
+{
+"name": "Bangladesh",
+"activeUsers": 1420,
+"engagedSessions": 125
+},
+{
+"name": "Ukraine",
+"activeUsers": 1256,
+"engagedSessions": 136
+},
+{
+"name": "Argentina",
+"activeUsers": 1231,
+"engagedSessions": 145
+},
+{
+"name": "Mexico",
+"activeUsers": 1138,
+"engagedSessions": 132
+},
+{
+"name": "South Africa",
+"activeUsers": 908,
+"engagedSessions": 162
+},
+{
+"name": "France",
+"activeUsers": 865,
+"engagedSessions": 86
+},
+{
+"name": "Iraq",
+"activeUsers": 847,
+"engagedSessions": 112
+},
+{
+"name": "Colombia",
+"activeUsers": 753,
+"engagedSessions": 92
+},
+{
+"name": "Saudi Arabia",
+"activeUsers": 732,
+"engagedSessions": 106
+},
+{
+"name": "Russia",
+"activeUsers": 720,
+"engagedSessions": 107
+},
+{
+"name": "Venezuela",
+"activeUsers": 660,
+"engagedSessions": 78
+},
+{
+"name": "Uzbekistan",
+"activeUsers": 610,
+"engagedSessions": 178
+},
+{
+"name": "Morocco",
+"activeUsers": 576,
+"engagedSessions": 97
+},
+{
+"name": "Indonesia",
+"activeUsers": 543,
+"engagedSessions": 106
+},
+{
+"name": "Chile",
+"activeUsers": 507,
+"engagedSessions": 64
+},
+{
+"name": "United Kingdom",
+"activeUsers": 473,
+"engagedSessions": 264
+},
+{
+"name": "Kenya",
+"activeUsers": 460,
+"engagedSessions": 62
+},
+{
+"name": "Tunisia",
+"activeUsers": 453,
+"engagedSessions": 65
+},
+{
+"name": "United Arab Emirates",
+"activeUsers": 440,
+"engagedSessions": 84
+},
+{
+"name": "Germany",
+"activeUsers": 422,
+"engagedSessions": 83
+},
+{
+"name": "Ecuador",
+"activeUsers": 405,
+"engagedSessions": 46
+},
+{
+"name": "Jordan",
+"activeUsers": 389,
+"engagedSessions": 41
+},
+{
+"name": "Nigeria",
+"activeUsers": 363,
+"engagedSessions": 88
+},
+{
+"name": "Kazakhstan",
+"activeUsers": 343,
+"engagedSessions": 45
+},
+{
+"name": "T\u00fcrkiye",
+"activeUsers": 334,
+"engagedSessions": 64
+},
+{
+"name": "Azerbaijan",
+"activeUsers": 292,
+"engagedSessions": 32
+},
+{
+"name": "Egypt",
+"activeUsers": 291,
+"engagedSessions": 71
+},
+{
+"name": "Algeria",
+"activeUsers": 288,
+"engagedSessions": 43
+},
+{
+"name": "Hong Kong",
+"activeUsers": 283,
+"engagedSessions": 155
+},
+{
+"name": "Oman",
+"activeUsers": 275,
+"engagedSessions": 28
+},
+{
+"name": "Israel",
+"activeUsers": 266,
+"engagedSessions": 30
+},
+{
+"name": "Thailand",
+"activeUsers": 257,
+"engagedSessions": 86
+},
+{
+"name": "Malaysia",
+"activeUsers": 242,
+"engagedSessions": 191
+},
+{
+"name": "Philippines",
+"activeUsers": 239,
+"engagedSessions": 59
+},
+{
+"name": "Spain",
+"activeUsers": 238,
+"engagedSessions": 59
+},
+{
+"name": "Nepal",
+"activeUsers": 236,
+"engagedSessions": 17
+},
+{
+"name": "Peru",
+"activeUsers": 222,
+"engagedSessions": 39
+},
+{
+"name": "Paraguay",
+"activeUsers": 221,
+"engagedSessions": 29
+},
+{
+"name": "Italy",
+"activeUsers": 218,
+"engagedSessions": 44
+},
+{
+"name": "Japan",
+"activeUsers": 215,
+"engagedSessions": 107
+},
+{
+"name": "Netherlands",
+"activeUsers": 192,
+"engagedSessions": 139
+},
+{
+"name": "South Korea",
+"activeUsers": 188,
+"engagedSessions": 141
+},
+{
+"name": "Australia",
+"activeUsers": 183,
+"engagedSessions": 58
+},
+{
+"name": "Syria",
+"activeUsers": 180,
+"engagedSessions": 35
+},
+{
+"name": "Uruguay",
+"activeUsers": 173,
+"engagedSessions": 18
+},
+{
+"name": "Ethiopia",
+"activeUsers": 158,
+"engagedSessions": 32
+},
+{
+"name": "Albania",
+"activeUsers": 153,
+"engagedSessions": 22
+},
+{
+"name": "Iran",
+"activeUsers": 152,
+"engagedSessions": 59
+},
+{
+"name": "Senegal",
+"activeUsers": 148,
+"engagedSessions": 13
+},
+{
+"name": "Dominican Republic",
+"activeUsers": 140,
+"engagedSessions": 21
+},
+{
+"name": "Taiwan",
+"activeUsers": 138,
+"engagedSessions": 59
+},
+{
+"name": "Poland",
+"activeUsers": 135,
+"engagedSessions": 80
+},
+{
+"name": "Bolivia",
+"activeUsers": 134,
+"engagedSessions": 15
+},
+{
+"name": "Ireland",
+"activeUsers": 132,
+"engagedSessions": 15
+},
+{
+"name": "Palestine",
+"activeUsers": 132,
+"engagedSessions": 4
+},
+{
+"name": "C\u00f4te d\u2019Ivoire",
+"activeUsers": 126,
+"engagedSessions": 19
+},
+{
+"name": "Romania",
+"activeUsers": 123,
+"engagedSessions": 59
+},
+{
+"name": "Qatar",
+"activeUsers": 112,
+"engagedSessions": 16
+},
+{
+"name": "Bulgaria",
+"activeUsers": 110,
+"engagedSessions": 19
+},
+{
+"name": "Myanmar (Burma)",
+"activeUsers": 109,
+"engagedSessions": 19
+},
+{
+"name": "Jamaica",
+"activeUsers": 107,
+"engagedSessions": 8
+},
+{
+"name": "Lebanon",
+"activeUsers": 105,
+"engagedSessions": 17
+},
+{
+"name": "Bahrain",
+"activeUsers": 103,
+"engagedSessions": 4
+},
+{
+"name": "Georgia",
+"activeUsers": 103,
+"engagedSessions": 19
+},
+{
+"name": "Greece",
+"activeUsers": 103,
+"engagedSessions": 31
+},
+{
+"name": "Moldova",
+"activeUsers": 102,
+"engagedSessions": 11
+},
+{
+"name": "Belarus",
+"activeUsers": 97,
+"engagedSessions": 10
+},
+{
+"name": "Angola",
+"activeUsers": 95,
+"engagedSessions": 16
+},
+{
+"name": "Cambodia",
+"activeUsers": 91,
+"engagedSessions": 9
+},
+{
+"name": "Serbia",
+"activeUsers": 87,
+"engagedSessions": 11
+},
+{
+"name": "Costa Rica",
+"activeUsers": 82,
+"engagedSessions": 7
+},
+{
+"name": "Hungary",
+"activeUsers": 81,
+"engagedSessions": 10
+},
+{
+"name": "Congo - Brazzaville",
+"activeUsers": 79,
+"engagedSessions": 15
+},
+{
+"name": "Togo",
+"activeUsers": 79,
+"engagedSessions": 12
+},
+{
+"name": "Armenia",
+"activeUsers": 78,
+"engagedSessions": 8
+},
+{
+"name": "Bosnia & Herzegovina",
+"activeUsers": 78,
+"engagedSessions": 7
+},
+{
+"name": "Portugal",
+"activeUsers": 77,
+"engagedSessions": 9
+},
+{
+"name": "Panama",
+"activeUsers": 76,
+"engagedSessions": 8
+},
+{
+"name": "Sweden",
+"activeUsers": 74,
+"engagedSessions": 26
+},
+{
+"name": "Kuwait",
+"activeUsers": 71,
+"engagedSessions": 7
+},
+{
+"name": "Kyrgyzstan",
+"activeUsers": 70,
+"engagedSessions": 6
+},
+{
+"name": "Honduras",
+"activeUsers": 65,
+"engagedSessions": 7
+},
+{
+"name": "Belgium",
+"activeUsers": 62,
+"engagedSessions": 9
+},
+{
+"name": "Czechia",
+"activeUsers": 59,
+"engagedSessions": 11
+},
+{
+"name": "Mongolia",
+"activeUsers": 59,
+"engagedSessions": 12
+},
+{
+"name": "New Zealand",
+"activeUsers": 55,
+"engagedSessions": 8
+},
+{
+"name": "Sri Lanka",
+"activeUsers": 54,
+"engagedSessions": 10
+},
+{
+"name": "Austria",
+"activeUsers": 52,
+"engagedSessions": 19
+},
+{
+"name": "Guatemala",
+"activeUsers": 52,
+"engagedSessions": 7
+},
+{
+"name": "Croatia",
+"activeUsers": 50,
+"engagedSessions": 12
+},
+{
+"name": "Slovakia",
+"activeUsers": 50,
+"engagedSessions": 4
+},
+{
+"name": "Lithuania",
+"activeUsers": 47,
+"engagedSessions": 7
+},
+{
+"name": "El Salvador",
+"activeUsers": 43,
+"engagedSessions": 4
+},
+{
+"name": "Switzerland",
+"activeUsers": 43,
+"engagedSessions": 13
+},
+{
+"name": "Gabon",
+"activeUsers": 42,
+"engagedSessions": 6
+},
+{
+"name": "Latvia",
+"activeUsers": 37,
+"engagedSessions": 5
+},
+{
+"name": "Norway",
+"activeUsers": 35,
+"engagedSessions": 9
+},
+{
+"name": "Kosovo",
+"activeUsers": 34,
+"engagedSessions": 8
+},
+{
+"name": "North Macedonia",
+"activeUsers": 34,
+"engagedSessions": 9
+},
+{
+"name": "Mauritius",
+"activeUsers": 33,
+"engagedSessions": 4
+},
+{
+"name": "Trinidad & Tobago",
+"activeUsers": 31,
+"engagedSessions": 1
+},
+{
+"name": "Puerto Rico",
+"activeUsers": 30,
+"engagedSessions": 8
+},
+{
+"name": "Nicaragua",
+"activeUsers": 28,
+"engagedSessions": 2
+},
+{
+"name": "Botswana",
+"activeUsers": 27,
+"engagedSessions": 3
+},
+{
+"name": "Cyprus",
+"activeUsers": 25,
+"engagedSessions": 6
+},
+{
+"name": "Luxembourg",
+"activeUsers": 25,
+"engagedSessions": 15
+},
+{
+"name": "Mali",
+"activeUsers": 25,
+"engagedSessions": 1
+},
+{
+"name": "Guyana",
+"activeUsers": 24,
+"engagedSessions": 6
+},
+{
+"name": "Brunei",
+"activeUsers": 22,
+"engagedSessions": 3
+},
+{
+"name": "Denmark",
+"activeUsers": 22,
+"engagedSessions": 6
+},
+{
+"name": "Malta",
+"activeUsers": 19,
+"engagedSessions": 0
+},
+{
+"name": "Burkina Faso",
+"activeUsers": 18,
+"engagedSessions": 3
+},
+{
+"name": "Estonia",
+"activeUsers": 16,
+"engagedSessions": 4
+},
+{
+"name": "Finland",
+"activeUsers": 16,
+"engagedSessions": 5
+},
+{
+"name": "Ghana",
+"activeUsers": 16,
+"engagedSessions": 5
+},
+{
+"name": "Uganda",
+"activeUsers": 14,
+"engagedSessions": 4
+},
+{
+"name": "Slovenia",
+"activeUsers": 11,
+"engagedSessions": 2
+},
+{
+"name": "Maldives",
+"activeUsers": 9,
+"engagedSessions": 3
+},
+{
+"name": "Cuba",
+"activeUsers": 8,
+"engagedSessions": 0
+},
+{
+"name": "Guadeloupe",
+"activeUsers": 8,
+"engagedSessions": 0
+},
+{
+"name": "Laos",
+"activeUsers": 7,
+"engagedSessions": 2
+},
+{
+"name": "Tajikistan",
+"activeUsers": 7,
+"engagedSessions": 0
+},
+{
+"name": "Tanzania",
+"activeUsers": 7,
+"engagedSessions": 1
+},
+{
+"name": "Fiji",
+"activeUsers": 6,
+"engagedSessions": 6
+},
+{
+"name": "Western Sahara",
+"activeUsers": 6,
+"engagedSessions": 1
+},
+{
+"name": "Zimbabwe",
+"activeUsers": 6,
+"engagedSessions": 2
+},
+{
+"name": "Congo - Kinshasa",
+"activeUsers": 5,
+"engagedSessions": 0
+},
+{
+"name": "Libya",
+"activeUsers": 5,
+"engagedSessions": 1
+},
+{
+"name": "Rwanda",
+"activeUsers": 5,
+"engagedSessions": 5
+},
+{
+"name": "Bahamas",
+"activeUsers": 4,
+"engagedSessions": 0
+},
+{
+"name": "Cameroon",
+"activeUsers": 4,
+"engagedSessions": 1
+},
+{
+"name": "Cura\u00e7ao",
+"activeUsers": 4,
+"engagedSessions": 0
+},
+{
+"name": "Macao",
+"activeUsers": 4,
+"engagedSessions": 3
+},
+{
+"name": "Madagascar",
+"activeUsers": 4,
+"engagedSessions": 1
+},
+{
+"name": "Namibia",
+"activeUsers": 4,
+"engagedSessions": 1
+},
+{
+"name": "Cape Verde",
+"activeUsers": 3,
+"engagedSessions": 0
+},
+{
+"name": "Montenegro",
+"activeUsers": 3,
+"engagedSessions": 0
+},
+{
+"name": "Mozambique",
+"activeUsers": 3,
+"engagedSessions": 0
+},
+{
+"name": "R\u00e9union",
+"activeUsers": 3,
+"engagedSessions": 0
+},
+{
+"name": "Zambia",
+"activeUsers": 3,
+"engagedSessions": 0
+},
+{
+"name": "Benin",
+"activeUsers": 2,
+"engagedSessions": 6
+},
+{
+"name": "Iceland",
+"activeUsers": 2,
+"engagedSessions": 2
+},
+{
+"name": "New Caledonia",
+"activeUsers": 2,
+"engagedSessions": 2
+},
+{
+"name": "Seychelles",
+"activeUsers": 2,
+"engagedSessions": 2
+},
+{
+"name": "South Sudan",
+"activeUsers": 2,
+"engagedSessions": 1
+},
+{
+"name": "Afghanistan",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Anguilla",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Barbados",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Bermuda",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Bhutan",
+"activeUsers": 1,
+"engagedSessions": 1
+},
+{
+"name": "British Virgin Islands",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Cayman Islands",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Djibouti",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Faroe Islands",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "French Guiana",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Gambia",
+"activeUsers": 1,
+"engagedSessions": 1
+},
+{
+"name": "Grenada",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Guernsey",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Jersey",
+"activeUsers": 1,
+"engagedSessions": 1
+},
+{
+"name": "Liechtenstein",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Malawi",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Martinique",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Mayotte",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Monaco",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Niger",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "San Marino",
+"activeUsers": 1,
+"engagedSessions": 1
+},
+{
+"name": "Sint Maarten",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "Somalia",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "St. Lucia",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "St. Vincent & Grenadines",
+"activeUsers": 1,
+"engagedSessions": 1
+},
+{
+"name": "Suriname",
+"activeUsers": 1,
+"engagedSessions": 1
+},
+{
+"name": "Turkmenistan",
+"activeUsers": 1,
+"engagedSessions": 1
+},
+{
+"name": "Turks & Caicos Islands",
+"activeUsers": 1,
+"engagedSessions": 0
+},
+{
+"name": "U.S. Virgin Islands",
+"activeUsers": 1,
+"engagedSessions": 0
+}
+]
+}

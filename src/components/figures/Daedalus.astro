@@ -1,0 +1,184 @@
+---
+// Fig: Daedalus. A small flat-shaded 3D viewport: a MediaPipe hand pinches an
+// icosphere, pulls a lump out of it like clay, then spreads thumb and index to
+// scale it up. The webcam's view of the same 21 landmarks sits in a corner.
+// The server renders the last frame of the scroll timeline.
+import Figure from "../Figure.astro";
+import {
+  VIEW, CAM0, PIP, ICO, TOOLS, GESTURES, captionOpacity,
+  gesture, mesh, floor, gizmo, pip, dimension, bonesPath, fmt, readout,
+} from "../../scripts/geo/daedalus";
+
+const g = gesture(1);
+const m = mesh(CAM0, g.S, g.clayAt, g.sculpt);
+const fl = floor(CAM0);
+const gz = gizmo(CAM0);
+const dim = dimension(g.lm);
+const bones = bonesPath(g.lm);
+const plm = pip(g.lm);
+const tips = new Set([4, 8]);
+const r1 = (v: number) => Math.round(v * 10) / 10;
+
+// Toolbar glyphs, drawn on a 24px button centred at the origin.
+const GLYPH: Record<(typeof TOOLS)[number], string> = {
+  add: "M-6 0H6M0 -6V6",
+  move: "M0 -7.5V7.5M-7.5 0H7.5M-2.5 -5L0 -7.5L2.5 -5M-2.5 5L0 7.5L2.5 5M-5 -2.5L-7.5 0L-5 2.5M5 -2.5L7.5 0L5 2.5",
+  scale: "M-7 -1.5V7H1.5M-2.5 2.5L7 -7M1.5 -7H7V-1.5",
+  // The sculpt tool: a ball with a lump pulled out of it.
+  sculpt: "M3.2 -0.3A5.3 5.3 0 1 1 0.3 -3.2L6.5 -6.5Z",
+};
+const TB = { x: 28, y: 64, step: 30 };
+const active = TOOLS.indexOf(g.tool);
+
+const GZ = { x: 40, y: 326 };
+const vf = (x: number, y: number, w: number, h: number, i: number, a: number) =>
+  `M${x + i} ${y + i + a}V${y + i}H${x + i + a}M${x + w - i - a} ${y + i}H${x + w - i}V${y + i + a}M${x + w - i} ${y + h - i - a}V${y + h - i}H${x + w - i - a}M${x + i + a} ${y + h - i}H${x + i}V${y + h - i - a}`;
+---
+
+<Figure name="daedalus" n={10} title="Sculpting by hand" label="A tracked hand pinching, pulling and scaling a flat-shaded mesh in a 3D viewport" readout={readout(g.pinch, g.S)}>
+  <svg class="dd" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} role="img" aria-label={`A 3D viewport with a flat-shaded icosphere of ${ICO.v.length} vertices over a ground grid. The 21 MediaPipe hand landmarks, joined into a skeleton, pinch its side and pull a lump out of it like clay, then spread thumb and index apart to scale the mesh up to ${g.S.toFixed(2)} times. A toolbar highlights the active tool, and a small webcam inset shows the same landmarks.`}>
+    <defs>
+      <clipPath id="dd-clip"><rect x="1" y="1" width={VIEW.w - 2} height={VIEW.h - 2} rx="8" /></clipPath>
+      <clipPath id="dd-pipclip"><rect x={PIP.x + 1} y={PIP.y + 1} width={PIP.w - 2} height={PIP.h - 2} rx="6" /></clipPath>
+      <pattern id="dd-scan" width="6" height="4" patternUnits="userSpaceOnUse">
+        <path class="dd-scanline" d="M0 0.5H6" />
+      </pattern>
+    </defs>
+
+    <rect class="inset" x="0.5" y="0.5" width={VIEW.w - 1} height={VIEW.h - 1} rx="8" />
+    <g clip-path="url(#dd-clip)">
+      <!-- Ground grid and its centre axes. -->
+      <path class="dd-grid" d={fl.grid} />
+      <path class="dd-ax dd-ax-x" d={fl.x} />
+      <path class="dd-ax dd-ax-z" d={fl.z} />
+
+      <!-- The mesh: front faces only, far to near, lit from the upper left. -->
+      <g class="dd-mesh">
+        {m.faces.map((f) => <path class="dd-f" d={f.d} fill={f.fill} stroke={f.stroke} />)}
+      </g>
+    </g>
+
+    <text class="dd-ht" x="16" y="25">perspective</text>
+    <text class="dd-sec dd-ht" x="96" y="25">{ICO.v.length} vertices, {ICO.f.length} faces</text>
+
+    <!-- Toolbar. -->
+    <g class="dd-tools">
+      <rect class="dd-tbar" x={TB.x - 16} y={TB.y - 16} width="32" height={TB.step * 3 + 32} rx="8" />
+      {TOOLS.map((tool, i) => (
+        <g class:list={["dd-tool", { on: i === active }]} data-tool={tool} transform={`translate(${TB.x} ${TB.y + i * TB.step})`}>
+          <rect x="-12" y="-12" width="24" height="24" rx="5" />
+          <path d={GLYPH[tool]} />
+        </g>
+      ))}
+      <text class="dd-tname" x={TB.x + 24} y={TB.y + active * TB.step} dominant-baseline="central">{g.tool}</text>
+    </g>
+
+    <!-- Axis gizmo. -->
+    <g class="dd-gizmo" transform={`translate(${GZ.x} ${GZ.y})`}>
+      <circle class="dd-gz-ring" r="27" />
+      {gz.map((a) => (
+        <>
+          <line class:list={["dd-gz", `dd-gz-${a.a}`]} x1="0" y1="0" x2={a.x} y2={a.y} />
+          <text class:list={["m", "dd-gzl", `dd-gzl-${a.a}`]} x={r1(a.x * 1.5)} y={r1(a.y * 1.5)} text-anchor="middle" dominant-baseline="central">{a.a}</text>
+        </>
+      ))}
+      <circle class="dot" r="1.75" />
+    </g>
+
+    <!-- The hand, as MediaPipe reports it, landed in the viewport. -->
+    <g class="dd-hand">
+      <path class="dd-halo" d={bones} />
+      <path class="dd-bones" d={bones} />
+      {g.lm.map(([x, y], i) => (
+        <circle class:list={["dd-lm", tips.has(i) ? "dot-accent" : "dot"]} cx={r1(x)} cy={r1(y)} r={tips.has(i) ? 3.25 : 2.25} />
+      ))}
+      <g class="dd-dim" opacity={Math.round(dim.on * (1 - g.relax) * 100) / 100}>
+        <path class="dd-ext" d={dim.ext} />
+        <path class="dd-line" d={dim.line} />
+        <text class="cm dd-val" x={dim.label[0]} y={dim.label[1]} text-anchor="middle" dominant-baseline="central">{fmt(g.pinch)}</text>
+      </g>
+    </g>
+
+    <!-- Webcam picture-in-picture: the same 21 landmarks, as tracked. -->
+    <g class="dd-pip">
+      <rect class="dd-pip-bg" x={PIP.x} y={PIP.y} width={PIP.w} height={PIP.h} rx="6" />
+      <rect x={PIP.x + 1} y={PIP.y + 1} width={PIP.w - 2} height={PIP.h - 2} rx="6" fill="url(#dd-scan)" />
+      <path class="faint" d={vf(PIP.x, PIP.y, PIP.w, PIP.h, 6, 8)} />
+      <g clip-path="url(#dd-pipclip)">
+        <path class="dd-pbones" d={bonesPath(plm)} />
+        {plm.map(([x, y], i) => (
+          <circle class:list={["dd-plm", tips.has(i) ? "dot-accent" : "dot"]} cx={r1(x)} cy={r1(y)} r={tips.has(i) ? 2.1 : 1.5} />
+        ))}
+      </g>
+      <text x={PIP.x + 12} y={PIP.y + PIP.h - 12}>webcam</text>
+      <text class="dd-sec" x={PIP.x + PIP.w} y={PIP.y + PIP.h + 16} text-anchor="end">MediaPipe, 21 landmarks</text>
+    </g>
+
+    <!-- The current gesture, named in the corner. -->
+    <g class="dd-cap">
+      <circle class="dot-accent" cx={VIEW.w - 150} cy={VIEW.h - 17} r="2.5" />
+      {GESTURES.map((c, i) => (
+        <text class="dd-capt" x={VIEW.w - 142} y={VIEW.h - 13} opacity={captionOpacity(i, 1)}>{c}</text>
+      ))}
+    </g>
+
+    <rect class="dd-hit" x="0" y="0" width={VIEW.w} height={VIEW.h} rx="8" />
+  </svg>
+  <Fragment slot="caption">
+    The skeleton is MediaPipe's 21 hand landmarks, and the gap between the thumb tip (4) and index tip (8) drives each tool: a pinched point pulls nearby vertices after it with a soft falloff, like clay, and a widening gap scales the mesh. Drag the viewport to orbit it.
+  </Fragment>
+</Figure>
+
+<style>
+  .dd { touch-action: pan-y; }
+  .dd-grid { stroke: var(--hair); stroke-width: 1; fill: none; }
+  .dd-ax { stroke-width: 1; fill: none; opacity: 0.55; }
+  .dd-ax-x { stroke: var(--s-red); }
+  .dd-ax-z { stroke: var(--accent); }
+  .dd-ht { paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
+  .dd-f { stroke-width: 0.6; stroke-linejoin: round; }
+
+  .dd-tbar { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
+  .dd-tool rect { fill: transparent; stroke: none; }
+  .dd-tool path { stroke: var(--ink-3); stroke-width: 1.25; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .dd-tool.on rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+  .dd-tool.on path { stroke: var(--accent); }
+  .dd .dd-tname { fill: var(--accent); paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
+
+  .dd-gz-ring { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
+  .dd-gz { stroke-width: 1.5; stroke-linecap: round; }
+  .dd-gz-x { stroke: var(--s-red); }
+  .dd-gz-y { stroke: var(--s-green); }
+  .dd-gz-z { stroke: var(--accent); }
+  .dd .dd-gzl { font-size: 11px; }
+  .dd .dd-gzl-x { fill: var(--s-red); }
+  .dd .dd-gzl-y { fill: var(--s-green); }
+  .dd .dd-gzl-z { fill: var(--accent); }
+
+  .dd-halo { stroke: var(--panel); stroke-width: 5; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+  .dd-bones { stroke: var(--ink); stroke-width: 1.1; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .dd-lm.dot { stroke: var(--panel); stroke-width: 1.25; }
+  .dd-ext { stroke: var(--ink-4); stroke-width: 1; fill: none; }
+  .dd-line { stroke: var(--ink-2); stroke-width: 1; fill: none; stroke-linecap: round; }
+  .dd-val { paint-order: stroke; stroke: var(--panel-2); stroke-width: 3px; stroke-linejoin: round; fill: var(--ink-2); }
+
+  .dd-pip-bg { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1; }
+  .dd-scanline { stroke: var(--hair); stroke-width: 0.6; opacity: 0.6; }
+  .dd-pbones { stroke: var(--ink-2); stroke-width: 0.9; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  .dd .dd-capt { fill: var(--ink-2); }
+
+  .dd-hit { fill: transparent; cursor: grab; }
+  .dd-hit.dragging { cursor: grabbing; }
+
+  /* Phones: the plate shrinks ~2x, so nothing below 20 units (about 10px)
+     stays. Micro labels go; the toolbar and gizmo scale up as units. */
+  @media (max-width: 560px) {
+    .dd-sec, .dd-gzl, .dd-val, .dd .dd-tname { display: none; }
+    .dd text { font-size: 20px; }
+    .dd .dd-capt { font-size: 21px; transform: translate(-40px, -2px); }
+    .dd-cap circle { transform: translate(-40px, -4px); }
+    .dd-tools { transform: scale(1.22); transform-origin: 0 0; }
+    .dd-gizmo { transform: translate(40px, 322px) scale(1.4); }
+  }
+</style>

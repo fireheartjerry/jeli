@@ -1,0 +1,174 @@
+%-------------------------
+% Jerry Li — Software Engineering Resume
+%-------------------------
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={Jerry Li, Resume}, pdfauthor={Jerry (Yuze) Li}}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{iftex}
+\ifPDFTeX
+  \input{glyphtounicode}
+  \pdfgentounicode=1
+\fi
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\setlength{\footskip}{6pt}
+
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.55in}
+\addtolength{\textheight}{1.2in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+\setlength{\parindent}{0pt}
+
+% ---- Rhythm: every gap on the page comes from these four lengths ----
+\newlength{\sectionabove}\setlength{\sectionabove}{12pt}  % before a section rule
+\newlength{\sectionbelow}\setlength{\sectionbelow}{5pt}  % rule to first entry
+\newlength{\entrygap}\setlength{\entrygap}{7.5pt}        % between entries
+\newlength{\bulletgap}\setlength{\bulletgap}{2.5pt}        % heading to bullets
+
+\titleformat{\section}{\scshape\raggedright\large}{}{0em}{}[\vspace{-3pt}\titlerule]
+\titlespacing*{\section}{0pt}{\sectionabove}{\sectionbelow}
+
+% Entry lists: no label, spacing owned by \entrygap
+\newenvironment{entries}
+  {\begin{itemize}[leftmargin=0.12in, label={}, itemsep=\entrygap, topsep=0pt, parsep=0pt, partopsep=0pt]}
+  {\end{itemize}}
+
+% Bullets under an entry
+\newenvironment{bullets}
+  {\begin{itemize}[leftmargin=0.16in, itemsep=1.25pt, topsep=\bulletgap, parsep=0pt, partopsep=0pt, label={\raisebox{0.15ex}{\scriptsize$\bullet$}}]\small}
+  {\end{itemize}}
+
+% Two-row heading: Org / date, then role / place
+\newcommand{\entry}[4]{%
+  \item
+  \begin{tabular*}{\linewidth}[t]{l@{\extracolsep{\fill}}r}
+    \textbf{#1} & #2 \\[-1pt]
+    \textit{\small #3} & \textit{\small #4}
+  \end{tabular*}}
+
+% One-row heading: Org + role, date
+\newcommand{\role}[3]{%
+  \item
+  \begin{tabular*}{\linewidth}[t]{l@{\extracolsep{\fill}}r}
+    \textbf{#1}\hspace{0.55em}\textit{\small #2} & #3
+  \end{tabular*}}
+
+% Project heading: name | stack, context
+\newcommand{\project}[3]{%
+  \item
+  \begin{tabular*}{\linewidth}[t]{l@{\extracolsep{\fill}}r}
+    #1\hspace{0.4em}{\small$|$}\hspace{0.4em}\textit{\small #2} & #3
+  \end{tabular*}}
+
+\newcommand{\link}[2]{\href{#1}{\underline{#2}}}
+
+\begin{document}
+
+\begin{center}
+  {\Huge\textbf{Jerry (Yuze) Li}}\\[3pt]
+  \small Toronto, Canada\hspace{0.5em}$|$\hspace{0.5em}%
+  \link{mailto:fireheartjerry@gmail.com}{fireheartjerry@gmail.com}\hspace{0.5em}$|$\hspace{0.5em}%
+  \link{https://yuzeli.ca}{yuzeli.ca}\hspace{0.5em}$|$\hspace{0.5em}%
+  \link{https://linkedin.com/in/fireheartjerry}{linkedin.com/in/fireheartjerry}\hspace{0.5em}$|$\hspace{0.5em}%
+  \link{https://github.com/fireheartjerry}{github.com/fireheartjerry}
+\end{center}
+\vspace{-6pt}
+
+\section{Education}
+\begin{entries}
+  \entry{University of Waterloo}{Expected 2029}
+        {Bachelor of Computer Science $|$ Schulich Leader Scholarship (\$100,000)}{Waterloo, Canada}
+\end{entries}
+
+\section{Experience}
+\begin{entries}
+  \role{Mathos AI (YC W24)}{Software Engineer Intern}{June 2026 -- Present}
+  \begin{bullets}
+    \item Shipped MP4 export for AI math videos, rendering Remotion jobs in isolated AWS Fargate sandboxes via Celery.
+    \item Built an OAuth 2.0 and MCP server so ChatGPT and Claude users can generate and download Mathos videos in chat.
+    \item Shipped lifecycle emails on AWS SES and EventBridge with engagement tracking and Gmail reply threading.
+    \item Rebuilt the AI tutor's step grading on a fast judge model plus SymPy checks, sharply improving accuracy and speed.
+  \end{bullets}
+
+  \role{TopsOJ}{Founder \& Lead Developer}{July 2023 -- Present}
+  \begin{bullets}
+    \item Built a competitive-math judge with 100,000+ users in 180+ countries (Google Analytics) and 128,000+ submissions.
+    \item Designed EloMMR ratings; led a 30-person team across engineering, contest ops, and sponsors like 3Blue1Brown.
+  \end{bullets}
+
+  \role{Quoted Tech Computers}{Software Engineer Intern}{July 2025 -- Aug.\ 2025}
+  \begin{bullets}
+    \item Automated barcode-label generation and CUPS printing with Node.js/Express, cutting manual processing time by 70\%.
+    \item Built Playwright/Selenium scrapers that structure competitor catalogs for pricing and inventory analysis.
+  \end{bullets}
+\end{entries}
+
+\section{Research}
+\begin{entries}
+  \entry{Computational Astrophysics}{Nov.\ 2024 -- Mar.\ 2026}
+        {Sole author of three papers, supervised by Dr.\ Alexander Mushtukov (University of Oxford)}{Remote}
+  \begin{bullets}
+    \item \href{https://doi.org/10.3847/2515-5172/ae4513}{``Ballistic Mass Transfer Necessarily Contracts Orbits in Binary Star Systems,''} \textit{Research Notes of the AAS} (2026). Showed the orbit loses angular momentum as $1-f$ and shrinks at every mass ratio.
+    \item \href{https://doi.org/10.64336/001c.159153}{``On the Conditions Under Which Instantaneous Mass-Transfer Mappings Reproduce Conservative Limits,''} \textit{Journal of High School Science} (2026), \textbf{Best Manuscript}. A velocity-rescaling closure cut orbit error from 22\% to under $10^{-4}$\%.
+    \item \href{https://arxiv.org/abs/2608.19107}{``The Effective Velocity of Transferred Mass,''} arXiv:2608.19107, under review at \textit{Astronomische Nachrichten}. Unified transfer models under one parameter $\eta$ that decides whether orbits widen or shrink.
+  \end{bullets}
+\end{entries}
+
+\section{Projects}
+\begin{entries}
+  \project{\link{https://devpost.com/software/wad}{\textbf{Cardboard Cockpit}}}{Godot, Python/OpenCV, ArUco, WebSockets, BLE}{Hack the North 2026}
+  \begin{bullets}
+    \item Built most of the Godot flight sim (21 of 22 PRs): map, weapons, HUD, BLE badge cockpit, landing, and tutorial.
+  \end{bullets}
+
+  \project{\link{https://devpost.com/software/glebber-stometric}{\textbf{Daedalus}}}{TypeScript, Three.js/WebGL, MediaPipe}{JAMHacks 10}
+  \begin{bullets}
+    \item Co-built a webcam-gesture 3D modeling app with MediaPipe hand tracking and Three.js; won Best Non-GenAI Hack.
+  \end{bullets}
+
+  \project{\link{https://chromewebstore.google.com/detail/drift/agihdlojchhjpflceecmfknffggofdhf}{\textbf{Drift}}}{JavaScript, Chrome Extensions API}{2026}
+  \begin{bullets}
+    \item Built a Chrome extension that opens a focused feed while ChatGPT, Claude, or Gemini think; Featured on the Web Store.
+  \end{bullets}
+
+  \project{\link{https://github.com/fireheartjerry/worldline-engine}{\textbf{Worldline Engine}}}{C++, raylib, CMake}{2026}
+  \begin{bullets}
+    \item Wrote a deterministic C++ universe simulator with seeded generation, live physics, save/replay, and automated tests.
+  \end{bullets}
+\end{entries}
+
+\section{Awards}
+\begin{entries}
+  \item\small
+  \textbf{USACO Platinum} (1,000/1,000 on Gold)\hspace{0.5em}$|$\hspace{0.5em}\textbf{AIME} qualifier (3$\times$)\\[1pt]
+  \textbf{AAPT PhysicsBowl} Div.\ II: 1st in Canada, 7th globally\hspace{0.5em}$|$\hspace{0.5em}\textbf{Sir Isaac Newton Exam}: 4th in Canada, 9th globally
+\end{entries}
+
+\section{Technical Skills}
+\begin{entries}
+  \item\small
+  \textbf{Languages:} C/C++, Python, TypeScript, JavaScript, SQL\\[1pt]
+  \textbf{Frameworks:} Node.js, Express, React, Next.js, Celery, NumPy, SciPy, Godot, raylib, Three.js\\[1pt]
+  \textbf{Tools:} AWS (Fargate, SES, S3), Git, Linux, SQLite, CMake, OpenCV, MediaPipe, Playwright, WebSockets
+\end{entries}
+
+\end{document}

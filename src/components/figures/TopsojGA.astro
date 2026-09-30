@@ -1,0 +1,375 @@
+---
+// Fig: TopsOJ in Google Analytics. Three coordinated panels drawn from the
+// GA4 export: monthly users since the property began recording (June 2024),
+// where time on the site goes by page, and how people arrive. All geometry is
+// computed here at build time; the server render is the finished dashboard.
+import Figure from "../Figure.astro";
+import ga from "../../data/topsoj-ga.json";
+
+const f = (v: number) => v.toFixed(1);
+const fmt = (v: number) => v.toLocaleString("en-US");
+const dur = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`);
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const mlabel = (iso: string) => `${MON[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
+
+// ---- (a) monthly users --------------------------------------------------
+const months = ga.months.map((m) => ({ ...m, ret: m.users - m.newUsers }));
+const M = months.length;
+const VMAX = 42_000;
+const peakI = months.reduce((b, m, i) => (m.users > months[b].users ? i : b), 0);
+const peak = months[peakI];
+const GRID = [1_000, 5_000, 10_000, 20_000, 40_000];
+
+interface Variant { cls: string; W: number; H: number; L: number; R: number; T: number; B: number; xl: { i: number; t: string; a: string }[]; peakLines: string[] }
+const VARIANTS: Variant[] = [
+  {
+    cls: "wide", W: 1200, H: 300, L: 40, R: 1184, T: 18, B: 268,
+    xl: [{ i: 0, t: "Jun 2024", a: "start" }, { i: 7, t: "Jan 2025", a: "middle" }, { i: 19, t: "Jan 2026", a: "middle" }, { i: M - 1, t: "Sep 2026", a: "end" }],
+    peakLines: ["Summer Contest 2026, 30 Aug", `${fmt(peak.users)} users in ${mlabel(peak.m)}`],
+  },
+  {
+    cls: "narrow", W: 600, H: 340, L: 52, R: 588, T: 20, B: 292,
+    xl: [{ i: 0, t: "Jun 2024", a: "start" }, { i: 7, t: "2025", a: "middle" }, { i: 19, t: "2026", a: "middle" }, { i: M - 1, t: "Sep", a: "end" }],
+    peakLines: ["Summer Contest 2026", `${fmt(peak.users)} users`],
+  },
+];
+const panelA = VARIANTS.map((v) => {
+  const x = (i: number) => v.L + (i / (M - 1)) * (v.R - v.L);
+  const y = (n: number) => v.B - Math.sqrt(Math.max(0, n) / VMAX) * (v.B - v.T);
+  const line = (key: "users" | "ret" | "engagedSessions") => months.map((m, i) => `${i ? "L" : "M"}${f(x(i))} ${f(y(m[key]))}`).join("");
+  const area = (key: "users" | "ret") => `${line(key)}L${f(x(M - 1))} ${v.B}L${f(x(0))} ${v.B}Z`;
+  return {
+    ...v,
+    users: line("users"), usersArea: area("users"),
+    ret: line("ret"), retArea: area("ret"),
+    eng: line("engagedSessions"),
+    engDots: months.map((m, i) => ({ x: x(i), y: y(m.engagedSessions) })),
+    grid: GRID.map((g) => ({ y: y(g), t: g >= 1000 ? `${g / 1000}k` : String(g), minor: g === 5_000 || g === 20_000 })),
+    xs: v.xl.map((l) => ({ ...l, x: x(l.i) })),
+    px: x(peakI), py: y(peak.users),
+    end: { x: x(M - 1), y: y(months[M - 1].users) },
+    g: JSON.stringify({ L: v.L, R: v.R, T: v.T, B: v.B, vmax: VMAX, peak: peakI, m: months.map((m) => [mlabel(m.m), m.users, m.newUsers, m.ret, m.engagedSessions]) }),
+  };
+});
+
+// ---- (b) where time goes -------------------------------------------------
+const B = { lab: 174, x0: 182, bw: 132, e0: 410, e1: 584, emax: 960, top: 36, row: 25 };
+const maxViews = Math.max(...ga.pages.map((p) => p.views));
+const CONTEST = new Set(["Contests", "Rankings"]);
+const standout = ga.pages.reduce((a, p) => (p.avgEngagementSec > a.avgEngagementSec ? p : a));
+const ex = (s: number) => B.e0 + (s / B.emax) * (B.e1 - B.e0);
+const starI = ga.pages.indexOf(standout);
+const pages = ga.pages.map((p, i) => ({
+  ...p,
+  y: B.top + i * B.row + B.row / 2,
+  w: (p.views / maxViews) * B.bw,
+  ex: ex(p.avgEngagementSec),
+  kind: p === standout ? "star" : CONTEST.has(p.label) ? "contest" : "",
+  // The row above the standout gives up its value on phones to make room for the callout.
+  above: i === starI - 1,
+}));
+const HB = B.top + pages.length * B.row + 46;
+const contestViews = ga.pages.filter((p) => CONTEST.has(p.label)).reduce((a, p) => a + p.views, 0);
+const contestNote = `Contests and Rankings: ${fmt(contestViews)} views, ${ga.pages.filter((p) => CONTEST.has(p.label)).map((p) => dur(p.avgEngagementSec)).join(" and ")} average`;
+
+// ---- (c) how people arrive -----------------------------------------------
+const totalSessions = ga.channels.reduce((a, c) => a + c.sessions, 0);
+const C = { x0: 8, x1: 588, bar: 30, bh: 16 };
+const MAJOR = ["Direct", "Organic Search", "Referral"];
+// Tone classes are prefixed so they never pick up the plate's shared stroke classes (.ink, .acc).
+const tone = (name: string) => `tone-${name === "Referral" ? "acc" : name === "Organic Search" ? "grn" : name === "Direct" ? "ink" : "mut"}`;
+const segs: { name: string; sessions: number; x: number; w: number; tone: string }[] = [];
+{
+  let cx = C.x0;
+  const span = C.x1 - C.x0;
+  for (const name of MAJOR) {
+    const ch = ga.channels.find((c) => c.name === name)!;
+    const w = (ch.sessions / totalSessions) * span;
+    segs.push({ name, sessions: ch.sessions, x: cx, w, tone: tone(name) });
+    cx += w;
+  }
+  const rest = ga.channels.filter((c) => !MAJOR.includes(c.name)).reduce((a, c) => a + c.sessions, 0);
+  segs.push({ name: "Other", sessions: rest, x: cx, w: C.x1 - cx, tone: "tone-mut" });
+}
+const pct = (n: number, d: number) => `${((n / d) * 100).toFixed(1)}%`;
+const segLabels = segs.slice(1).map((s, k) => ({
+  ...s,
+  cx: s.x + s.w / 2,
+  ly: C.bar + C.bh + 24 + k * 21,
+  text: s.name === "Other" ? `Unassigned, social and AI ${fmt(s.sessions)}` : `${s.name} ${fmt(s.sessions)}`,
+}));
+const L2 = { top: 156, row: 25, lab: 174, x0: 182, x1: 560, max: 420 };
+const chans = [...ga.channels].sort((a, b) => b.avgEngagementSec - a.avgEngagementSec).map((c, i) => ({
+  ...c,
+  y: L2.top + i * L2.row + L2.row / 2,
+  ex: L2.x0 + (c.avgEngagementSec / L2.max) * (L2.x1 - L2.x0),
+  tone: tone(c.name),
+}));
+const chanAxisY = L2.top + chans.length * L2.row + 6;
+const browserUsers = ga.browsers.reduce((a, b) => a + b.users, 0);
+const BR = { y: chanAxisY + 40, h: 8, x0: 182, x1: 588 };
+const brSegs: { name: string; users: number; x: number; w: number }[] = [];
+{
+  let bx = BR.x0;
+  const top3 = ga.browsers.slice(0, 3);
+  const rest = browserUsers - top3.reduce((a, b) => a + b.users, 0);
+  for (const b of [...top3, { name: "Other", users: rest }]) {
+    const w = (b.users / browserUsers) * (BR.x1 - BR.x0);
+    brSegs.push({ name: b.name, users: b.users, x: bx, w });
+    bx += w;
+  }
+}
+const HC = BR.y + BR.h + 26;
+const H2 = Math.max(HB, HC);
+
+const readout = `${fmt(ga.totals.activeUsers)} users`;
+---
+
+<Figure name="topsojga" n={4} size="stage" screen title="TopsOJ in Google Analytics" label="TopsOJ analytics: monthly users, time spent by page, and how visitors arrive" readout={readout}>
+  <div class="gd">
+    <section class="gd-p gd-a">
+      <header class="gd-h">
+        <span class="gd-k">Monthly users since June 2024</span>
+        <span class="gd-lg">
+          <span><i class="sw sw-tot"></i>all users</span>
+          <span><i class="sw sw-new"></i>new</span>
+          <span><i class="sw sw-ret"></i>returning</span>
+          <span><i class="sw sw-eng"></i>engaged sessions</span>
+          <span class="gd-note">square-root scale</span>
+        </span>
+      </header>
+      {panelA.map((a) => (
+        <svg class:list={["gd-svg", "gd-asvg", a.cls]} viewBox={`0 0 ${a.W} ${a.H}`} role="img" data-g={a.g}
+          aria-label={`Monthly TopsOJ users from June 2024 to September 2026, split into new and returning users, with engaged sessions. Users peaked at ${fmt(peak.users)} in ${mlabel(peak.m)}, the month of the Summer Contest 2026.`}>
+          <defs>
+            <clipPath id={`gd-line-${a.cls}`}><rect class="clip-line" x="0" y="0" width={a.W} height={a.H} /></clipPath>
+            <clipPath id={`gd-area-${a.cls}`}><rect class="clip-area" x="0" y="0" width={a.W} height={a.H} /></clipPath>
+          </defs>
+          <g class="grid">
+            {a.grid.map((g) => (
+              <>
+                <line class="hair" x1={a.L} x2={a.R} y1={f(g.y)} y2={f(g.y)} />
+                <text class:list={["cm", "tk", "tk-a", { minor: g.minor }]} x={a.L - 8} y={f(g.y + 4)} text-anchor="end">{g.t}</text>
+              </>
+            ))}
+            <line class="faint" x1={a.L} x2={a.R} y1={a.B} y2={a.B} />
+            {a.xs.map((l) => (
+              <>
+                <line class="faint" x1={f(l.x)} x2={f(l.x)} y1={a.B} y2={a.B + 5} />
+                <text class="cm tk tk-a" x={f(l.x)} y={a.B + 24} text-anchor={l.a}>{l.t}</text>
+              </>
+            ))}
+          </g>
+          <g clip-path={`url(#gd-area-${a.cls})`}>
+            <path class="a-users" d={a.usersArea} />
+            <path class="a-ret" d={a.retArea} />
+          </g>
+          <g clip-path={`url(#gd-line-${a.cls})`}>
+            <path class="l-ret" d={a.ret} />
+            <path class="l-eng" d={a.eng} />
+            {a.engDots.map((d) => <circle class="d-eng" cx={f(d.x)} cy={f(d.y)} r="1.9" />)}
+            <path class="accent l-users" d={a.users} />
+          </g>
+          <g class="peak-ann">
+            <line class="lead" x1={f(a.px - 7)} x2={f(a.px - 30)} y1={f(a.py)} y2={f(a.py)} />
+            {a.peakLines.map((t, k) => (
+              <text class:list={["pk", { strong: k === 0, pk2: k > 0 }]} x={f(a.px - 36)} y={f(a.py + 4 + k * (a.cls === "wide" ? 16 : 18))} text-anchor="end">{t}</text>
+            ))}
+          </g>
+          <circle class="pulse" cx={f(a.px)} cy={f(a.py)} r="4" opacity="0" />
+          <circle class="pk-dot" cx={f(a.px)} cy={f(a.py)} r="3.5" />
+          <circle class="dot-accent head" cx={f(a.end.x)} cy={f(a.end.y)} r="3" />
+          <g class="xh" opacity="0">
+            <line class="xh-l" x1="0" x2="0" y1={a.T - 6} y2={a.B} />
+            <circle class="xh-d" r="3.5" />
+            <g class="xh-p">
+              <rect class="xh-box" x="0" y="0" width="140" height="80" rx="5" />
+              <text class="xh-m" x="10" y="17"></text>
+              <text class="xh-v" x="10" y="33"></text>
+              <text class="xh-v" x="10" y="48"></text>
+              <text class="xh-v" x="10" y="63"></text>
+              <text class="xh-v" x="10" y="78"></text>
+            </g>
+          </g>
+          <rect class="hit" x={a.L - 6} y={a.T - 10} width={a.R - a.L + 12} height={a.B - a.T + 14} />
+        </svg>
+      ))}
+    </section>
+
+    <div class="gd-row">
+      <section class="gd-p gd-b">
+        <header class="gd-h">
+          <span class="gd-k">Where time goes</span>
+          <span class="gd-lg">
+            <span><i class="sw sw-bar"></i>views</span>
+            <span><i class="sw sw-con"></i>contest pages</span>
+            <span><i class="sw sw-dot"></i>average engagement</span>
+          </span>
+        </header>
+        <svg class="gd-svg gd-bsvg" viewBox={`0 0 600 ${H2}`} role="img"
+          aria-label={`Views and average engagement time for the twelve most viewed TopsOJ pages. Problems has the most views, ${fmt(maxViews)}. The ${standout.label} holds readers longest, ${dur(standout.avgEngagementSec)} on average. ${contestNote}.`}>
+          <text class="colh" x={B.x0} y="14">Views</text>
+          <text class="colh" x={B.e0} y="14">Engagement time</text>
+          {[0, 300, 600, 900].map((s) => (
+            <>
+              <line class="hair" x1={f(ex(s))} x2={f(ex(s))} y1={B.top - 4} y2={B.top + pages.length * B.row + 2} />
+              <text class="cm tk" x={f(ex(s))} y={B.top + pages.length * B.row + 18} text-anchor="middle">{s ? `${s / 60}m` : "0"}</text>
+            </>
+          ))}
+          {pages.map((p) => (
+            <g class:list={["pg", p.kind]}>
+              <text class="rl" x={B.lab} y={f(p.y + 4)} text-anchor="end">{p.label}</text>
+              <rect class="bar" x={B.x0} y={f(p.y - 6)} width={f(p.w)} height="12" rx="1.5" data-w={f(p.w)} />
+              <text class="cm val vv" x={f(B.x0 + p.w + 6)} y={f(p.y + 4)}>{fmt(p.views)}</text>
+              <line class="stem" x1={B.e0} x2={f(p.ex)} y1={f(p.y)} y2={f(p.y)} />
+              <circle class="lol" cx={f(p.ex)} cy={f(p.y)} r={p.kind === "star" ? 4 : 3} />
+              {p.kind === "star"
+                ? <text class="acc star-t" x={f(p.ex - 10)} y={f(p.y - 8)} text-anchor="end">{p.label}: {dur(p.avgEngagementSec)} average</text>
+                : <text class:list={["cm", "val", "ev", { "ev-above": p.above }]} x={f(p.ex + 8)} y={f(p.y + 4)}>{dur(p.avgEngagementSec)}</text>}
+            </g>
+          ))}
+          <text class="note con-note" x={B.x0} y={H2 - 6}>{contestNote}</text>
+        </svg>
+      </section>
+
+      <section class="gd-p gd-c">
+        <header class="gd-h">
+          <span class="gd-k">How people arrive</span>
+          <span class="gd-lg"><span class="gd-note">{fmt(totalSessions)} sessions</span></span>
+        </header>
+        <svg class="gd-svg gd-csvg" viewBox={`0 0 600 ${H2}`} role="img"
+          aria-label={`Sessions by acquisition channel: Direct ${pct(segs[0].sessions, totalSessions)}, Organic Search ${pct(segs[1].sessions, totalSessions)}, Referral ${pct(segs[2].sessions, totalSessions)}. Average engagement per session is ${chans.map((c) => `${c.name} ${dur(c.avgEngagementSec)}`).join(", ")}. By browser, Chrome accounts for ${pct(ga.browsers[0].users, browserUsers)} of users.`}>
+          <text class="colh" x={C.x0} y="14">Sessions by channel</text>
+          <g class="stack">
+            {segs.map((s) => <rect class:list={["seg", s.tone]} x={f(s.x)} y={C.bar} width={f(Math.max(0.8, s.w - 1.5))} height={C.bh} data-w={f(Math.max(0.8, s.w - 1.5))} data-x={f(s.x)} />)}
+          </g>
+          <text class="rl strong seg-l" x={C.x0} y={C.bar + C.bh + 22}>Direct {fmt(segs[0].sessions)}</text>
+          <text class="cm val seg-l seg-minor" x={C.x0} y={C.bar + C.bh + 42}>{pct(segs[0].sessions, totalSessions)} of sessions</text>
+          {segLabels.map((s) => (
+            <g class="seg-l seg-minor">
+              <line class="lead" x1={f(s.cx)} x2={f(s.cx)} y1={C.bar + C.bh + 2} y2={f(s.ly - 4)} />
+              <text class:list={["rl", s.tone]} x={f(s.cx - 6)} y={f(s.ly)} text-anchor="end">{s.text}</text>
+            </g>
+          ))}
+
+          <text class="colh" x={C.x0} y={L2.top - 12}>Average engagement per session</text>
+          {[0, 120, 240, 360].map((s) => (
+            <>
+              <line class="hair" x1={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} x2={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} y1={L2.top - 2} y2={chanAxisY - 4} />
+              <text class="cm tk" x={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} y={chanAxisY + 12} text-anchor="middle">{s ? `${s / 60}m` : "0"}</text>
+            </>
+          ))}
+          {chans.map((c) => (
+            <g class:list={["ch", c.tone]}>
+              <text class="rl" x={L2.lab} y={f(c.y + 4)} text-anchor="end">{c.name}</text>
+              <line class="stem" x1={L2.x0} x2={f(c.ex)} y1={f(c.y)} y2={f(c.y)} />
+              <circle class="lol" cx={f(c.ex)} cy={f(c.y)} r="3.4" />
+              <text class="cm val" x={f(c.ex + 8)} y={f(c.y + 4)}>{dur(c.avgEngagementSec)}</text>
+            </g>
+          ))}
+
+          <text class="rl br-k" x={L2.lab} y={BR.y + 7} text-anchor="end">Browsers</text>
+          <g class="brs">
+            {brSegs.map((b, i) => <rect class:list={["brseg", `b${i}`]} x={f(b.x)} y={BR.y} width={f(Math.max(0.8, b.w - 1.2))} height={BR.h} data-w={f(Math.max(0.8, b.w - 1.2))} />)}
+          </g>
+          <text class="cm val br-l" x={BR.x0} y={BR.y + BR.h + 18}>Chrome {pct(brSegs[0].users, browserUsers)}</text>
+          <text class="cm val br-l br-minor" x={BR.x1} y={BR.y + BR.h + 18} text-anchor="end">Edge {pct(brSegs[1].users, browserUsers)}, Safari {pct(brSegs[2].users, browserUsers)}</text>
+        </svg>
+      </section>
+    </div>
+  </div>
+  <Fragment slot="caption">All figures on this panel come from Google Analytics.</Fragment>
+</Figure>
+
+<style>
+  .gd { display: grid; gap: 26px; }
+  .gd-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 34px; }
+  .gd-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; font-size: 12.5px; color: var(--ink-3); margin-bottom: 10px; }
+  .gd-k { color: var(--ink); font-weight: 500; }
+  .gd-lg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-left: auto; }
+  .gd-lg > span { display: inline-flex; align-items: center; gap: 6px; }
+  .gd-note { color: var(--ink-3); font-family: var(--cm); font-size: 13px; }
+  .sw { display: inline-block; width: 12px; height: 8px; border-radius: 1.5px; }
+  .sw-tot { height: 0; border-top: 1.75px solid var(--accent); border-radius: 0; }
+  .sw-new { background: rgb(39 67 214 / 0.14); }
+  .sw-ret { background: rgb(118 87 201 / 0.28); box-shadow: inset 0 1px 0 var(--s-violet); }
+  .sw-eng { height: 0; border-top: 1.25px dashed var(--ink-3); border-radius: 0; }
+  .sw-bar { background: rgb(20 20 19 / 0.22); }
+  .sw-con { background: var(--s-violet); opacity: 0.6; }
+  .sw-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
+  .gd-asvg.narrow { display: none; }
+  @media (max-width: 900px) {
+    .gd-asvg.wide { display: none; }
+    .gd-asvg.narrow { display: block; }
+  }
+  @media (max-width: 760px) {
+    .gd-row { grid-template-columns: minmax(0, 1fr); gap: 26px; }
+  }
+
+  /* (a) */
+  .gd-svg .a-users { fill: var(--s-blue-t); }
+  .gd-svg .a-ret { fill: var(--s-violet); fill-opacity: 0.16; }
+  .gd-svg .l-ret { fill: none; stroke: var(--s-violet); stroke-width: 1; stroke-linejoin: round; }
+  .gd-svg .l-eng { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; stroke-linejoin: round; }
+  .gd-svg .d-eng { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1; }
+  .gd-svg .pk-dot { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
+  .gd-svg .pulse { fill: none; stroke: var(--accent); stroke-width: 1; }
+  .gd-svg .lead { stroke: var(--ink-4); stroke-width: 1; }
+  .gd-svg .pk { font-size: 12.5px; fill: var(--ink-3); }
+  .gd-svg .pk.strong { fill: var(--ink); font-weight: 500; }
+  .gd-svg .tk { font-size: 12px; fill: var(--ink-3); }
+  .gd-svg .xh-l { stroke: var(--ink); stroke-opacity: 0.45; stroke-width: 1; }
+  .gd-svg .xh-d { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
+  .gd-svg .xh-box { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
+  .gd-svg .xh-m { font-size: 12.5px; font-weight: 500; fill: var(--ink); }
+  .gd-svg .xh-v { font-family: var(--cm); font-size: 13px; fill: var(--ink-2); letter-spacing: 0; }
+  .gd-svg .hit { fill: transparent; pointer-events: none; }
+  .gd-svg[data-live] .hit { pointer-events: all; cursor: crosshair; touch-action: pan-y; }
+  .gd-svg.reading .peak-ann { opacity: 0.2; }
+  .gd-svg .peak-ann { transition: opacity 0.25s ease; }
+
+  /* (b), (c) */
+  .gd-svg .colh { font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; fill: var(--ink-3); }
+  .gd-svg .rl { font-size: 12.5px; fill: var(--ink-2); }
+  .gd-svg .rl.strong, .gd-svg .star .rl, .gd-svg .contest .rl, .gd-svg .ch.tone-ink .rl { fill: var(--ink); font-weight: 500; }
+  .gd-svg text.cm.val { font-size: 12.5px; fill: var(--ink-3); }
+  .gd-svg .bar { fill: var(--ink); fill-opacity: 0.2; }
+  .gd-svg .contest .bar { fill: var(--s-violet); fill-opacity: 0.6; }
+  .gd-svg .star .bar { fill-opacity: 0.3; }
+  .gd-svg .stem { stroke: var(--ink-4); stroke-width: 1; }
+  .gd-svg .lol { fill: var(--ink); }
+  .gd-svg .star .stem { stroke: var(--accent); stroke-width: 1.5; }
+  .gd-svg .star .lol { fill: var(--accent); }
+  .gd-svg .star-t { font-size: 12.5px; font-weight: 500; }
+  .gd-svg .note { font-size: 12px; fill: var(--s-violet); }
+  .gd-svg .seg.tone-ink { fill: var(--ink); fill-opacity: 0.55; }
+  .gd-svg .seg.tone-grn { fill: var(--s-green); }
+  .gd-svg .seg.tone-acc { fill: var(--accent); }
+  .gd-svg .seg.tone-mut { fill: var(--ink-4); }
+  .gd-svg .rl.tone-grn { fill: var(--s-green); }
+  .gd-svg .rl.tone-acc { fill: var(--accent); }
+  .gd-svg .ch.tone-acc .lol { fill: var(--accent); }
+  .gd-svg .ch.tone-acc .stem { stroke: var(--accent); stroke-width: 1.5; }
+  .gd-svg .ch.tone-grn .lol { fill: var(--s-green); }
+  .gd-svg .ch.tone-grn .stem { stroke: var(--s-green); stroke-width: 1.5; }
+  .gd-svg .ch.tone-mut .lol { fill: var(--ink-4); }
+  .gd-svg .ch.tone-acc text.cm.val { fill: var(--accent); }
+  .gd-svg .ch.tone-grn text.cm.val { fill: var(--s-green); }
+  .gd-svg .brseg { fill: var(--ink); }
+  .gd-svg .brseg.b0 { fill-opacity: 0.5; }
+  .gd-svg .brseg.b1 { fill-opacity: 0.3; }
+  .gd-svg .brseg.b2 { fill-opacity: 0.2; }
+  .gd-svg .brseg.b3 { fill-opacity: 0.12; }
+
+  /* Phones: the 600-wide panels render at about half size. Hide micro labels
+     rather than shrink them; what stays is set at 23 units, about 11px. */
+  @media (max-width: 560px) {
+    .gd-h { font-size: 12px; }
+    .gd-note { font-size: 12px; }
+    .gd-svg .colh, .gd-svg .vv, .gd-svg .ev-above, .gd-svg .note, .gd-svg .seg-minor, .gd-svg .br-minor,
+    .gd-svg .tk:not(.tk-a), .gd-svg .tk-a.minor, .gd-svg .pk2 { display: none; }
+    .gd-svg text, .gd-svg .tk, .gd-svg .pk, .gd-svg text.cm.val, .gd-svg .star-t, .gd-svg .xh-m, .gd-svg .xh-v { font-size: 23px; }
+    .gd-svg .rl { font-size: 22px; }
+    .gd-svg .l-users { stroke-width: 2.25; }
+  }
+</style>

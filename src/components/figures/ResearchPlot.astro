@@ -1,0 +1,358 @@
+---
+// The plot SVG of Fig. "research", in one of two layouts: "wide" puts each
+// panel's inset beside it, "narrow" (phones) stacks it underneath. Both are
+// computed from the same formulas (src/scripts/geo/research.ts) and carry
+// the same class names, so one script drives whichever is showing.
+import { aBallistic, lBallistic, aClosure, respL, QS, QCOL, binary } from "../../scripts/geo/research";
+
+interface Props { mode: "wide" | "narrow" }
+const { mode } = Astro.props;
+const wide = mode === "wide";
+
+const W = wide ? 640 : 400;
+const L = wide ? 80 : 54, R = wide ? 412 : 392; // plot box, shared by all three panels
+const T = wide ? 26 : 50, B = wide ? 154 : 202; // plot top and bottom, relative to the panel's top
+// x-axis titles: in the tick row on wide plates (xAt gives each panel's gap), on their own row on phones.
+const XT = wide ? 8 : 27;
+const SX = wide ? 440 : 1, SW = wide ? 198 : 398; // inset column
+const INS_H = wide ? [0, 0, 0] : [104, 132, 150];
+const insTop = () => (wide ? T - 4 : B + 54); // relative to the panel's top
+const insH = (k: number) => (wide ? B - T + 8 : INS_H[k]);
+const PW = 206; // wide panel pitch
+const panelH = (k: number) => (wide ? PW : B + 54 + INS_H[k] + 42);
+const Y0 = [0, panelH(0), panelH(0) + panelH(1)];
+const H = wide ? 2 * PW + B + 24 : Y0[2] + B + 54 + INS_H[2] + 4;
+const xAt = () => (wide ? L - 14 : (L + R) / 2);
+const xAnchor = wide ? "end" : "middle";
+
+const r2 = (v: number) => Math.round(v * 100) / 100;
+type Pt = [number, number];
+const pathOf = (pts: Pt[]) => pts.map(([x, y], i) => `${i ? "L" : "M"}${x} ${y}`).join("");
+const minus = (v: number) => (v < 0 ? `−${Math.abs(v)}` : `${v}`);
+const sgn = (v: number, d = 2) => `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(d)}`;
+
+// (a) RNAAS 2026. Ballistic transfer: the gas keeps the donor's velocity.
+// With masses in units of the (conserved) total, q0 = Md0/Ma0 and f = ΔM/Md0,
+//   a/a0 = (1 + f q0)^-2,  μ/μ0 = (1 - f)(1 + f q0),  L ∝ μ √a,
+// so L/L0 = 1 - f for every q0. Computed from the mechanism, not assumed.
+const A = { y0: Y0[0], fmax: 0.15, lo: 0.82, hi: 1.02 };
+const ax = (f: number) => r2(L + (f / A.fmax) * (R - L));
+const ay = (v: number) => r2(A.y0 + B - ((v - A.lo) / (A.hi - A.lo)) * (B - T));
+const aCurves: Pt[][] = QS.map((q0) =>
+  Array.from({ length: 31 }, (_, i) => {
+    const f = (i / 30) * A.fmax;
+    return [ax(f), ay(lBallistic(f, q0))] as Pt;
+  }),
+);
+const aEnd = aCurves[0][30];
+const aSep = QS.map((q0) => aBallistic(A.fmax, q0));
+const lEnd = QS.map((q0) => lBallistic(A.fmax, q0));
+const aC = { x: ax(0.05), y: ay(1 - 0.05) };
+const aIn = { y0: A.y0 + insTop(), h: insH(0) };
+const aRow = (i: number) => aIn.y0 + 42 + i * 20; // wide list rows
+const aCol = [SX + 196, SX + 292, SX + 384]; // narrow table columns (right edges)
+
+// (b) JHSS 2026. q0 = 2, 15% of the donor moved over 50 orbits. With the
+// velocity-rescaling closure the mapping follows the conservative limit
+//   a(t)/a0 = [(1 - f)(1 + f q0)]^-2,  f(t) = 0.15 t/50;
+// with no closure the separation never moves.
+const Bp = { y0: Y0[1], lo: 0.78, hi: 1.04, q0: 2, tmax: 50 };
+const bx = (t: number) => r2(L + (t / Bp.tmax) * (R - L));
+const by = (v: number) => r2(Bp.y0 + B - ((v - Bp.lo) / (Bp.hi - Bp.lo)) * (B - T));
+const bCurve: Pt[] = Array.from({ length: 51 }, (_, i) => [bx(i), by(aClosure(i, Bp.q0, Bp.tmax))] as Pt);
+const aFinal = aClosure(Bp.tmax, Bp.q0, Bp.tmax); // 0.8190
+const err = (1 / aFinal - 1) * 100; // 22.1%
+const yOne = by(1), yFin = by(aFinal);
+// The closure's label sits right-aligned above the curve, with a tick down to it.
+const bLead = { x: bx(38), y: by(aClosure(38, Bp.q0, Bp.tmax)), v: 0.95 };
+// Zoom on the last orbits.
+const Z = { t0: 44, t1: 50, lo: 0.81, hi: 0.8335 };
+const zIn = { x0: SX, x1: SX + SW, y0: Bp.y0 + insTop(), y1: Bp.y0 + insTop() + insH(1) };
+const zx = (t: number) => r2(zIn.x0 + 14 + ((t - Z.t0) / (Z.t1 - Z.t0)) * (SW - 38));
+const zy = (v: number) => r2(zIn.y1 - 28 - ((v - Z.lo) / (Z.hi - Z.lo)) * (zIn.y1 - zIn.y0 - 54));
+const zCurve: Pt[] = Array.from({ length: 25 }, (_, i) => {
+  const t = Z.t0 + (i / 24) * (Z.t1 - Z.t0);
+  return [zx(t), zy(aClosure(t, Bp.q0, Bp.tmax))] as Pt;
+});
+const zBox = { x0: bx(Z.t0), x1: bx(Z.t1), y0: by(Z.hi), y1: by(Z.lo) };
+const zBrk = { x: SX + SW - 12, top: zIn.y0 + 12, bot: zy(aFinal) };
+const zCon = wide
+  ? `M${zBox.x1} ${zBox.y0}L${zIn.x0} ${zIn.y0 + 7}M${zBox.x1} ${zBox.y1}L${zIn.x0} ${zIn.y1 - 7}`
+  : `M${r2((zBox.x0 + zBox.x1) / 2)} ${zBox.y1}V${zIn.y0}`; // straight down, between the tick labels
+
+// (c) arXiv:2608.19107. Normalized orbital response to a parcel δm moved
+// with effective velocity η v1 + (1 − η) v2: (ΔL/L)/δm = (1 - η) - η/q, in
+// units of the accretor mass. Zero at η = q/(1 + q).
+const C = { y0: Y0[2], lo: -2.7, hi: 1.2 };
+const cx = (eta: number) => r2(L + eta * (R - L));
+const cy = (v: number) => r2(C.y0 + B - ((v - C.lo) / (C.hi - C.lo)) * (B - T));
+const cLines = QS.map((q) => ({ q, x0: cx(0), y0: cy(1), x1: cx(1), y1: cy(respL(1, q)), ec: q / (1 + q) }));
+const ecLabel = (v: number) => v.toFixed(3).replace(/0+$/, "");
+// Binary diagram, final state: q = 1, ballistic (η = 1).
+const bnIn = { x0: SX, x1: SX + SW, y0: C.y0 + insTop(), y1: C.y0 + insTop() + insH(2) };
+const BN = wide
+  ? { cx: SX + 56, cy: bnIn.y0 + 80, th: -0.55, qi: 1, eta: 1, k: 0.9 }
+  : { cx: SX + 90, cy: bnIn.y0 + 76, th: -0.55, qi: 1, eta: 1, k: 1.2 };
+const bn = binary(QS[BN.qi], BN.eta, BN.th, BN.cx, BN.cy, BN.k);
+// Right-hand column of the diagram's inset.
+const RC = wide
+  ? { chipY: bnIn.y0 + 17, chipX: [SX + 64, SX + 112, SX + 150], qx: SX + 12, eta: bnIn.y0 + 46, verd: bnIn.y0 + 64, dl: bnIn.y0 + 98, da: bnIn.y0 + 118, rule: bnIn.y0 + 81, lx: SX + 104 }
+  : { chipY: bnIn.y0 + 20, chipX: [SX + 250, SX + 306, SX + 350], qx: SX + 186, eta: bnIn.y0 + 56, verd: bnIn.y0 + 78, dl: bnIn.y0 + 110, da: bnIn.y0 + 132, rule: bnIn.y0 + 94, lx: SX + 186 };
+const arrowAng = -2.35; // radial arrow on the donor's ring, upper left
+const arr = (e: number, r: number) => {
+  const ca = Math.cos(arrowAng), sa = Math.sin(arrowAng);
+  const sg = Math.sign(e) || 1;
+  const a0 = r + 4 * sg, a1 = r * (1 + e) + 1.5 * sg;
+  const x0 = BN.cx + a0 * ca, y0 = BN.cy + a0 * sa, x1 = BN.cx + a1 * ca, y1 = BN.cy + a1 * sa;
+  const d = Math.sign(a1 - a0) || 1;
+  const hx = ca * d, hy = sa * d;
+  return `M${r2(x0)} ${r2(y0)}L${r2(x1)} ${r2(y1)}M${r2(x1 - 4 * hx - 3 * hy)} ${r2(y1 - 4 * hy + 3 * hx)}L${r2(x1)} ${r2(y1)}L${r2(x1 - 4 * hx + 3 * hy)} ${r2(y1 - 4 * hy - 3 * hx)}`;
+};
+const lab = (x: number, y: number, s: number) => {
+  const dx = x - BN.cx, dy = y - BN.cy, d = Math.hypot(dx, dy) || 1;
+  return { x: r2(x + (dx / d) * (s + 13)), y: r2(y + (dy / d) * (s + 11)) };
+};
+const l1 = lab(bn.x1, bn.y1, bn.s1), l2 = lab(bn.x2, bn.y2, bn.s2);
+const stream = (() => {
+  const dx = bn.x2 - bn.x1, dy = bn.y2 - bn.y1, d = Math.hypot(dx, dy) || 1;
+  const ux = dx / d, uy = dy / d;
+  return `M${r2(bn.x1 + ux * (bn.s1 + 3))} ${r2(bn.y1 + uy * (bn.s1 + 3))}L${r2(bn.x2 - ux * (bn.s2 + 3))} ${r2(bn.y2 - uy * (bn.s2 + 3))}`;
+})();
+
+const G = {
+  L, R, T, B, SX, SW,
+  a: { curves: aCurves, q0: QS, fmax: A.fmax },
+  b: { curve: bCurve, x0: bx(0), yOne, q0: Bp.q0, tmax: Bp.tmax, err: err.toFixed(1), z: Z, zCurve, brk: 8 + zBrk.bot - zBrk.top },
+  c: { lines: cLines, lo: C.lo, hi: C.hi, y0: C.y0, bn: BN, arrowAng },
+};
+
+const heads = [
+  { k: "a", venue: "RNAAS 2026" },
+  { k: "b", venue: "JHSS 2026" },
+  { k: "c", venue: "arXiv 2026" },
+];
+// Subtitle position: beside the venue on wide plates, on a second line on phones.
+const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] + 29 });
+---
+
+<svg
+  class:list={["rs", wide ? "rs-w" : "rs-n"]}
+  viewBox={`0 0 ${W} ${H}`}
+  role="img"
+  data-g={JSON.stringify(G)}
+  aria-label={`Three panels. (a) Under ballistic transfer the orbital angular momentum falls as 1 minus f for mass ratios 0.4, 1 and 2, all on one line, although their separations end at ${aSep.map((v) => v.toFixed(3)).join(", ")}. (b) At q0 = 2, moving 15% of the donor over 50 orbits: with no closure the separation stays at 1, with velocity rescaling it falls to the analytic ${aFinal.toFixed(3)}, a ${err.toFixed(1)}% difference; an inset zooms on the last six orbits. (c) The normalized angular momentum response (1 minus eta) minus eta over q crosses zero at eta = q/(1+q). A diagram of the two stars shows whether their separation grows or shrinks, which changes sign at eta = 1/(1+q).`}
+>
+  {heads.map((h, k) => (
+    <text class="plab" x="0" y={Y0[k] + 9} dominant-baseline="central" aria-hidden="true"><tspan class="pl">({h.k})</tspan><tspan class="k" dx="7">{h.venue}</tspan></text>
+  ))}
+  <g class="psub" aria-hidden="true">
+    <text x={sub(0).x} y={sub(0).y} dominant-baseline="central">Ballistic transfer: <tspan class="mi">L</tspan>/<tspan class="mi">L</tspan><tspan class="sbs" dy="3">0</tspan><tspan dy="-3"> = 1 − </tspan><tspan class="mi">f</tspan> for every <tspan class="mi">q</tspan><tspan class="sbs" dy="3">0</tspan></text>
+    <text x={sub(1).x} y={sub(1).y} dominant-baseline="central">The closure reaches the analytic <tspan class="mi">a</tspan>/<tspan class="mi">a</tspan><tspan class="sbs" dy="3">0</tspan><tspan dy="-3">; no closure is {err.toFixed(1)}% off</tspan></text>
+    <text x={sub(2).x} y={sub(2).y} dominant-baseline="central">Δ<tspan class="mi">L</tspan> flips sign at η = <tspan class="mi">q</tspan>/(1 + <tspan class="mi">q</tspan>), the separation at 1/(1 + <tspan class="mi">q</tspan>)</text>
+  </g>
+
+  <!-- (a) -->
+  <g class="pa" aria-hidden="true">
+    {[0.85, 0.9, 0.95, 1].map((v) => (
+      <>
+        <line class="hair" x1={L} x2={R} y1={ay(v)} y2={ay(v)} />
+        <text class="cm tl" x={L - 9} y={ay(v)} text-anchor="end" dominant-baseline="central">{v.toFixed(2)}</text>
+      </>
+    ))}
+    <path class="faint" d={`M${L} ${A.y0 + T - 4}V${A.y0 + B}H${R}`} />
+    {[0, 0.05, 0.1, 0.15].map((f) => (
+      <>
+        <line class="faint" x1={ax(f)} x2={ax(f)} y1={A.y0 + B} y2={A.y0 + B + 4} />
+        <text class="cm tl" x={ax(f)} y={A.y0 + B + 8} text-anchor="middle" dominant-baseline="hanging">{Math.round(f * 100)}%</text>
+      </>
+    ))}
+    <text class="m yl" transform={`translate(12 ${A.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle">L<tspan class="u">/</tspan>L<tspan class="sb" dy="3">0</tspan></text>
+    <text class="m xl" x={xAt()} y={A.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging">{wide ? "f" : <>f<tspan class="u"> = Δ</tspan>M<tspan class="u">/</tspan>M<tspan class="sb" dy="3">d0</tspan></>}</text>
+
+    <path class="dash ref" d={`M${ax(0)} ${ay(1)}L${ax(A.fmax)} ${ay(1 - A.fmax)}`} />
+    {aCurves.map((pts, i) => <path class={`lc s-${QCOL[i]}`} d={pathOf(pts)} stroke-dashoffset={-7 * i} />)}
+    <g class="acall">
+      <path class="lead" d={`M${aC.x + 3} ${aC.y - 4}L${aC.x + 16} ${ay(0.99)}H${aC.x + 24}`} />
+      <circle class="lead-dot" cx={aC.x} cy={aC.y} r="1.8" />
+      <text class="m" x={aC.x + 28} y={ay(0.99)} dominant-baseline="central"><tspan class="u">1 − </tspan>f<tspan class="u">, every </tspan>q<tspan class="sb" dy="3">0</tspan></text>
+    </g>
+    <circle class="dot-accent ha" cx={aEnd[0]} cy={aEnd[1]} r="3.5" />
+
+    <g class="ains">
+      <rect class="inset" x={SX} y={aIn.y0} width={SW} height={aIn.h} rx="7" />
+      {wide ? (
+        <>
+          <text class="ann" x={SX + 12} y={aIn.y0 + 15} dominant-baseline="central"><tspan class="mi">f</tspan> = Δ<tspan class="mi">M</tspan>/<tspan class="mi">M</tspan><tspan class="sbs" dy="3">d0</tspan><tspan dy="-3"> = 15%</tspan></text>
+          <text class="m hd" x={SX + SW - 12} y={aIn.y0 + 15} text-anchor="end" dominant-baseline="central">a<tspan class="u">/</tspan>a<tspan class="sb" dy="3">0</tspan></text>
+          <line class="hair" x1={SX + 12} x2={SX + SW - 12} y1={aIn.y0 + 27} y2={aIn.y0 + 27} />
+          {QS.map((q0, i) => (
+            <g class="arow">
+              <line class={`sw s-${QCOL[i]}`} x1={SX + 12} x2={SX + 28} y1={aRow(i)} y2={aRow(i)} />
+              <text class="m" x={SX + 36} y={aRow(i)} dominant-baseline="central">q<tspan class="sb" dy="3">0</tspan><tspan class="u" dy="-3"> = {q0}</tspan></text>
+              <text class="cm strong" x={SX + SW - 12} y={aRow(i)} text-anchor="end" dominant-baseline="central">{aSep[i].toFixed(3)}</text>
+            </g>
+          ))}
+          <g class="alsum">
+            <line class="hair" x1={SX + 12} x2={SX + SW - 12} y1={aRow(2) + 15} y2={aRow(2) + 15} />
+            <text class="m" x={SX + 12} y={aRow(2) + 32} dominant-baseline="central">L<tspan class="u">/</tspan>L<tspan class="sb" dy="3">0</tspan><tspan class="ann-in" dy="-3">, all three</tspan></text>
+            <text class="cm acc" x={SX + SW - 12} y={aRow(2) + 32} text-anchor="end" dominant-baseline="central">{lEnd[0].toFixed(3)}</text>
+          </g>
+        </>
+      ) : (
+        <>
+          <text class="ann" x={SX + 12} y={aIn.y0 + 20} dominant-baseline="central">at <tspan class="mi">f</tspan> = 15%</text>
+          {QS.map((q0, i) => (
+            <g class="arow">
+              <text class="m" x={aCol[i]} y={aIn.y0 + 20} text-anchor="end" dominant-baseline="central">q<tspan class="sb" dy="3">0</tspan><tspan class="u" dy="-3"> = {q0}</tspan></text>
+              <line class={`sw s-${QCOL[i]}`} x1={aCol[i] - 40} x2={aCol[i]} y1={aIn.y0 + 34} y2={aIn.y0 + 34} />
+              <text class="cm strong" x={aCol[i]} y={aIn.y0 + 56} text-anchor="end" dominant-baseline="central">{aSep[i].toFixed(3)}</text>
+            </g>
+          ))}
+          <text class="m" x={SX + 12} y={aIn.y0 + 56} dominant-baseline="central">a<tspan class="u">/</tspan>a<tspan class="sb" dy="3">0</tspan></text>
+          <g class="alsum">
+            <line class="hair" x1={SX + 12} x2={SX + SW - 12} y1={aIn.y0 + 72} y2={aIn.y0 + 72} />
+            <text class="m" x={SX + 12} y={aIn.y0 + 88} dominant-baseline="central">L<tspan class="u">/</tspan>L<tspan class="sb" dy="3">0</tspan></text>
+            {QS.map((_, i) => (
+              <text class="cm acc" x={aCol[i]} y={aIn.y0 + 88} text-anchor="end" dominant-baseline="central">{lEnd[i].toFixed(3)}</text>
+            ))}
+          </g>
+        </>
+      )}
+    </g>
+  </g>
+
+  <!-- (b) -->
+  <g class="pb" aria-hidden="true">
+    {[0.8, 0.9, 1].map((v) => (
+      <>
+        <line class="hair" x1={L} x2={R} y1={by(v)} y2={by(v)} />
+        <text class="cm tl" x={L - 9} y={by(v)} text-anchor="end" dominant-baseline="central">{v.toFixed(2)}</text>
+      </>
+    ))}
+    <path class="faint" d={`M${L} ${Bp.y0 + T - 4}V${Bp.y0 + B}H${R}`} />
+    {[0, 10, 20, 30, 40, 50].map((t) => (
+      <>
+        <line class="faint" x1={bx(t)} x2={bx(t)} y1={Bp.y0 + B} y2={Bp.y0 + B + 4} />
+        <text class="cm tl" x={bx(t)} y={Bp.y0 + B + 8} text-anchor="middle" dominant-baseline="hanging">{t}</text>
+      </>
+    ))}
+    <text class="m yl" transform={`translate(12 ${Bp.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle">a<tspan class="u">/</tspan>a<tspan class="sb" dy="3">0</tspan></text>
+    <text class="xl" x={xAt()} y={Bp.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging"><tspan class="mi">t</tspan>, orbits</text>
+
+    <line class="dotted" x1={L} x2={R} y1={yFin} y2={yFin} />
+    <text class="ann anl" x={L + 8} y={yFin - 8}>analytic {aFinal.toFixed(3)}</text>
+    <path class="dash noc" d={`M${bx(0)} ${yOne}H${bx(Bp.tmax)}`} />
+    <text class="ann nocl" x={L + 8} y={yOne - 8}>no closure</text>
+    <path class="accent clo" d={pathOf(bCurve)} />
+    <g class="clol">
+      <path class="lead" d={`M${bLead.x} ${bLead.y - 5}V${by(bLead.v) + 8}`} />
+      <text class="ann acc" x={R - 6} y={by(bLead.v)} text-anchor="end" dominant-baseline="central">velocity-rescaling closure</text>
+    </g>
+    <circle class="dot hn" cx={bx(Bp.tmax)} cy={yOne} r="2.5" />
+    <circle class="dot-accent hc" cx={bx(Bp.tmax)} cy={yFin} r="3.5" />
+
+    <g class="zlink">
+      <rect class="zbox" x={zBox.x0} y={zBox.y0} width={r2(zBox.x1 - zBox.x0)} height={r2(zBox.y1 - zBox.y0)} />
+      <path class="zcon" d={zCon} />
+    </g>
+    <g class="zoom">
+      <rect class="inset" x={zIn.x0} y={zIn.y0} width={SW} height={zIn.y1 - zIn.y0} rx="7" />
+      <text class="ann" x={SX + 12} y={zIn.y0 + 16} dominant-baseline="central">last 6 orbits</text>
+      {[44, 46, 48, 50].map((t) => (
+        <line class="hair" x1={zx(t)} x2={zx(t)} y1={zy(Z.hi)} y2={zy(Z.lo)} />
+      ))}
+      {[44, 46, 48, 50].map((t) => (
+        <text class="cm tl" x={zx(t)} y={zIn.y1 - 13} text-anchor={t === 44 ? "start" : t === 50 ? "end" : "middle"} dominant-baseline="central">{t}</text>
+      ))}
+      <line class="dotted" x1={zx(Z.t0)} x2={zx(Z.t1)} y1={zy(aFinal)} y2={zy(aFinal)} />
+      <text class="ann" x={zx(Z.t0) + 3} y={zy(aFinal) - 8}>analytic</text>
+      <path class="accent zclo" d={pathOf(zCurve)} />
+      <circle class="zring" cx={zx(Z.t1)} cy={zy(aFinal)} r="6.5" />
+      <circle class="dot-accent zhc" cx={zx(Z.t1)} cy={zy(aFinal)} r="3" />
+      <text class="cm strong zv" x={zx(Z.t1) - 11} y={zy(aFinal) + 15} text-anchor="end" dominant-baseline="central">{aFinal.toFixed(4)}</text>
+      <path class="ink zbrk" d={`M${zBrk.x - 4} ${zBrk.bot}h4V${zBrk.top}h-4`} />
+      <path class="zbrkx" d={`M${zBrk.x - 4} ${zBrk.top + 14}l8 -4M${zBrk.x - 4} ${zBrk.top + 18}l8 -4`} />
+      <g class="zbl">
+        <text class="cm strong" x={zBrk.x - 10} y={zBrk.top + 5} text-anchor="end" dominant-baseline="central">+{err.toFixed(1)}%</text>
+        <text class="ann" x={zBrk.x - 10} y={zBrk.top + 22} text-anchor="end" dominant-baseline="central">no closure</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- (c) -->
+  <g class="pc" aria-hidden="true">
+    <rect class="fill-accent-soft below" x={L} y={cy(0)} width={R - L} height={r2(C.y0 + B - cy(0))} />
+    {[-2, -1, 1].map((v) => (
+      <line class="hair" x1={L} x2={R} y1={cy(v)} y2={cy(v)} />
+    ))}
+    <line class="faint" x1={L} x2={R} y1={cy(0)} y2={cy(0)} />
+    {[-2, -1, 0, 1].map((v) => (
+      <text class="cm tl" x={L - 9} y={cy(v)} text-anchor="end" dominant-baseline="central">{minus(v)}</text>
+    ))}
+    <path class="faint" d={`M${L} ${C.y0 + T - 4}V${C.y0 + B}H${R}`} />
+    {[0, 1].map((e) => (
+      <>
+        <line class="faint" x1={cx(e)} x2={cx(e)} y1={C.y0 + B} y2={C.y0 + B + 4} />
+        <text class="cm tl" x={cx(e)} y={C.y0 + B + 8} text-anchor="middle" dominant-baseline="hanging">{e}</text>
+      </>
+    ))}
+    <text class="m yl" transform={`translate(12 ${C.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle"><tspan class="u">(Δ</tspan>L<tspan class="u">/</tspan>L<tspan class="u">)/</tspan>δm</text>
+    <text class="m xl" x={xAt()} y={C.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging">η</text>
+    <text class="ann" x={L + 8} y={cy(0.2)} dominant-baseline="central"><tspan class="mi">L</tspan> rises</text>
+    <text class="ann" x={L + 8} y={cy(-2.35)} dominant-baseline="central"><tspan class="mi">L</tspan> falls</text>
+
+    {cLines.map((l, i) => (
+      <line class={`drop s-${QCOL[i]}`} x1={cx(l.ec)} x2={cx(l.ec)} y1={cy(0)} y2={C.y0 + B} />
+    ))}
+    {cLines.map((l, i) => (
+      <line class={`cl s-${QCOL[i]}${i === 1 ? " sel" : ""}`} x1={l.x0} y1={l.y0} x2={l.x1} y2={l.y1} />
+    ))}
+    {cLines.map((l, i) => (
+      <text class={`cm tl ect c-${QCOL[i]}`} x={cx(l.ec)} y={C.y0 + B + 8} text-anchor="middle" dominant-baseline="hanging">{ecLabel(l.ec)}</text>
+    ))}
+    {cLines.map((l, i) => <circle class={`ec f-${QCOL[i]}`} cx={cx(l.ec)} cy={cy(0)} r="3" />)}
+    <g class="ccall">
+      <text class="ann" x={R - 6} y={cy(0) - 8} text-anchor="end">Δ<tspan class="mi">L</tspan> = 0</text>
+    </g>
+    <g class="cur" opacity="0">
+      <line class="curl" x1={cx(0.5)} x2={cx(0.5)} y1={C.y0 + T - 4} y2={C.y0 + B} />
+      {cLines.map((l, i) => <circle class={`cd f-${QCOL[i]}${i === 1 ? " sel" : ""}`} cx={cx(0.5)} cy={cy(respL(0.5, l.q))} r={i === 1 ? 3.5 : 2.5} />)}
+    </g>
+
+    <g class="bin">
+      <rect class="inset" x={bnIn.x0} y={bnIn.y0} width={SW} height={bnIn.y1 - bnIn.y0} rx="7" />
+      <g class="binc">
+      <text class="m" x={RC.qx} y={RC.chipY} dominant-baseline="central">q</text>
+      {QS.map((q, i) => (
+        <g class={`chip${i === BN.qi ? " on" : ""}`} data-i={i}>
+          <rect class="chit" x={RC.chipX[i] - 20} y={RC.chipY - 16} width="40" height="34" rx="4" />
+          <text class={`cm c-${QCOL[i]}`} x={RC.chipX[i]} y={RC.chipY} text-anchor="middle" dominant-baseline="central">{q}</text>
+          <line class={`cbar s-${QCOL[i]}`} x1={RC.chipX[i] - 9} x2={RC.chipX[i] + 9} y1={RC.chipY + 12} y2={RC.chipY + 12} />
+        </g>
+      ))}
+      <text class="m beta" x={wide ? SX + SW - 12 : RC.lx} y={RC.eta} text-anchor={wide ? "end" : "start"} dominant-baseline="central">η<tspan class="u"> = {BN.eta.toFixed(2)}</tspan></text>
+      <text class="ann bverd" x={wide ? SX + SW - 12 : RC.lx} y={RC.verd} text-anchor={wide ? "end" : "start"} dominant-baseline="central">orbit {bn.da > 0 ? "widens" : bn.da < 0 ? "shrinks" : "holds"}</text>
+
+      <path class="com" d={`M${BN.cx - 4} ${BN.cy}h8M${BN.cx} ${BN.cy - 4}v8`} />
+      <circle class="orb o1" cx={BN.cx} cy={BN.cy} r={r2(bn.r1)} />
+      <circle class="orb o2" cx={BN.cx} cy={BN.cy} r={r2(bn.r2)} />
+      <circle class="aft a1" cx={BN.cx} cy={BN.cy} r={r2(bn.r1 * (1 + bn.e))} />
+      <circle class="aft a2" cx={BN.cx} cy={BN.cy} r={r2(bn.r2 * (1 + bn.e))} />
+      <circle class="rip" cx={BN.cx} cy={BN.cy} r={r2(bn.r1)} opacity="0" />
+      <path class="barr" d={arr(bn.e, bn.r1)} />
+      <path class="strm" d={stream} />
+      <circle class="st1" cx={r2(bn.x1)} cy={r2(bn.y1)} r={r2(bn.s1)} />
+      <circle class="st2" cx={r2(bn.x2)} cy={r2(bn.y2)} r={r2(bn.s2)} />
+      <text class="m sl1" x={l1.x} y={l1.y} text-anchor="middle" dominant-baseline="central">M<tspan class="sb" dy="3">1</tspan></text>
+      <text class="m sl2" x={l2.x} y={l2.y} text-anchor="middle" dominant-baseline="central">M<tspan class="sb" dy="3">2</tspan></text>
+
+      <line class="hair" x1={RC.lx} x2={SX + SW - 12} y1={RC.rule} y2={RC.rule} />
+      <text class="m" x={RC.lx} y={RC.dl} dominant-baseline="central"><tspan class="u">Δ</tspan>L<tspan class="u">/</tspan>L</text>
+      <text class="cm strong bdl" x={SX + SW - 12} y={RC.dl} text-anchor="end" dominant-baseline="central">{sgn(bn.dl)}</text>
+      <text class="m" x={RC.lx} y={RC.da} dominant-baseline="central"><tspan class="u">Δ</tspan>a<tspan class="u">/</tspan>a</text>
+      <text class="cm acc bda" x={SX + SW - 12} y={RC.da} text-anchor="end" dominant-baseline="central">{sgn(bn.da)}</text>
+      </g>
+    </g>
+  </g>
+  <rect class="hit" x={L - 50} y={C.y0 + T - 12} width={R - L + 64} height={B - T + 44} rx="6" />
+</svg>

@@ -1,6 +1,6 @@
 @import "@fontsource-variable/instrument-sans/wght.css";
 
-/* KaTeX's Computer Modern cuts, used only for math in figure labels. */
+/* KaTeX's Computer Modern cuts: math in figure labels, and every numeral that matters. */
 @font-face {
   font-family: "CM Math";
   src: url("/fonts/cm-math-italic.woff2") format("woff2");
@@ -13,16 +13,33 @@
   font-display: swap;
 }
 
-:root {
+/*
+  Two themes share one set of names. Day is ink on paper; night is paper on
+  ink. Colours that need an alpha are built from the -rgb triplets, so a
+  figure never hardcodes a colour and works in both.
+
+  Derived tokens resolve where they are declared, so the night block restates
+  all of them. It applies to the whole page in the dark theme, and to any
+  element marked [data-night] (the cover is always night). [data-day] is the
+  reverse: a printed thing inside a figure (a label, a marker) stays ink on
+  white paper at night.
+*/
+:root,
+[data-day] {
+  --ink-rgb: 20 20 19;
+  --paper-rgb: 244 243 238;
+  --accent-rgb: 39 67 214;
+
   --paper: #f4f3ee;
   --panel: #fdfdfb;
+  --panel-2: #f7f6f2; /* inset surfaces inside a plate */
   --ink: #141413;
-  --ink-2: rgb(20 20 19 / 0.68); /* body copy, 7.4:1 */
-  --ink-3: rgb(20 20 19 / 0.56); /* meta, 5.1:1 */
-  --ink-4: rgb(20 20 19 / 0.3); /* strokes only, never text */
-  --hair: rgb(20 20 19 / 0.12);
+  --ink-2: rgb(var(--ink-rgb) / 0.68); /* body copy, 7.4:1 */
+  --ink-3: rgb(var(--ink-rgb) / 0.64); /* meta, 5.2:1 */
+  --ink-4: rgb(var(--ink-rgb) / 0.3); /* strokes only, never text */
+  --hair: rgb(var(--ink-rgb) / 0.12);
   --accent: #2743d6;
-  --accent-soft: rgb(39 67 214 / 0.1);
+  --accent-soft: rgb(var(--accent-rgb) / 0.1);
   /* Data-series palette. Accent stays the hero colour; these separate series
      and states. Each has a soft tint for fills. Muted enough to sit on paper. */
   --s-blue: #2743d6;
@@ -35,7 +52,11 @@
   --s-green-t: rgb(46 138 92 / 0.1);
   --s-violet-t: rgb(118 87 201 / 0.1);
   --s-amber-t: rgb(199 144 28 / 0.12);
-  --panel-2: #f7f6f2; /* inset surfaces inside a plate */
+  --plate-shadow:
+    0 1px 0 rgb(255 255 255 / 0.8) inset,
+    0 1px 2px rgb(var(--ink-rgb) / 0.03),
+    0 12px 32px -18px rgb(var(--ink-rgb) / 0.12);
+  --grid-dot: rgb(var(--ink-rgb) / 0.09);
 
   --sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --math: "CM Math", "Latin Modern Math", "Times New Roman", serif;
@@ -43,10 +64,105 @@
 
   --gutter: clamp(20px, 4vw, 56px);
   --measure: 1180px;
+  --bar: 60px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
 
   color-scheme: light;
+
+  /* Figures: the few values that must not simply flip with the theme.
+     A flat-shaded solid (the mesh in Fig. "daedalus") runs from --solid-lit, a
+     face turned to the light, toward --solid-shade as the face turns away;
+     --solid-depth scales how far it goes. By day that is paper shaded with ink;
+     by night the light still has to fall on the lit side. */
+  --solid-lit: var(--panel);
+  --solid-shade: var(--ink);
+  --solid-depth: 1;
+  /* A label that steps back but is still read (an option not picked), as an
+     opacity. Paper forgives a fainter one than the dark does. */
+  --dim: 0.55;
+}
+
+:root[data-theme="dark"],
+[data-night] {
+  --ink-rgb: 240 238 230;
+  --paper-rgb: 10 11 14;
+  --accent-rgb: 124 148 255;
+
+  --paper: #0a0b0e;
+  --panel: #111217;
+  --panel-2: #16181e;
+  --ink: #f0eee6;
+  --ink-2: rgb(var(--ink-rgb) / 0.74);
+  --ink-3: rgb(var(--ink-rgb) / 0.58);
+  --ink-4: rgb(var(--ink-rgb) / 0.32);
+  --hair: rgb(var(--ink-rgb) / 0.13);
+  --accent: #7c94ff;
+  --accent-soft: rgb(var(--accent-rgb) / 0.16);
+  --s-blue: #7c94ff;
+  --s-red: #f08560;
+  --s-green: #56c492;
+  --s-violet: #a993f2;
+  --s-amber: #e3b455;
+  --s-blue-t: rgb(124 148 255 / 0.15);
+  --s-red-t: rgb(240 133 96 / 0.15);
+  --s-green-t: rgb(86 196 146 / 0.14);
+  --s-violet-t: rgb(169 147 242 / 0.15);
+  --s-amber-t: rgb(227 180 85 / 0.15);
+  --plate-shadow:
+    0 1px 0 rgb(255 255 255 / 0.045) inset,
+    0 24px 48px -28px rgb(0 0 0 / 0.7);
+  --grid-dot: rgb(var(--ink-rgb) / 0.1);
+
+  color-scheme: dark;
+
+  /* Figures: the few values that must not simply flip with the theme. */
+  --solid-lit: #b4b2ab;
+  --solid-shade: #1a1c22;
+  --solid-depth: 2;
+  --dim: 0.78;
+}
+
+/* Without JS there is no data-theme, and the page is still night. */
+@media all {
+  :root:not([data-theme]) {
+    --ink-rgb: 240 238 230;
+    --paper-rgb: 10 11 14;
+    --accent-rgb: 124 148 255;
+
+    --paper: #0a0b0e;
+    --panel: #111217;
+    --panel-2: #16181e;
+    --ink: #f0eee6;
+    --ink-2: rgb(var(--ink-rgb) / 0.74);
+    --ink-3: rgb(var(--ink-rgb) / 0.58);
+    --ink-4: rgb(var(--ink-rgb) / 0.32);
+    --hair: rgb(var(--ink-rgb) / 0.13);
+    --accent: #7c94ff;
+    --accent-soft: rgb(var(--accent-rgb) / 0.16);
+    --s-blue: #7c94ff;
+    --s-red: #f08560;
+    --s-green: #56c492;
+    --s-violet: #a993f2;
+    --s-amber: #e3b455;
+    --s-blue-t: rgb(124 148 255 / 0.15);
+    --s-red-t: rgb(240 133 96 / 0.15);
+    --s-green-t: rgb(86 196 146 / 0.14);
+    --s-violet-t: rgb(169 147 242 / 0.15);
+    --s-amber-t: rgb(227 180 85 / 0.15);
+    --plate-shadow:
+      0 1px 0 rgb(255 255 255 / 0.045) inset,
+      0 24px 48px -28px rgb(0 0 0 / 0.7);
+    --grid-dot: rgb(var(--ink-rgb) / 0.1);
+
+    color-scheme: dark;
+
+    /* Figures: the few values that must not simply flip with the theme. */
+    --solid-lit: #b4b2ab;
+    --solid-shade: #1a1c22;
+    --solid-depth: 2;
+    --dim: 0.78;
+  }
 }
 
 *,
@@ -58,7 +174,8 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  scroll-padding-top: 24px;
+  scroll-padding-top: calc(var(--bar) + 12px);
+  background: var(--paper);
 }
 
 body {
@@ -72,6 +189,19 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* Switching themes by hand eases between them; first paint never does. */
+html[data-theme-switching] body,
+html[data-theme-switching] .fig {
+  transition:
+    background-color 0.45s ease,
+    color 0.45s ease,
+    border-color 0.45s ease;
+}
+
+[data-night] {
+  color: var(--ink);
 }
 
 h1,
@@ -111,6 +241,15 @@ a {
   text-decoration: none;
 }
 
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
 ::selection {
   background: var(--accent);
   color: var(--paper);
@@ -124,6 +263,13 @@ a {
 
 .num {
   font-variant-numeric: tabular-nums;
+}
+
+/* Computer Modern for the numerals that carry weight. */
+.cm {
+  font-family: var(--cm);
+  font-feature-settings: normal;
+  letter-spacing: 0;
 }
 
 .wrap {
@@ -155,4 +301,20 @@ a {
 .ln:hover {
   color: var(--accent);
   text-decoration-color: currentColor;
+}
+
+kbd {
+  font: 12.5px var(--sans);
+  padding: 1px 6px;
+  border: 1px solid var(--hair);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink-2);
+}
+
+/* Poster mode: tools/cover.mjs photographs the cover scene with nothing over it. */
+html[data-poster] [data-bar],
+html[data-poster] [data-index] {
+  visibility: hidden;
 }

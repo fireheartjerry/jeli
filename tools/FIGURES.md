@@ -27,7 +27,7 @@ where your brief explicitly allows a package.
 9. Only create/modify YOUR files: the component(s), the script(s), and a lab page per figure. Don't touch shared files (Figure.astro, motion.ts, figures.ts, global.css, index.astro, Hero, other figures). If you need a shared change, describe it in your report.
 
 ## Lab page and verification (required)
-Create `src/pages/lab/<name>.astro`:
+Create `src/pages/lab/<name>.astro` (a scratch page: it carries `noindex`, and it is deleted once the figure is on the page it was built for):
 ```astro
 ---
 import Base from "../../layouts/Base.astro";

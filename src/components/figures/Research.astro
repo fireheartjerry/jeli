@@ -9,7 +9,7 @@ import ResearchPlot from "./ResearchPlot.astro";
 
 <Figure
   name="research"
-  n={8}
+  n={11}
   title="Three results"
   label="Three results on mass transfer in binary stars, one panel per paper"
   readout=""
@@ -70,7 +70,7 @@ import ResearchPlot from "./ResearchPlot.astro";
   .fig svg.rs .chit { fill: transparent; stroke: none; }
   .fig svg.rs .chip .cbar { stroke-width: 2; opacity: 0; }
   .fig svg.rs .chip.on .cbar { opacity: 1; }
-  .fig svg.rs .chip:not(.on) text { fill-opacity: 0.55; }
+  .fig svg.rs .chip:not(.on) text { fill-opacity: var(--dim); }
   .fig svg.rs[data-live] .chip { cursor: pointer; }
   .fig svg.rs .com { fill: none; stroke: var(--ink-3); stroke-width: 1; }
   .fig svg.rs .orb { fill: none; stroke: var(--ink-4); stroke-width: 1; }

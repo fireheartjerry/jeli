@@ -88,7 +88,7 @@ const KEYS = Array.from({ length: 10 }, (_, k) => (k === 0 ? 1 : k * 100));
 const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
 ---
 
-<Figure name="worldline" n={12} title="Worldline" label="A seeded universe simulation you can scrub through time" readout={readout}>
+<Figure name="worldline" n={15} title="Worldline" label="A seeded universe simulation you can scrub through time" readout={readout}>
   <div class="wl">
     <div class="wl-main">
       <div class="wl-stage" role="img" aria-label={`A universe of ${u.n} bodies generated from the seed ${SEED}: one heavy central body with smaller bodies on perturbed orbits, each trailing its recent path, over a polar grid. Inner orbits are green, outer orbits violet, and the one planet is blue with a long trail. Scrolling plays its ${FRAMES} precomputed frames forwards or backwards.`}>
@@ -235,6 +235,11 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
   .wl-tl { position: relative; margin-top: 10px; padding: 0 1px; user-select: none; -webkit-user-select: none; }
   .wl-track { position: relative; height: 22px; touch-action: pan-y; }
   .wl-track[data-live] { cursor: ew-resize; }
+  /* Under a finger the track answers over 44 px. A transparent border widens what can be touched
+     without moving anything inside it, and the margin gives the space back. */
+  @media (hover: none) {
+    .wl-track { box-sizing: content-box; border-block: 11px solid transparent; margin-block: -11px; }
+  }
   .wl-rail, .wl-fill { position: absolute; left: 0; right: 0; top: 10px; height: 1px; }
   .wl-rail { background: var(--ink-4); }
   .wl-fill { background: var(--accent); height: 1.5px; top: 9.75px; transform-origin: left; }

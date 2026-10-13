@@ -95,25 +95,43 @@ export function packets(
   opts: { n?: number; speed?: number; r?: number; cls?: string; active?: () => boolean } = {},
 ) {
   const { n = 3, speed = 0.45, r = 2.2, cls = "dot-accent", active = () => true } = opts;
-  const len = path.getTotalLength();
+  // The path is sampled once, and again only if its shape changes. Asking the
+  // browser for a point on every frame makes it work the path out each time.
+  const N = 48;
+  const xs = new Float32Array(N + 1), ys = new Float32Array(N + 1);
+  let shape: string | null = null;
+  const sample = () => {
+    const d = path.getAttribute("d") ?? "";
+    if (d === shape) return;
+    shape = d;
+    const len = path.getTotalLength();
+    for (let i = 0; i <= N; i++) {
+      const p = path.getPointAtLength((i / N) * len);
+      xs[i] = p.x;
+      ys[i] = p.y;
+    }
+  };
   const dots = Array.from({ length: n }, (_, i) => {
     const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     c.setAttribute("r", String(r));
     c.setAttribute("class", cls);
     c.style.opacity = "0";
     layer.append(c);
-    return { c, u: i / n };
+    return { c, u: i / n, shown: "0" };
   });
   return whileVisible(root, (dt) => {
     const on = active();
+    sample();
     for (const d of dots) {
       d.u = (d.u + dt * speed) % 1;
-      const p = path.getPointAtLength(d.u * len);
-      d.c.setAttribute("cx", p.x.toFixed(1));
-      d.c.setAttribute("cy", p.y.toFixed(1));
       // Fade in and out at the ends so packets never pop.
       const edge = Math.min(1, d.u * 8, (1 - d.u) * 8);
-      d.c.style.opacity = on ? edge.toFixed(2) : "0";
+      const opacity = on ? edge.toFixed(2) : "0";
+      if (opacity !== d.shown) d.c.style.opacity = d.shown = opacity;
+      if (!on) continue;
+      const f = d.u * N, i = Math.min(N - 1, Math.floor(f)), t = f - i;
+      d.c.setAttribute("cx", (xs[i] + (xs[i + 1] - xs[i]) * t).toFixed(1));
+      d.c.setAttribute("cy", (ys[i] + (ys[i + 1] - ys[i]) * t).toFixed(1));
     }
   });
 }

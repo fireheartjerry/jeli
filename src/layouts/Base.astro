@@ -5,30 +5,70 @@ interface Props {
   title?: string;
   description?: string;
   noindex?: boolean;
+  /** Extra JSON-LD nodes for this page, added beside the Person node. */
+  jsonld?: Record<string, unknown>[];
+  /** Pin a theme regardless of the reader's choice (the social card). */
+  theme?: "light" | "dark";
 }
 
 const {
   title = "Jerry Li",
   noindex = false,
-  description = "Jerry (Yuze) Li studies computer science at the University of Waterloo. Software engineering intern at Mathos AI, founder of TopsOJ, and author of three papers on binary star mass transfer.",
+  description = "Jerry (Yuze) Li studies computer science at the University of Waterloo as a Schulich Leader. Sole author of a paper at two NeurIPS 2026 workshops, software engineering intern at Mathos AI (YC W24), founder of TopsOJ, and Software Lead at Waterloo Defence.",
+  jsonld = [],
+  theme,
 } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
-const og = new URL("/og.png", Astro.site).href;
+const og = new URL("/og.jpg", Astro.site).href;
+
+const person = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "@id": "https://yuzeli.ca/#jerry",
+  name: "Jerry Li",
+  alternateName: "Yuze Li",
+  url: "https://yuzeli.ca",
+  email: "mailto:fireheartjerry@gmail.com",
+  affiliation: { "@type": "CollegeOrUniversity", name: "University of Waterloo" },
+  award: ["Schulich Leader Scholarship", "USACO Platinum"],
+  worksFor: [
+    { "@type": "Organization", name: "Mathos AI", url: "https://mathos.ai" },
+    { "@type": "Organization", name: "Waterloo Defence", url: "https://waterloodefence.ca" },
+  ],
+  knowsAbout: ["AI agents", "software engineering", "computational astrophysics", "competitive programming"],
+  sameAs: [
+    "https://github.com/fireheartjerry",
+    "https://www.linkedin.com/in/fireheartjerry/",
+    "https://topsoj.com",
+  ],
+};
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme={theme}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {/* Night unless the reader has chosen day: the site opens in space. Settled before first paint. */}
+    {!theme && (
+      <script is:inline>
+        (() => {
+          let t = null;
+          try { t = localStorage.getItem("theme"); } catch {}
+          document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+        })();
+      </script>
+    )}
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     {noindex && <meta name="robots" content="noindex" />}
-    <meta name="theme-color" content="#f4f3ee" />
+    <meta name="theme-color" content="#0a0b0e" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/cm-main.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/cm-math-italic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="sitemap" href="/sitemap.xml" />
 
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
@@ -39,19 +79,7 @@ const og = new URL("/og.png", Astro.site).href;
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
 
-    <script type="application/ld+json" set:html={JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "Person",
-      name: "Jerry Li",
-      alternateName: "Yuze Li",
-      url: "https://yuzeli.ca",
-      affiliation: { "@type": "CollegeOrUniversity", name: "University of Waterloo" },
-      sameAs: [
-        "https://github.com/fireheartjerry",
-        "https://www.linkedin.com/in/fireheartjerry/",
-        "https://topsoj.com",
-      ],
-    })} />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonld.length ? [person, ...jsonld] : person)} />
   </head>
   <body>
     <slot />

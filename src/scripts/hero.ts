@@ -1,157 +1,137 @@
-import { gsap, ScrollTrigger, reducedMotion } from "./motion";
-import { aBallistic, aConservative, masses, omega, roche, toPath, F_MAX as DM_MAX } from "./binary";
+import { ScrollTrigger, reducedMotion } from "./motion";
+import { mountCosmos, L_SUN, BELT_MASS, type CosmosState } from "./cosmos";
 
-const fig = document.querySelector<HTMLElement>("[data-hero]");
-if (fig && !reducedMotion()) init(fig);
+const hero = document.querySelector<HTMLElement>("[data-hero]");
+if (hero) init(hero);
 
-function init(fig: HTMLElement) {
-  const G = JSON.parse(fig.dataset.g!);
-  const $ = <T extends Element>(s: string) => fig.querySelector<T>(s)!;
-  const donor = $<SVGPathElement>(".donor");
-  const lobe = $<SVGPathElement>(".lobe");
-  const accretor = $<SVGCircleElement>(".accretor");
-  const rings = fig.querySelectorAll<SVGCircleElement>(".ring");
-  const ghost = $<SVGCircleElement>(".ring-ghost");
-  const ghostLab = $<SVGTextElement>(".ghost-lab");
-  const streamG = $<SVGGElement>(".stream");
-  const cCons = $<SVGPathElement>(".c-cons");
-  const cBall = $<SVGPathElement>(".c-ball");
-  const hCons = $<SVGCircleElement>(".h-cons");
-  const hBall = $<SVGCircleElement>(".h-ball");
-  const cursor = $<SVGLineElement>(".cursor");
-  const readout = $<HTMLElement>(".readout");
-  const labCons = $<SVGTextElement>(".lab-cons");
-  const labBall = $<SVGTextElement>(".lab-ball");
+/** 2.4e21 as "2.4 × 10²¹". */
+function sci(v: number, digits = 2) {
+  if (v <= 0) return "0";
+  const e = Math.floor(Math.log10(v));
+  const sup = String(e).replace(/[-0-9]/g, (c) => "⁻⁰¹²³⁴⁵⁶⁷⁸⁹"["-0123456789".indexOf(c)]);
+  return `${(v / 10 ** e).toFixed(digits)} × 10${sup}`;
+}
 
-  const X = (dm: number) => G.px0 + (dm / DM_MAX) * (G.px1 - G.px0);
-  const Y = (a: number) => G.py0 - ((a - G.amin) / (G.amax - G.amin)) * (G.py0 - G.py1);
+function init(hero: HTMLElement) {
+  const canvas = hero.querySelector<HTMLCanvasElement>("[data-sky]")!;
+  const ledger = hero.querySelector<HTMLElement>(".ledger")!;
+  const out = Object.fromEntries(
+    [...hero.querySelectorAll<HTMLElement>("[data-v]")].map((el) => [el.dataset.v!, el]),
+  );
+  const tags = Object.fromEntries(
+    [...hero.querySelectorAll<HTMLElement>("[data-tag]")].map((el) => [el.dataset.tag!, el]),
+  );
+  // ?poster=<0..1> freezes the scene at that point of the build, with nothing
+  // drawn over it, so tools/cover.mjs can photograph it.
+  const poster = new URLSearchParams(location.search).get("poster");
+  if (poster !== null) document.documentElement.dataset.poster = "";
+  const still = reducedMotion() || poster !== null;
+  const wide = () => window.matchMedia("(min-width: 881px)").matches;
+  const bar = 60;
+  const fmt = new Intl.NumberFormat("en-US");
 
-  // Curves are rebuilt up to the current Δm each frame: 60 points is cheap,
-  // and it keeps the line exactly under the moving head dots.
-  const partial = (f: (dm: number) => number, dm: number) => {
-    const n = Math.max(1, Math.round((dm / DM_MAX) * 60));
-    let d = "";
-    for (let i = 0; i <= n; i++) {
-      const x = (i / n) * dm;
-      d += `${i ? "L" : "M"}${X(x).toFixed(1)} ${Y(f(x)).toFixed(1)}`;
-    }
-    return d;
+  // Text only changes when its value does, so a steady frame writes nothing.
+  const shown: Record<string, string> = {};
+  const put = (key: string, text: string) => {
+    if (shown[key] === text || !out[key]) return;
+    shown[key] = text;
+    out[key].textContent = text;
   };
 
-  // Stream parcels: each has a phase u in [0,1) along a curved path from the
-  // donor's L1 point to the accretor, defined in the co-rotating frame.
-  const N = 26;
-  const parcels = Array.from({ length: N }, (_, i) => {
-    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    c.setAttribute("r", "1.7");
-    c.setAttribute("opacity", "0");
-    streamG.append(c);
-    return { el: c, u: i / N };
-  });
-
-  let dm = 0;
-  let theta = -0.35;
-  let lobeDm = -1;
-  let donorPts: [number, number][] = [];
-  let accPts: [number, number][] = [];
-  let l1 = 0;
-  const fmt = (v: number, d = 3) => v.toFixed(d);
-
-  function frame(dt: number) {
-    const { md, ma } = masses(dm);
-    const ab = aBallistic(dm);
-    const a = ab * G.S;
-    const ac = aConservative(dm) * G.S;
-
-    // Kepler: the tighter orbit turns faster. 0.5 rad/s at a0.
-    theta += omega(ab) * 0.5 * dt;
-    const cos = Math.cos(theta), sin = Math.sin(theta);
-    const rot = (x: number, y: number) => [G.cx + x * cos - y * sin, G.cy + x * sin + y * cos];
-
-    const [ax, ay] = rot(a * md, 0);
-    // The lobes only change with Δm, so recompute them only when it moves.
-    if (dm !== lobeDm) {
-      lobeDm = dm;
-      const R = roche(md, ma);
-      donorPts = R.donor();
-      accPts = R.accretor();
-      l1 = R.l1;
-    }
-    const map = (x: number, y: number) => rot(x * a, y * a) as [number, number];
-    donor.setAttribute("d", toPath(donorPts, map));
-    lobe.setAttribute("d", toPath(accPts, map));
-    accretor.setAttribute("cx", ax.toFixed(2));
-    accretor.setAttribute("cy", ay.toFixed(2));
-    rings[0].setAttribute("r", (a * ma).toFixed(2));
-    rings[1].setAttribute("r", (a * md).toFixed(2));
-    ghost.setAttribute("r", (ac * ma).toFixed(2));
-    // The classical ring only earns its place once the two predictions part.
-    const apart = Math.min(1, (ac / a - 1) * 12);
-    ghost.style.opacity = String(apart);
-    ghostLab.setAttribute("y", (G.cy - ac * ma - 8).toFixed(1));
-    // The label sits at 12 o'clock; step it aside while the donor swings past.
-    const donorUp = -Math.sin(theta + Math.PI); // 1 when the donor is at the top
-    ghostLab.style.opacity = String(apart * Math.min(1, Math.max(0, (0.72 - donorUp) * 4)));
-
-    const start = l1 * a;
-    const end = a * md - 7;
-    const bend = -0.3 * a; // Coriolis swings the stream ahead of the accretor
-    const flow = 0.55 + dm * 3;
-    for (const p of parcels) {
-      p.u = (p.u + dt * flow * 0.5) % 1;
-      const u = p.u, v = 1 - u;
-      const x = v * v * start + 2 * v * u * ((start + end) / 2) + u * u * end;
-      const y = 2 * v * u * bend;
-      const [px, py] = rot(x, y);
-      p.el.setAttribute("cx", px.toFixed(2));
-      p.el.setAttribute("cy", py.toFixed(2));
-      p.el.setAttribute("opacity", (Math.sin(Math.PI * u) * 0.9).toFixed(2));
+  function frame(s: CosmosState) {
+    put("n", fmt.format(s.collectors));
+    put("total", fmt.format(s.total));
+    put("pct", (s.built * 100).toFixed(1));
+    put("watts", `${sci(s.built * L_SUN)} W`);
+    put("mass", `${sci(s.built * BELT_MASS, 1)} kg`);
+    put("tugs", String(s.tugs));
+    const box = { w: canvas.clientWidth, h: canvas.clientHeight };
+    for (const [name, el] of Object.entries(tags)) {
+      const at = s.labels[name];
+      if (!at) continue;
+      // Keep names out of the text columns, off the edges, and out of the Sun's glare.
+      const sun = s.labels.sun;
+      const glare = name !== "swarm" && name !== "beam" && Math.hypot(at.x - sun.x, at.y - sun.y) < s.sunPx * 3.2;
+      const clear = at.on && !glare && at.x > 24 && at.x < box.w - 130 && at.y > bar + 8 && at.y < box.h - 20 && free(at.x, at.y);
+      el.toggleAttribute("data-on", !!clear);
+      if (clear) el.style.transform = `translate(${at.x.toFixed(1)}px, ${(at.y - 6).toFixed(1)}px)`;
     }
   }
 
-  function plot() {
-    cCons.setAttribute("d", partial(aConservative, dm));
-    cBall.setAttribute("d", partial(aBallistic, dm));
-    const x = X(dm).toFixed(1);
-    cursor.setAttribute("x1", x);
-    cursor.setAttribute("x2", x);
-    hCons.setAttribute("cx", x);
-    hCons.setAttribute("cy", Y(aConservative(dm)).toFixed(1));
-    hBall.setAttribute("cx", x);
-    hBall.setAttribute("cy", Y(aBallistic(dm)).toFixed(1));
-    const end = Math.max(0, (dm / DM_MAX - 0.85) / 0.15);
-    labCons.style.opacity = labBall.style.opacity = String(end);
-    readout.textContent = `f = ${fmt(dm * 100, 1)}%   ballistic a = ${fmt(aBallistic(dm))} a₀   classical a = ${fmt(aConservative(dm))} a₀`;
-  }
+  // Rectangles the text occupies, measured against the cover, refreshed on resize.
+  let blocks: DOMRect[] = [];
+  const free = (x: number, y: number) => {
+    const top = hero.getBoundingClientRect().top;
+    return !blocks.some((r) => x > r.left - 120 && x < r.right + 16 && y + top > r.top - 14 && y + top < r.bottom + 14);
+  };
+  const survey = () => {
+    blocks = [".legend", ".id", ".ledger"].map((sel) => hero.querySelector(sel)!.getBoundingClientRect());
+  };
 
-  // Scroll is time. On wide screens the hero pins while the donor hands over
-  // its mass; on phones it scrubs as the figure itself passes through view.
-  const pin = fig.closest(".hero")!.querySelector(".pin")!;
-  const wide = window.matchMedia("(min-width: 881px)").matches;
-  ScrollTrigger.create({
-    trigger: wide ? pin : fig,
-    start: wide ? "top 60px" : "top 70%", // 60px: under the sticky header
-    end: wide ? "+=85%" : "bottom 30%",
-    pin: wide,
-    scrub: true,
-    onUpdate(self) {
-      dm = self.progress * DM_MAX;
-      fig.toggleAttribute("data-idle", self.progress < 0.01);
-      plot();
-      frame(0); // keep the geometry true to Δm even if rAF is throttled
+  const cosmos = mountCosmos(canvas, {
+    seed: hero.dataset.seed ?? "yuzeli",
+    light: !wide() || (navigator.hardwareConcurrency ?? 8) <= 4,
+    still,
+    onFrame: frame,
+    place(w, h) {
+      survey();
+      if (wide()) {
+        // The Sun sits right of centre, above the ledger, clear of the name.
+        const foot = ledger.getBoundingClientRect().top - hero.getBoundingClientRect().top;
+        return { x: w > 1500 ? 0.66 : 0.68, y: (bar + (foot - bar) * 0.4) / h };
+      }
+      const band = Math.min(w * 0.8, window.innerHeight * 0.46);
+      hero.style.setProperty("--sky-h", `${Math.round(band)}px`);
+      return { x: 0.5, y: (bar + band * 0.54) / Math.max(1, h) };
     },
   });
-  fig.toggleAttribute("data-idle", dm < 0.0015);
-  plot();
+  if (!cosmos) {
+    // No WebGL: the still image stands in.
+    const img = new Image();
+    img.className = canvas.className + " still";
+    img.alt = "";
+    img.src = "/cover.webp";
+    canvas.replaceWith(img);
+    return;
+  }
+  canvas.toggleAttribute("data-on", true);
+  window.addEventListener("resize", () => cosmos.refit(), { passive: true });
+  document.fonts?.ready.then(() => cosmos.refit());
 
-  // The orbit itself runs on real time, and only while the figure is visible.
-  let visible = true;
-  new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(fig);
-  let last = performance.now();
-  gsap.ticker.add(() => {
-    const now = performance.now();
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    if (visible && !document.hidden) frame(dt);
+  if (still) {
+    cosmos.setScroll(poster !== null ? +poster : 0.55);
+    if (poster !== null) requestAnimationFrame(() => (document.documentElement.dataset.posterReady = ""));
+    return;
+  }
+
+  // From here on the scene runs and answers to scroll and drag, and the cover's small print may say so.
+  hero.toggleAttribute("data-live", true);
+
+  // Scroll is the build. The cover holds while the swarm closes: a full
+  // screen of scrolling on wide screens, a shorter hold on narrow ones, where
+  // the scene is only the top band and has to finish while it is in view.
+  ScrollTrigger.create({
+    trigger: hero,
+    start: "top top",
+    end: wide() ? "+=110%" : "+=85%",
+    pin: true,
+    anticipatePin: 1,
+    scrub: true,
+    onUpdate(self) {
+      cosmos.setScroll(self.progress);
+      hero.toggleAttribute("data-idle", self.progress < 0.01);
+      survey();
+    },
   });
+  hero.toggleAttribute("data-idle", true);
+
+  // The system only runs while some of the cover is on screen.
+  let seen = true;
+  const sync = () => cosmos.run(seen && !document.hidden);
+  new IntersectionObserver(([e]) => {
+    seen = e.isIntersecting;
+    sync();
+  }).observe(hero);
+  document.addEventListener("visibilitychange", sync);
+  sync();
 }

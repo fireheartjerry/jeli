@@ -73,7 +73,7 @@ const payload = JSON.stringify({
 });
 ---
 
-<Figure name="submissions" n={5} title="Submissions to TopsOJ" label="TopsOJ submissions over time" readout={`${fmt(total)} submissions`}>
+<Figure name="submissions" n={6} title="Submissions to TopsOJ" label="TopsOJ submissions over time" readout={`${fmt(total)} submissions`}>
   <svg class="sb" viewBox={`0 0 ${W} ${H}`} role="img" data-g={payload} aria-label={`Cumulative TopsOJ submissions from July 2023 to January 2026, reaching ${fmt(total)}, with monthly counts peaking at ${fmt(peakN)} in ${label(months[peakI].m)} and a tick for each contest. ${accPct}% of all answers are judged correct.`}>
     <g class="strip">
       <text class="sb-k" x={L} y={SY + 4}>answers</text>

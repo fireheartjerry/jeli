@@ -19,9 +19,15 @@ export default function (root: HTMLElement) {
   const canvas = q<HTMLCanvasElement>(stage, "canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  // A canvas keeps the colours it was painted with, so they are read from the
+  // tokens here and again whenever the theme flips (see the listener below).
   const css = getComputedStyle(root);
-  const INK = css.getPropertyValue("--ink").trim() || "#141413";
-  const ACC = css.getPropertyValue("--accent").trim() || "#2743d6";
+  let INK = "", ACC = "";
+  function readColours() {
+    INK = css.getPropertyValue("--ink").trim();
+    ACC = css.getPropertyValue("--accent").trim();
+  }
+  readColours();
 
   // ---- data ---------------------------------------------------------------
   const data = JSON.parse(stage.dataset.map!) as { d: string; n: string[]; s: number[]; w: number[]; max: number };
@@ -181,6 +187,11 @@ export default function (root: HTMLElement) {
   canvas.style.display = "block";
   q(svg, ".tm-static").style.display = "none";
   new ResizeObserver(resize).observe(stage);
+  // The page announces a theme flip; repaint in the new colours.
+  document.addEventListener("themechange", () => {
+    readColours();
+    request();
+  });
 
   // ---- annotations --------------------------------------------------------
   const count = q<SVGTextElement>(svg, ".tm-count");

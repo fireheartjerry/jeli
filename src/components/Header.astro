@@ -1,76 +1,197 @@
 ---
 import CopyEmail from "./CopyEmail.astro";
+import { sections } from "../data/paper";
+
+interface Props {
+  /** The page opens on the night cover, so the bar starts in night colours and lies over it. */
+  cover?: boolean;
+  /** A fixed breadcrumb for pages that are not the home page. */
+  crumb?: string;
+}
+const { cover = false, crumb } = Astro.props;
+const home = Astro.url.pathname === "/";
+const at = (id: string) => (home ? `#${id}` : `/#${id}`);
 ---
 
-<header class="bar" data-bar>
+<header class:list={["bar", { cover }]} data-bar data-night={cover ? "" : undefined}>
   <div class="wrap inner">
-    <a class="name" href="#top" aria-label="Jerry Li, back to top">
+    <a class="name" href={home ? "#top" : "/"} aria-label={home ? "Jerry Li, back to top" : "Jerry Li, home"}>
       Jerry Li
-      <span class="crumb" aria-hidden="true">
+      <span class="crumb" aria-hidden="true" data-on={crumb ? "" : undefined}>
         <span class="sep">/</span>
-        <span class="track"><span class="cur" data-crumb></span><span class="next" data-crumb-next></span></span>
+        <span class="track"><span class="cur" data-crumb>{crumb}</span><span class="next" data-crumb-next></span></span>
       </span>
     </a>
     <nav aria-label="Elsewhere">
       <a class="q" href="/resume.pdf">Résumé</a>
-      <a class="q" href="https://github.com/fireheartjerry" rel="me noopener" target="_blank">GitHub</a>
+      <a class="q hide-sm" href="https://github.com/fireheartjerry" rel="me noopener" target="_blank">GitHub</a>
       <a class="q hide-sm" href="https://www.linkedin.com/in/fireheartjerry/" rel="me noopener" target="_blank">LinkedIn</a>
       <span class="q"><CopyEmail /></span>
+      <button class="q cmd" type="button" data-palette-open aria-haspopup="dialog" aria-keyshortcuts="Meta+K Control+K" aria-label="Open the command palette">
+        <span class="jump" data-jump>Jump</span><kbd data-kbd>⌘K</kbd>
+      </button>
+      <button class="q theme" type="button" data-theme-toggle aria-label="Switch between day and night">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.25" />
+          <path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" />
+        </svg>
+      </button>
     </nav>
   </div>
 </header>
 
+{/* The index: the page as a ruler. Each tick sits where its section starts, and the mark is where you are. */}
+<nav class="rail" data-index aria-label="Sections" data-night={cover ? "" : undefined} hidden={!home}>
+  <span class="mark" data-mark aria-hidden="true"></span>
+  {sections.map((s, i) => (
+    <a href={at(s.id)} data-for={s.id} style={`--p:${i / (sections.length - 1)}`}>
+      <span class="tick" aria-hidden="true"></span>
+      <span class="lab">{s.label}</span>
+    </a>
+  ))}
+</nav>
+
 <script>
+  import { toggleTheme, getTheme } from "../scripts/theme";
+
   const bar = document.querySelector<HTMLElement>("[data-bar]")!;
   const cur = bar.querySelector<HTMLElement>("[data-crumb]")!;
   const next = bar.querySelector<HTMLElement>("[data-crumb-next]")!;
   const crumb = bar.querySelector<HTMLElement>(".crumb")!;
+  const rail = document.querySelector<HTMLElement>("[data-index]")!;
+  const mark = rail.querySelector<HTMLElement>("[data-mark]")!;
+  const links = [...rail.querySelectorAll<HTMLAnchorElement>("a")];
+  const cover = document.querySelector<HTMLElement>("[data-hero]");
+  const fixedCrumb = !!cur.textContent;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Hairline under the bar only once the page has moved.
-  const onScroll = () => bar.toggleAttribute("data-scrolled", window.scrollY > 8);
-  window.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
+  // Theme toggle. The label says what a press will do.
+  const toggle = bar.querySelector<HTMLButtonElement>("[data-theme-toggle]")!;
+  const label = () => toggle.setAttribute("aria-label", getTheme() === "dark" ? "Switch to the day theme" : "Switch to the night theme");
+  toggle.addEventListener("click", () => {
+    toggleTheme();
+    label();
+  });
+  document.addEventListener("themechange", label);
+  label();
+
+  const kbd = bar.querySelector<HTMLElement>("[data-kbd]")!;
+  if (!/Mac|iPhone|iPad/.test(navigator.platform)) kbd.textContent = "Ctrl K";
+
+  // On a phone there is no room for the breadcrumb, so the jump button carries
+  // the name of the section you are in, and opens the list of the others.
+  const cmd = bar.querySelector<HTMLButtonElement>("[data-palette-open]")!;
+  const jump = bar.querySelector<HTMLElement>("[data-jump]")!;
+  const compact = window.matchMedia("(max-width: 640px) and (min-width: 360px)");
+  function here(i: number) {
+    // A page with a fixed breadcrumb (the paper) is always in that one place.
+    const name = fixedCrumb ? cur.textContent!.trim() : i > 0 ? links[i].textContent!.trim() : "";
+    const shown = name && compact.matches;
+    jump.textContent = shown ? name : "Jump";
+    jump.toggleAttribute("data-here", !!shown);
+    cmd.setAttribute("aria-label", name ? `Open the command palette. You are in ${name}.` : "Open the command palette");
+  }
 
   // The breadcrumb names the section under the middle of the screen. A new
   // name rolls up from below while the old one leaves through the top.
   let shown = "";
   let busy: Animation[] = [];
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
   function show(name: string) {
-    if (name === shown) return;
+    if (fixedCrumb || name === shown) return;
     const first = !shown;
+    const prev = shown;
     shown = name;
     crumb.toggleAttribute("data-on", !!name);
-    busy.forEach((a) => a.finish());
+    // A second change can arrive while the first is still rolling. Settle it
+    // first: the old name sits in place, and nothing of the old roll is left
+    // to finish later and clear the new one.
+    busy.forEach((a) => a.cancel());
+    busy = [];
+    next.textContent = "";
     if (first || reduce) {
       cur.textContent = name;
       return;
     }
+    cur.textContent = prev;
     next.textContent = name;
     const opts = { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" as const };
-    busy = [
+    const roll = [
       cur.animate([{ transform: "translateY(0)", opacity: 1 }, { transform: "translateY(-100%)", opacity: 0 }], opts),
       next.animate([{ transform: "translateY(100%)", opacity: 0 }, { transform: "translateY(0)", opacity: 1 }], opts),
     ];
-    busy[1].onfinish = () => {
+    busy = roll;
+    roll[1].onfinish = () => {
+      if (busy !== roll) return;
       cur.textContent = name;
-      busy.forEach((a) => a.cancel());
+      roll.forEach((a) => a.cancel());
+      busy = [];
       next.textContent = "";
     };
   }
 
-  const sections = document.querySelectorAll<HTMLElement>("[data-section]");
-  const visible = new Map<Element, boolean>();
-  const io = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) visible.set(e.target, e.isIntersecting);
-      const active = [...sections].find((s) => visible.get(s));
-      show(active?.dataset.section ?? "");
-    },
-    { rootMargin: "-45% 0px -54% 0px" },
-  );
-  sections.forEach((s) => io.observe(s));
+  // Where each section starts, as a fraction of the whole scroll. Heights move
+  // as figures load and the cover pins, so this is measured again when they do.
+  const targets = links.map((a) => document.getElementById(a.dataset.for!));
+  let starts: number[] = [];
+  let span = 1;
+  let coverEnd = 0; // where the cover ends, in page coordinates, counting the stretch it is held for
+  let footTop = Infinity; // where the night footer begins
+  let railH = 0;
+  const foot = document.querySelector<HTMLElement>("[data-foot]");
+  function measure() {
+    span = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+    starts = targets.map((el) => (el ? Math.min(span, Math.max(0, el.getBoundingClientRect().top + scrollY - 80)) : 0));
+    links.forEach((a, i) => a.style.setProperty("--p", (starts[i] / span).toFixed(4)));
+    if (cover) coverEnd = (cover.closest(".pin-spacer") ?? cover).getBoundingClientRect().bottom + scrollY;
+    if (foot) footTop = foot.getBoundingClientRect().top + scrollY;
+    railH = rail.clientHeight;
+  }
+
+  let active = -1;
+  let queued = false;
+  function update() {
+    queued = false;
+    const y = scrollY;
+    bar.toggleAttribute("data-scrolled", y > 8);
+    // Nothing here reads layout: on a scroll frame that would force the whole page to be laid out early.
+    if (cover) {
+      const bottom = coverEnd - y;
+      bar.toggleAttribute("data-night", bottom > 30);
+    }
+    // The rail takes night colours over either night surface: the cover, and
+    // the footer once it has reached the label of the section you are in.
+    const overCover = cover ? coverEnd - y > innerHeight / 2 : false;
+    const label = innerHeight / 2 - railH / 2 + (starts[Math.max(0, active)] / span) * railH;
+    rail.toggleAttribute("data-night", overCover || footTop - y < label + 10);
+    mark.style.transform = `translateY(${((y / span) * railH).toFixed(1)}px)`;
+    // The section whose start we have most recently passed (measured from mid-screen).
+    let i = 0;
+    for (let k = 0; k < starts.length; k++) if (targets[k] && y + innerHeight * 0.45 >= starts[k] + 80) i = k;
+    if (i !== active) {
+      active = i;
+      links.forEach((a, k) => (k === i ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current")));
+      show(i === 0 ? "" : links[i].textContent!.trim());
+      here(i);
+    }
+  }
+  const queue = () => {
+    if (!queued) {
+      queued = true;
+      requestAnimationFrame(update);
+    }
+  };
+  measure();
+  update();
+  compact.addEventListener("change", () => here(active));
+  addEventListener("scroll", queue, { passive: true });
+  addEventListener("resize", () => {
+    measure();
+    queue();
+  });
+  new ResizeObserver(() => {
+    measure();
+    queue();
+  }).observe(document.body);
 </script>
 
 <style>
@@ -78,17 +199,35 @@ import CopyEmail from "./CopyEmail.astro";
     position: sticky;
     top: 0;
     z-index: 50;
-    background: color-mix(in srgb, var(--paper) 94%, transparent);
+    height: var(--bar);
+    color: var(--ink);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
     -webkit-backdrop-filter: saturate(1.4) blur(12px);
     backdrop-filter: saturate(1.4) blur(12px);
     box-shadow: 0 1px 0 transparent;
-    transition: box-shadow 0.3s ease;
+    transition:
+      box-shadow 0.3s ease,
+      background-color 0.35s ease,
+      color 0.35s ease;
+  }
+  /* On a cover page the bar lies over the cover rather than above it. */
+  .bar.cover {
+    margin-bottom: calc(-1 * var(--bar));
+  }
+  .bar.cover[data-night]:not([data-scrolled]) {
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* Over the cover the links sit on moving light, so they take the stronger ink. */
+  .bar.cover[data-night]:not([data-scrolled]) nav {
+    color: var(--ink-2);
   }
   .bar[data-scrolled] {
     box-shadow: 0 1px 0 var(--hair);
   }
   .inner {
-    height: 60px;
+    height: var(--bar);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -98,6 +237,8 @@ import CopyEmail from "./CopyEmail.astro";
   .name {
     display: inline-flex;
     align-items: baseline;
+    min-height: 40px;
+    padding-block: 9px;
     font-weight: 500;
     letter-spacing: -0.01em;
     white-space: nowrap;
@@ -131,22 +272,163 @@ import CopyEmail from "./CopyEmail.astro";
   .track > span {
     grid-area: 1 / 1;
   }
-  nav {
+  nav[aria-label="Elsewhere"] {
     display: flex;
-    gap: clamp(14px, 2.4vw, 28px);
+    align-items: center;
+    gap: clamp(10px, 2vw, 26px);
     color: var(--ink-3);
   }
   .q {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
     transition: color 0.2s ease;
   }
   .q:hover,
   .q:focus-within {
     color: var(--ink);
   }
-  @media (max-width: 560px) {
+  .q :global(.copy) {
+    min-height: 40px;
+    align-items: center;
+  }
+  .cmd {
+    gap: 8px;
+  }
+  .cmd kbd {
+    font-size: 12.5px;
+    background: transparent;
+    color: inherit;
+  }
+  .jump {
+    display: none;
+  }
+  /* Showing a section's name, it gets a small chevron: it is where you are, and it opens the rest. */
+  .jump[data-here]::after {
+    content: "";
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    margin-left: 7px;
+    border: solid currentColor;
+    border-width: 0 1px 1px 0;
+    transform: translateY(-3px) rotate(45deg);
+  }
+  .theme {
+    width: 40px;
+    justify-content: center;
+    margin-inline: -8px -12px;
+  }
+  .theme circle {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.25;
+  }
+  .theme path {
+    fill: currentColor;
+    transform-origin: 8px 8px;
+    transition: transform 0.6s var(--ease-out);
+  }
+  :global(:root[data-theme="dark"]) .theme path {
+    transform: rotate(180deg);
+  }
+  @media (hover: none) {
+    .cmd kbd { display: none; }
+    .jump { display: inline; }
+  }
+  @media (max-width: 640px) {
     .hide-sm,
     .crumb {
       display: none;
     }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .theme path { transition: none; }
+  }
+
+  /* ---------- index rail ---------- */
+  .rail[hidden] {
+    display: none;
+  }
+  .rail {
+    position: fixed;
+    z-index: 40;
+    left: max(14px, calc((100vw - var(--measure) - 2 * var(--gutter)) / 2 + var(--gutter) - 86px));
+    top: 50%;
+    height: min(46svh, 380px);
+    width: 14px;
+    translate: 0 -50%;
+    color: var(--ink);
+    display: none;
+  }
+  @media (min-width: 1340px) {
+    .rail:not([hidden]) { display: block; }
+  }
+  .rail::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 1px;
+    background: var(--hair);
+  }
+  .mark {
+    position: absolute;
+    left: -2px;
+    top: -2.5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .rail a {
+    position: absolute;
+    left: 0;
+    top: calc(var(--p) * 100%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+    margin-top: -12px;
+    padding-right: 12px;
+    font-size: 12.5px;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .tick {
+    width: 9px;
+    height: 1px;
+    background: var(--ink-4);
+    transition:
+      width 0.3s var(--ease-out),
+      background-color 0.2s ease;
+  }
+  .lab {
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+      opacity 0.25s ease,
+      transform 0.3s var(--ease-out);
+  }
+  .rail:hover .lab,
+  .rail:focus-within .lab,
+  .rail a[aria-current] .lab {
+    opacity: 1;
+    transform: none;
+  }
+  .rail a[aria-current] {
+    color: var(--ink);
+  }
+  .rail a[aria-current] .tick {
+    width: 14px;
+    background: var(--ink);
+  }
+  .rail a:hover {
+    color: var(--accent);
+  }
+  .rail a:hover .tick {
+    background: var(--accent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tick, .lab { transition: none; }
   }
 </style>

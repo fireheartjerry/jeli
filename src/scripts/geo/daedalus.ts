@@ -190,9 +190,15 @@ function viewer(cam: Cam) {
 // ---------------------------------------------------------------- render
 
 const LIGHT = norm([-0.45, 0.62, 0.64]); // key light, fixed in view space (upper left, in front)
-const PANEL = [253, 253, 251], INK = [20, 20, 19], ACC = [39, 67, 214];
+const PCT = Array.from({ length: 101 }, (_, i) => `${i}%`);
 
-export type Face = { d: string; fill: string; stroke: string; z: number };
+/**
+ * A face carries no colour of its own, only how it is lit, so the stylesheet
+ * can paint it from the theme's tokens. `shade` is how far it turns from the
+ * light and `tint` how much of the accent the pulled clay takes, both as
+ * percentages to mix by; `hot` faces get an accent edge.
+ */
+export type Face = { d: string; shade: string; tint: string; hot: boolean; z: number };
 
 /**
  * The deformed, lit, sorted mesh. The pinch point (screen, at home view) pulls
@@ -243,17 +249,17 @@ export function mesh(cam: Cam, S: number, clayAt: P | null, sculpt = 1) {
     // Cull faces turned away from the eye at (0, 0, D).
     if (n[0] * -m[0] + n[1] * -m[1] + n[2] * (MESH.D - m[2]) <= 0) continue;
     const lit = 0.16 + 0.84 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
-    const shade = Math.round((0.05 + 0.5 * (1 - lit)) * 100) / 100;
+    // Whole percent: 5 facing the light, 47 turned fully away.
+    const shade = Math.round((0.05 + 0.5 * (1 - lit)) * 100);
     const fw = reach > 0.02 ? (w[a] + w[b] + w[c]) / 3 : 0;
     const tint = Math.round(Math.min(1, fw * 1.25) * 0.5 * 100) / 100;
-    const col = PANEL.map((p, i) => {
-      const grey = p + (INK[i] - p) * shade;
-      return Math.round(grey + (ACC[i] - grey) * tint * (0.35 + 0.65 * lit));
-    });
+    // The clay takes more of the accent where the light catches it.
+    const taken = tint * (0.35 + 0.65 * lit) * 100;
     faces.push({
       d: `M${r1(pts[a][0])} ${r1(pts[a][1])}L${r1(pts[b][0])} ${r1(pts[b][1])}L${r1(pts[c][0])} ${r1(pts[c][1])}Z`,
-      fill: `rgb(${col[0]} ${col[1]} ${col[2]})`,
-      stroke: tint > 0.2 ? "rgb(39 67 214 / 0.55)" : "rgb(20 20 19 / 0.2)",
+      shade: PCT[shade],
+      tint: taken > 0 ? `${Math.round(taken * 1000) / 1000}%` : PCT[0],
+      hot: tint > 0.2,
       z: m[2],
     });
   }

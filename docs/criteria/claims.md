@@ -1,0 +1,144 @@
+# Claims ledger: yuzeli.ca
+
+Every number and factual claim on the site, with where it comes from. If a claim is not in this
+table it should not be on the site.
+
+**Sources**
+
+- **R**: Jerry's résumé (`resume/resume.tex`, and `Jerry_Li_Resume_Summer_2027.pdf` of 23 Sep 2026)
+- **L**: Jerry's LinkedIn profile and posts (linkedin.com/in/fireheartjerry), read 11 Oct 2026
+- **P**: the paper as submitted, `182_Verifying_the_Second_Agent.pdf` (28 Aug 2026); table and section numbers refer to it
+- **GA**: Google Analytics exports in this repo (`src/data/topsoj-ga.json`, `src/data/ga-countries.json`)
+- **DB**: TopsOJ database aggregates in this repo (`src/data/topsoj.json`)
+- **WD**: the Waterloo Defence public site, waterloodefence.ca (its `content.ts` at commit 94d048a)
+- **S**: already on the site before this work (commit 103010b) and carried over unchanged
+- **A**: arithmetic or a published physical constant, shown in the row
+
+## Cover and ledger
+
+| Claim | Where | Source |
+|---|---|---|
+| Computer science, University of Waterloo | cover | R, L |
+| Software people use in 182 countries | cover, Work lede, TopsOJ | GA: 182 countries and territories with users |
+| Schulich Leader Scholarship, $100K+ | cover, Record; résumé says $100,000+ | R listed $100,000; "$100K+" is Jerry's wording (11 Oct 2026) |
+| NeurIPS 2026 workshops, sole author | cover, Research, Record, résumé, social card, BibTeX | Jerry, 13 Oct 2026: "I am the only author". Acceptance from L: "my first-authored paper got accepted to every workshop I applied to in NeurIPS 2026" |
+| TopsOJ, founder, 100,000+ users | cover, Work | GA: 101,950 users; R |
+| Waterloo Defence, Software Lead | cover, Work, résumé | WD team page; L experience |
+| Mathos AI (YC W24), software engineering intern | cover, Work | R; L |
+
+## Cover simulation (Fig. 1 and the closing figure)
+
+| Claim | Source |
+|---|---|
+| 60,000 collectors | A: the number of panels the page draws, 150 rings of 400 (`RINGS`, `PER` in `src/scripts/cosmos.ts`) |
+| Swarm at 1 AU; rings turn once a year | A: Kepler's third law, T = a^1.5 years |
+| Tugs on Hohmann transfers from the main belt | A: each transfer ellipse has perihelion 1 AU and aphelion at the source radius, flown in half its period |
+| Tugs in flight: 150 (70 on small screens) | A: the number of transfer orbits the page draws (`nTug` in `src/scripts/cosmos.ts`) |
+| "Shown here as a still frame" | A: shown instead of "Scroll to build it" when the scene is not running (no JavaScript, no WebGL, or reduced motion) |
+| Main belt 2.1 to 3.3 AU with gaps at 2.50, 2.82, 2.96 and 3.28 AU | A: the Kirkwood gaps at the 3:1, 5:2, 7:3 and 2:1 resonances with Jupiter |
+| The belt's 2.4 × 10^21 kg | A: main-belt mass about 2.39 × 10^21 kg (Pitjeva and Pitjev 2018) |
+| Rolled to 8.5 g/m² it just covers the sphere | A: 4π(1.496 × 10^11 m)² = 2.81 × 10^23 m²; 2.39 × 10^21 kg ÷ 2.81 × 10^23 m² = 8.5 g/m² |
+| Sunlight held, in watts; 3.83 × 10^26 W outbound | A: built fraction × the nominal solar luminosity, 3.828 × 10^26 W |
+| Earth, Mars, Jupiter and the Trojans | A: J2000 orbital elements, rounded; Trojans 60° ahead of and behind Jupiter |
+| 16 Psyche, quarry; the camera keeps its orbit | A: Psyche's semi-major axis is 2.92 AU. That it is being mined is the fiction of the scene |
+| Distances to scale; sizes and gaps are not | A: stated in the caption. The Sun is drawn about 18 times too large and each panel far larger than life, so the drawn swarm shows gaps that the percentage in the telemetry does not count |
+| Light shafts and bloom | A: an effect, not data. The light sources are drawn alone, with every panel standing in the way, and smeared outward from the Sun (`leaving()` in `src/scripts/cosmos.ts`) |
+| Seed yuzeli → 0xca722d88 | A: the same hash the Worldline figure uses (`src/scripts/worldline.ts`) |
+
+## Work
+
+| Claim | Source |
+|---|---|
+| Mathos (YC W24) turns math questions into narrated video lessons | S, R |
+| MP4 export in Python and Remotion, each render in its own AWS Fargate sandbox | S, R |
+| Lifecycle email pipeline on SES | S, R |
+| OAuth and MCP server for ChatGPT and Claude; rebuilt step grading | S, R |
+| Fig. 2 stages: a request from the app (Export MP4) or from ChatGPT or Claude through the OAuth and MCP server becomes a job in a Celery queue | R: "MP4 export for AI math videos (Remotion on AWS Fargate via Celery)"; S for the OAuth and MCP server |
+| Fig. 2: each render in its own locked-down Fargate sandbox, where Remotion draws the lesson frame by frame; "1 render · sealed" | S: "every render runs in its own locked-down AWS Fargate sandbox"; R |
+| Fig. 2: the file is stored and the video comes back in the same chat | R: "OAuth 2.0 and MCP server so ChatGPT and Claude users can generate and download Mathos videos in chat". The store is drawn as a generic "file store"; no vendor is claimed. That the file is kept before it is downloaded is the one inference |
+| Fig. 2: "Allow", "authorised", "token" | A: consent and a token are what OAuth 2.0 is; nothing specific to Mathos is claimed |
+| Fig. 2: an empty slot reads "the next render gets its own sandbox" | S: one sandbox per render. Nothing says what happens to a sandbox afterwards |
+| Fig. 2: lifecycle email as a separate pipeline on EventBridge and SES, not fed by the export | R: "SES/EventBridge lifecycle emails"; drawn separately because no source ties it to export delivery |
+| Fig. 2: the question, the tool name create_video, the job ids, the file name and the frame counts | A: examples, and the caption says so. tools/call is the real MCP method name |
+| Waterloo Defence: student team, autonomous counter-drone turret | WD |
+| Camera detects and tracks; solver aims where the drone will be; drag and drop corrected | WD project description |
+| "I lead the software": vision, solver, simulator | WD lists Jerry as Software Lead; L; the team's MuJoCo simulation is shown on WD |
+| Tags: computer vision, tracking, ballistics, MuJoCo | R: "camera detection and tracking of small drones, a ballistic solver for lead, drag, and drop, and a MuJoCo sim". No language is named because no source names one |
+| Building toward the Department of National Defence's 2027 CUAS Urban Sandbox | L (the team's launch post, reposted by Jerry) |
+| Fig. 3 numbers (range, flight time, lead, drop, speeds) | A: computed by `src/scripts/geo/intercept.ts` for an illustrative scenario; the caption says they are not the team's hardware |
+| TopsOJ: started in high school; Python and Flask | S, R |
+| Over 100,000 users from 182 countries | GA |
+| Problem count; over 120,000 submissions | DB (`totals.publicProblems`; 124,202 submissions) |
+| EloMMR ratings; team of 30; partners including 3Blue1Brown | S, R |
+| TopsOJ figures (map, analytics, submissions, ratings) | GA, DB; unchanged from S |
+| Quoted Tech: label automation in Node.js cut manual processing time by 70%; Playwright scrapers | S, R |
+
+## Research
+
+| Claim | Source |
+|---|---|
+| Four papers | S (three) plus P |
+| Title, "Verifying the Second Agent: Controlled Experiments on Recursive Delegation in Coding Agents" | P title page |
+| Accepted at both workshops: "Who Verifies the Agents? Toward Reliable Agent Development" and "Managing Agents that Manage Agents" | L post; workshop names from the two calls for papers |
+| NeurIPS 2026 in Sydney | L post |
+| Two within-task crossover experiments; verifier-scored repository repairs | P abstract, §2 |
+| DeepSWE: 113 tasks, public GitHub repositories, five languages; 97 gradable | P §2, Table 3 |
+| One model, gpt-5.6-luna; prompts, tools, container, verifier, task and per-node turn budget held fixed; a 6,000,000-token aggregate cap that never binds; run order randomised by a hash of the trial key | P §2, "What is randomized and held fixed" |
+| "Every 95% interval includes zero or favours the single agent" | P Table 15 (−11.54 [−20.93, −2.05]; −4.00 [−15.09, +8.00]; −6.03 [−16.96, +5.56]) and §5 (+1.25 [−9.76, +12.82]) |
+| "The design had 80% power at a 16.1-point effect" | P §5: the minimum detectable effect at 80% power is 16.1 points |
+| Tokens vs one agent: 2.73×, 5.98×, 12.50× (3, 7, 15 agents); cost 2.43×, 5.64×, 11.39×; wall clock 1.42×, 3.43×, 5.08× | P Table 16 |
+| Mean billable tokens 252,704 / 621,968 / 1,427,748 / 2,603,307 | P Table 18 |
+| Verified success vs one agent: −11.54 [−20.93, −2.05], −4.00 [−15.09, +8.00], −6.03 [−16.96, +5.56] points; 78, 50, 58 tasks | P Table 15 |
+| Cost per verified fix $0.58 to $6.92 at 15 agents | P §3 |
+| Patches handed up 194 / 516 / 1,316; refused 40.2% / 36.0% / 31.9% | P Table 20 |
+| Orchestration under a fifth of a percent of tokens | P Table 18 |
+| Excess tokens: 58.7% / 41.2% (7 agents), 68.2% / 31.6% (15 agents) | P Table 19 |
+| Sibling file overlap +9.8 [+5.0, +15.1] and +7.4 [+3.5, +11.7] points above the task null | P §4 |
+| 149 of 165 refused patches (90.3%) collide at the line level | P §4, Fig. 3c |
+| Return campaign: 40 tasks, 38 repositories; $0.17, $0.97, $1.03 per attempt | P §3, §5 |
+| Findings minus shared write: +1.25 [−9.76, +12.82] points, p = 0.925; detectable floor 16.1 | P §5 |
+| Findings minus single agent: −7.50 [−15.85, +1.16]; shared write −8.8 | P Table 2, Fig. 2 |
+| Cost of findings return minus shared write: +$0.051 [−0.005, +0.110] per attempt | P Fig. 2 (primary contrast) |
+| Explicit orchestration 0.17% of tokens (Fig. 2 of the paper page) | P Fig. 3a |
+| The oracle is not a runnable policy; a null with identical arms reproduces 81% of its gap | P §6 |
+| Readout lines in the paper-page figures: "A, one agent: $0.17 per attempt", "80% power at ±16.1 pp", "149 / 165 collide", "static routers against the best constant", "ridge router stays on the constant" | P §3 and §5 for the costs and the power floor; P §4 for the 165 replayed patches; P §6 and Table 25 for the routers (the fitted return router chose the single agent on all 39 tasks) |
+| Routers: 23 features; best +0.037 [−0.036, +0.125]; fitted router chose one agent on all 39 tasks | P §6 |
+| Router policy values and intervals in Fig. 4 of the paper page | P Table 21 (depth arms) and Table 25 (return arms). Not Fig. 5: see the open item below |
+| Fig. 4 depth rows: D threshold 30.5, best constant 26.8, ridge treatment 26.8, ridge outcome 24.4, difficulty only 24.4, always 7-node 23.2, boosted treatment 13.4, each with its difference from the constant and 95% interval | P Table 21. "Always 15-node" and the oracle (40.2%) are left off the plot because they fall outside the shared 0 to 40% axis |
+| "The only interval that excludes zero, and it is on the losing side" (boosted treatment learner, −13.4 [−23.2, −5.0]) | P Table 21 |
+| Fig. 4 return rows: values with intervals on the values themselves, read by picking a row | P Table 25 |
+| Fig. 9 / paper Fig. 1 title: "Trees cost 3 to 12 times more, with no resolved gain" | P Table 16: 2.73×, 5.98× and 12.50× the tokens of one agent; Table 15 for the unresolved gain |
+| Fig. 9 / paper Fig. 1 caption: "each contrast on its own paired tasks"; "the 3-agent tree resolves a loss" | P Table 15: the three contrasts use 78, 50 and 58 paired tasks, and only the 3-agent interval excludes zero |
+| In the delegation figure, the share of patches refused in the animation matches 40.2 / 36.0 / 31.9%; one packet per edge per cycle is illustrative | P Table 20 for the shares; the packet count is stated here as illustration, not data |
+| Limits: one model family, one benchmark, one harness; runtime control untested | P §9 |
+| Binary stars: three sole-authored papers, venues, dates, Best Manuscript, supervisor | S, R |
+| Landscape figure: orbit shrinks to 0.89, classical 1.23 | A: `src/scripts/binary.ts`, formulas from the RNAAS note at f = 15%, q0 = 0.4 |
+
+## Projects
+
+| Claim | Source |
+|---|---|
+| Cardboard Cockpit, Daedalus, Drift, Worldline Engine: descriptions, events, awards | S, R |
+| Porchlight: multi-agent aid dispatcher on Strands Agents and Bedrock AgentCore; deterministic safety, money and confidence gates; persistent human decision cards | R (Summer 2027 résumé) |
+| PolyTwist: deterministic engine for unfamiliar twisty puzzles; exact rational geometry; WebGL2 and CPU rendering; 16 task families | R (Summer 2027 résumé) |
+
+## Record
+
+| Claim | Source |
+|---|---|
+| Schulich Leader Scholarship, 2026 | R; L post |
+| Best Manuscript, Journal of High School Science | S, R |
+| Best Non-GenAI Hack, JAMHacks 10 | S, R, L post |
+| Featured on the Chrome Web Store | S, R |
+| USACO Platinum, perfect 1,000 on Gold; PhysicsBowl 1st in Canada and 7th in the world; Newton 4th and 9th; AIME three times | S, R |
+| 9,000+ followers on LinkedIn | L: 9,163 followers on 11 Oct 2026 |
+| First on Tokenboard's worldwide ranking in August 2026, past 20 billion tokens | L post: "I've used over 20 billion tokens and am #1 globally on tokenboard" |
+
+## Open items for Jerry
+
+- **Figure 5 disagrees with Table 21 in the submitted PDF.** For the depth-campaign arms, Fig. 5 shows the ridge treatment learner, ridge outcome learner, difficulty-only rule and boosted learner at 19.5%, 19.5%, 19.5% and 15.9%. Table 21 gives 26.8%, 24.4%, 24.4% and 13.4%, and the body text quotes Table 21's differences (+0.037 and −0.134). The site follows Table 21. Worth fixing before the camera-ready.
+
+- **Waterloo Defence stack.** The entry lists computer vision, tracking, ballistics and MuJoCo, and names no programming language. Jerry confirmed on 13 Oct 2026 that this is fine.
+- **Mathos figure.** Jerry said on 13 Oct 2026 that Fig. 2 is fine. It was not checked against the Mathos code: the stages come from the résumé, and their order, and that a rendered file is stored before it is downloaded, are a reading of it.
+- **Résumé.** To fit one page with the new entries, `resume/resume.tex` lost the 3Blue1Brown partnership, EloMMR, the submission count, the CUPS and Selenium details and two lines of astrophysics findings. It now differs from the Overleaf copy; copy it back if you keep it.
+- **Paper link.** No public copy was found; the paper page links nowhere external. Add the OpenReview or arXiv link when there is one.

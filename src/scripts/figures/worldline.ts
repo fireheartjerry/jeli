@@ -2,7 +2,7 @@ import { scrubbed, q, qa, whileVisible } from "../motion";
 import {
   FRAMES, MAX_BODIES, VIEW_W, CX, CY, TRAIL, ACCENT_TRAIL, TRAIL_ALPHA, ACCENT_ALPHA,
   A_INNER, A_OUTER,
-  createUniverse, generate, fingerprint, hex, sci, sparkPath, familyCounts, camDeg,
+  createUniverse, generate, generator, fingerprint, hex, sci, sparkPath, familyCounts, camDeg, type Universe,
 } from "../worldline";
 
 const F = FRAMES - 1;
@@ -13,7 +13,18 @@ const SPARK_W = 150, SPARK_H = 36;
 const YAW = 0.11, TILT = 0.035, PERIOD = 26;
 const RING_LABEL_ANGLE = 0.32;
 
+// Simulating 900 frames takes a while the first time. It is done in slices
+// while the figure is still off screen, and the figure wakes once it is ready;
+// until then the page keeps the frame the server drew.
 export default function (root: HTMLElement) {
+  const u = createUniverse();
+  const next = generator(q<HTMLInputElement>(root, "#wl-seed").value, u);
+  const idle = (fn: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(fn, { timeout: 300 }) : setTimeout(fn, 32));
+  const pump = () => (next(5) ? start(root, u) : idle(pump));
+  idle(pump);
+}
+
+function start(root: HTMLElement, u: Universe) {
   const stage = q<HTMLDivElement>(root, ".wl-stage");
   const snap = q<SVGSVGElement>(root, ".wl-snap");
   const canvas = q<HTMLCanvasElement>(root, ".wl-canvas");
@@ -39,20 +50,26 @@ export default function (root: HTMLElement) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
+  // A canvas keeps the colours it was painted with, so they are read from the
+  // tokens here and again whenever the theme flips (see the listener below).
   const css = getComputedStyle(root);
-  const col = (v: string, d: string) => css.getPropertyValue(v).trim() || d;
-  const INK = col("--ink", "#141413");
-  const ACC = col("--accent", "#2743d6");
-  const GREEN = col("--s-green", "#2e8a5c");
-  const VIOLET = col("--s-violet", "#7657c9");
-  const SANS = col("--sans", "sans-serif");
-  const PANEL2 = col("--panel-2", "#f7f6f2");
-  const FAM_COL = [INK, GREEN, VIOLET];
+  const token = (name: string) => css.getPropertyValue(name).trim();
+  const SANS = token("--sans") || "sans-serif";
+  let INK = "", INK3 = "", ACC = "", GREEN = "", VIOLET = "", PANEL2 = "";
+  let FAM_COL: string[] = [];
+  function readColours() {
+    INK = token("--ink");
+    INK3 = token("--ink-3");
+    ACC = token("--accent");
+    GREEN = token("--s-green");
+    VIOLET = token("--s-violet");
+    PANEL2 = token("--panel-2");
+    FAM_COL = [INK, GREEN, VIOLET];
+  }
+  readColours();
 
-  const u = createUniverse();
   const xyz = u.xyz;
   let seed = input.value;
-  generate(seed, u);
 
   let frame = F; // the frame on screen
   let k = 1; // CSS pixels per view unit
@@ -115,8 +132,7 @@ export default function (root: HTMLElement) {
     c.lineWidth = 4 * px;
     c.strokeStyle = PANEL2;
     c.strokeText(s, x, y);
-    c.globalAlpha = 0.56;
-    c.fillStyle = INK;
+    c.fillStyle = INK3;
     c.fillText(s, x, y);
   }
 
@@ -317,6 +333,11 @@ export default function (root: HTMLElement) {
   canvas.style.display = "block";
   new ResizeObserver(resize).observe(stage);
   document.fonts?.ready.then(() => (dirty = true));
+  // The page announces a theme flip; repaint in the new colours.
+  document.addEventListener("themechange", () => {
+    readColours();
+    dirty = true;
+  });
   syncFrame();
   syncCamera();
 

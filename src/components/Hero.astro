@@ -1,34 +1,57 @@
 ---
-import { aBallistic, aConservative, masses, roche, toPath, F_MAX as DM_MAX } from "../scripts/binary";
+import { fingerprint, hex } from "../scripts/worldline";
 
-// Geometry shared with src/scripts/hero.ts through data attributes, so the
-// server-rendered frame and the animated one can never disagree.
-const G = {
-  cx: 260, cy: 200, S: 185, // orbit centre and pixels per a0
-  px0: 44, px1: 476, py0: 520, py1: 404, amin: 0.84, amax: 1.26, // plot box
-};
-const X = (dm: number) => G.px0 + (dm / DM_MAX) * (G.px1 - G.px0);
-const Y = (a: number) => G.py0 - ((a - G.amin) / (G.amax - G.amin)) * (G.py0 - G.py1);
-const curve = (f: (dm: number) => number) =>
-  Array.from({ length: 61 }, (_, i) => {
-    const dm = (i / 60) * DM_MAX;
-    return `${i ? "L" : "M"}${X(dm).toFixed(1)} ${Y(f(dm)).toFixed(1)}`;
-  }).join("");
+const SEED = "yuzeli";
+const seedHex = hex(fingerprint(SEED));
 
-// Server-rendered frame: the end state, at a fixed orbital phase.
-const dm = DM_MAX;
-const { md, ma } = masses(dm);
-const a = aBallistic(dm) * G.S;
-const ac = aConservative(dm) * G.S;
-const R = roche(md, ma);
-const map = (x: number, y: number): [number, number] => [G.cx + x * a, G.cy + y * a];
-const donorD = toPath(R.donor(), map);
-const accD = toPath(R.accretor(), map);
+// The cover's contents: the five facts a reader should leave with, each a way in.
+const ledger = [
+  { k: "Schulich Leader Scholarship", v: "$100K+", href: "#record" },
+  { k: "NeurIPS 2026 workshops", v: "sole author", href: "#research" },
+  { k: "TopsOJ, founder", v: "100,000+ users", href: "#work" },
+  { k: "Waterloo Defence", v: "Software Lead", href: "#work" },
+  { k: "Mathos AI (YC W24)", v: "engineering intern", href: "#work" },
+];
 ---
 
-<section class="hero" aria-labelledby="hero-h">
-  <div class="pin wrap">
-    <div class="copy">
+<section class="hero" data-night data-hero data-seed={SEED} aria-labelledby="hero-h">
+  <canvas class="sky" data-sky aria-hidden="true"></canvas>
+  <noscript><img class="sky still" src="/cover.webp" alt="" /></noscript>
+  {/* Names for a few bodies, pinned to them by the script. */}
+  <div class="tags" aria-hidden="true">
+    <span data-tag="swarm">Dyson swarm, 1 AU</span>
+    <span data-tag="jupiter">Jupiter</span>
+    <span data-tag="psyche">16 Psyche, quarry</span>
+    <span data-tag="beam" class="hot">3.83 × 10²⁶ W, outbound</span>
+  </div>
+
+  <div class="frame wrap">
+    <figure class="legend" aria-labelledby="hero-cap">
+      <figcaption id="hero-cap">
+        <span class="n num">Fig. 1</span>
+        The Solar System with a Dyson swarm going up at 1 AU, simulated live from one seed like my{" "}
+        <a class="ln" href="#projects">Worldline Engine</a>. Tugs fall in from the main belt on Hohmann
+        transfers. Rolled to 8.5 g/m², the belt's 2.4 × 10²¹ kg is just enough foil to cover
+        the whole sphere.
+      </figcaption>
+      <dl class="tele" data-tele>
+        <div><dt>collectors</dt><dd class="cm"><span data-v="n">21,600</span> <i>/ <span data-v="total">60,000</span></i></dd></div>
+        <div><dt>sunlight held</dt><dd class="cm"><span data-v="pct">36.0</span>% <i data-v="watts">1.38 × 10²⁶ W</i></dd></div>
+        <div><dt>belt mined</dt><dd class="cm" data-v="mass">8.6 × 10²⁰ kg</dd></div>
+        <div><dt>tugs in flight</dt><dd class="cm" data-v="tugs">150</dd></div>
+        <div><dt>seed</dt><dd class="cm">{SEED} <i>→ {seedHex}</i></dd></div>
+      </dl>
+      <p class="fine">
+        {/* The first line is only true while the scene is running; a still frame says so instead. */}
+        <span class="hint" data-hint>Scroll to build it. Drag to look around.</span>
+        <span class="held">Shown here as a still frame.</span>{" "}
+        Orbits are Keplerian. Distances to scale; sizes and gaps are not.
+      </p>
+    </figure>
+
+    <div class="id">
+      <p class="cue"><span class="hint">Scroll to build it. Drag to look around.</span><span class="held">Fig. 1, shown here as a still frame.</span></p>
+      <p class="eyebrow">Computer science, University of Waterloo</p>
       <h1 id="hero-h" aria-label="Jerry Li">
         {["Jerry", "Li"].map((word, w) => (
           <span class="word" aria-hidden="true">
@@ -37,61 +60,31 @@ const accD = toPath(R.accretor(), map);
         ))}
       </h1>
       <p class="lede">
-        I study computer science at the University of Waterloo as a Schulich Leader. I work on video
-        export and AI integrations at <a class="ln" href="#work">Mathos AI</a>, run{" "}
-        <a class="ln" href="https://topsoj.com" target="_blank" rel="noopener">TopsOJ</a>, a judge for
-        competitive math, and write papers about <a class="ln" href="#research">binary stars</a>.
+        I build software people use in 182 countries, and I publish research: on when AI agents
+        should hand work to other agents, and on how binary stars trade mass.
       </p>
     </div>
 
-    <figure class="fig hero-fig" data-hero data-g={JSON.stringify(G)} aria-labelledby="hero-cap">
-      <svg viewBox="0 0 520 572" role="img" aria-label="Two stars orbit each other while gas streams from the larger to the smaller. The orbit shrinks, while the classical prediction widens.">
-        <circle class="ring-ghost" cx={G.cx} cy={G.cy} r={ac * ma} />
-        <circle class="ring" cx={G.cx} cy={G.cy} r={a * ma} />
-        <circle class="ring" cx={G.cx} cy={G.cy} r={a * md} />
-        <path class="com" d={`M${G.cx - 4} ${G.cy}h8M${G.cx} ${G.cy - 4}v8`} />
-        <g class="stream"></g>
-        <path class="lobe" d={accD} />
-        <path class="donor" d={donorD} />
-        <circle class="accretor" cx={G.cx + a * md} cy={G.cy} r="6" />
-        <text class="lab ghost-lab" x={G.cx} y={G.cy - ac * ma - 8} text-anchor="middle">classical prediction</text>
+    <ol class="ledger" aria-label="At a glance">
+      {ledger.map((row, i) => (
+        <li style={`--i:${i}`}>
+          <a href={row.href}>
+            <span class="k">{row.k}</span>
+            <span class="dots" aria-hidden="true"></span>
+            <span class="v cm">{row.v}</span>
+          </a>
+        </li>
+      ))}
+    </ol>
 
-        <g class="plot">
-          <line class="hair" x1={G.px0} x2={G.px1} y1={Y(1)} y2={Y(1)} />
-          <line class="faint" x1={G.px0} x2={G.px0} y1={G.py1 - 6} y2={G.py0} />
-          <line class="faint" x1={G.px0} x2={G.px1} y1={G.py0} y2={G.py0} />
-          {[0.9, 1, 1.1, 1.2].map((v) => (
-            <>
-              {v !== 1 && <line class="tick-h" x1={G.px0} x2={G.px1} y1={Y(v)} y2={Y(v)} />}
-              <text class="cm tk" x={G.px0 - 10} y={Y(v) + 4} text-anchor="end">{v.toFixed(1)}</text>
-            </>
-          ))}
-          <text class="m" x={G.px0 - 10} y={G.py1} text-anchor="end">a/a<tspan class="sub" dy="4">0</tspan></text>
-          {[0, 0.05, 0.1, 0.15].map((f) => (
-            <>
-              <line class="faint" x1={X(f)} x2={X(f)} y1={G.py0} y2={G.py0 + 4} />
-              <text class="cm tk" x={X(f)} y={G.py0 + 17} text-anchor="middle">{Math.round(f * 100)}%</text>
-            </>
-          ))}
-          <text class="m ax" x={G.px1} y={G.py0 + 36} text-anchor="end">f = Δm/M<tspan class="sub" dy="4">d</tspan></text>
-          <path class="dash c-cons" d={curve(aConservative)} />
-          <path class="accent c-ball" d={curve(aBallistic)} />
-          <line class="cursor" x1={X(dm)} x2={X(dm)} y1={G.py1 - 6} y2={G.py0} />
-          <circle class="dot h-cons" cx={X(dm)} cy={Y(aConservative(dm))} r="2.5" />
-          <circle class="dot-accent h-ball" cx={X(dm)} cy={Y(aBallistic(dm))} r="3.5" />
-          <text class="lab end-lab lab-cons" x={G.px1 + 8} y={Y(aConservative(DM_MAX)) + 4}>classical</text>
-          <text class="lab acc end-lab lab-ball" x={G.px1 + 8} y={Y(aBallistic(DM_MAX)) + 4}>ballistic</text>
-          <text class="hint" x={(G.px0 + G.px1) / 2} y={(G.py0 + G.py1) / 2 + 4} text-anchor="middle">Scroll to move mass between the stars</text>
-        </g>
-      </svg>
-      <figcaption id="hero-cap">
-        <span class="n num">Fig. 1</span>
-        Gas flows from one star to its companion. Classical theory says this orbit widens; following the
-        gas as a ballistic stream shows it <em>shrinks</em>.{" "}
-        <a class="ln" href="https://doi.org/10.3847/2515-5172/ae4513" target="_blank" rel="noopener">Li, RNAAS 2026</a>
-        <span class="readout num" aria-hidden="true"></span>
-      </figcaption>
-    </figure>
+    {/* Narrow screens have no index rail, so the sections are listed here as plain links. */}
+    <nav class="jump" aria-label="Sections">
+      <a href="#work">Work</a>
+      <a href="#research">Research</a>
+      <a href="#projects">Projects</a>
+      <a href="#record">Record</a>
+      <a href="#contact">Contact</a>
+    </nav>
   </div>
 </section>
 
@@ -102,22 +95,186 @@ const accD = toPath(R.accretor(), map);
 <style>
   .hero {
     position: relative;
+    background: #06080d;
+    overflow: clip;
+    isolation: isolate;
   }
-  .pin {
-    min-height: calc(100svh - 60px);
+  .sky {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 1.4s ease;
+    cursor: grab;
+    touch-action: pan-y;
+  }
+  .sky:active {
+    cursor: grabbing;
+  }
+  .sky[data-on],
+  .sky.still {
+    opacity: 1;
+  }
+  .sky.still {
+    object-fit: cover;
+    cursor: auto;
+  }
+
+  /* Poster mode (?poster=0..1), used by tools/cover.mjs: only the scene. */
+  :global(html[data-poster]) .frame,
+  :global(html[data-poster]) .tags,
+  :global(html[data-poster]) .hero::after {
+    visibility: hidden;
+  }
+
+  /* Negative fill: the left of the frame is held down so the type reads, and the corners fall away. */
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, rgb(6 8 13 / 0.94), rgb(6 8 13 / 0.86) 26%, rgb(6 8 13 / 0.42) 46%, transparent 62%),
+      linear-gradient(0deg, rgb(6 8 13 / 0.92), rgb(6 8 13 / 0.6) 14%, transparent 30%),
+      linear-gradient(180deg, rgb(6 8 13 / 0.88), rgb(6 8 13 / 0.62) 7%, transparent 17%);
+  }
+
+  /* Small names riding on a few bodies. */
+  .tags {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: clip;
+  }
+  .tags span {
+    position: absolute;
+    left: 0;
+    top: 0;
+    padding-left: 15px;
+    font-size: 12.5px;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    color: var(--ink-3);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    will-change: transform;
+  }
+  .tags span::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    width: 9px;
+    height: 1px;
+    background: var(--ink-4);
+  }
+  .tags span[data-on] {
+    opacity: 1;
+  }
+  .tags .hot {
+    color: var(--accent);
+  }
+
+  /* Legend top left, the stars filling the right, the name bottom left, the ledger along the foot. */
+  .frame {
+    pointer-events: none;
+    min-height: max(100svh, 640px);
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-rows: 1fr auto auto;
+    grid-template-areas: "legend ." "id ." "ledger ledger";
     column-gap: clamp(32px, 6vw, 96px);
-    align-items: center;
-    padding-block: 32px 48px;
+    padding-top: calc(var(--bar) + clamp(20px, 4.4svh, 44px));
+    padding-bottom: clamp(24px, 4svh, 40px);
+  }
+
+  .legend,
+  .id,
+  .ledger {
+    pointer-events: auto;
+  }
+  .legend {
+    grid-area: legend;
+    max-width: 318px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-3);
+    animation: fade-up 0.9s var(--ease-out) 1.2s both;
+  }
+  .legend .n {
+    color: var(--ink);
+    margin-right: 0.5em;
+  }
+  .legend a {
+    padding-block: 12px;
+  }
+  /* Telemetry: what the simulation is doing right now. */
+  .tele {
+    margin: 14px 0 0;
+    border-top: 1px solid var(--hair);
+  }
+  .tele div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding-block: 5px;
+    border-bottom: 1px solid var(--hair);
+  }
+  .tele dt {
+    font-size: 12.5px;
+  }
+  .tele dd {
+    font-size: 15px;
+    line-height: 1.2;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .tele i {
+    font-style: normal;
+    color: var(--ink-3);
+  }
+  .fine {
+    margin-top: 12px;
+    font-size: 12.5px;
+  }
+  .hint {
+    display: none;
+    color: var(--ink-2);
+  }
+  .hero[data-live] .hint {
+    display: inline;
+  }
+  .hero[data-live] .held {
+    display: none;
+  }
+
+  .id {
+    grid-area: id;
+    align-self: end;
+    padding-top: 28px;
+  }
+  .eyebrow {
+    font-size: 15px;
+    color: var(--ink-3);
+    margin-bottom: clamp(6px, 1.4svh, 14px);
+    animation: fade-up 0.9s var(--ease-out) 0.25s both;
   }
   h1 {
-    font-size: clamp(56px, 8vw, 116px);
-    line-height: 0.95;
-    letter-spacing: -0.04em;
+    font-size: clamp(72px, min(12.6vw, 21.5svh), 196px);
+    line-height: 0.84;
+    letter-spacing: -0.048em;
+    font-weight: 500;
     display: flex;
-    flex-wrap: wrap;
-    column-gap: 0.24em;
+    white-space: nowrap;
+    column-gap: 0.2em;
+    margin-left: -0.04em;
   }
   /* Page-load choreography is pure CSS, so it runs before any JS and costs nothing. */
   .word {
@@ -129,104 +286,213 @@ const accD = toPath(R.accretor(), map);
   }
   .ch {
     display: inline-block;
-    animation: rise 0.85s var(--ease-out) both;
-    animation-delay: calc(var(--i) * 26ms);
+    animation: rise 0.95s var(--ease-out) both;
+    animation-delay: calc(0.15s + var(--i) * 30ms);
   }
   @keyframes rise {
     from { transform: translateY(105%); }
   }
-  .lede {
-    animation: fade-up 0.9s var(--ease-out) 0.45s both;
-  }
-  .hero-fig {
-    animation: fade-in 1.4s ease 0.25s both;
-  }
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(12px); }
   }
-  @keyframes fade-in {
-    from { opacity: 0; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .ch, .lede, .hero-fig { animation: none; }
-  }
   .lede {
-    margin-top: 28px;
-    font-size: clamp(18px, 1.55vw, 21px);
-    line-height: 1.5;
+    margin-top: clamp(18px, 3svh, 30px);
+    font-size: clamp(17.5px, 1.5vw, 21px);
+    line-height: 1.45;
     color: var(--ink-2);
-    max-width: 34ch;
+    max-width: 37ch;
+    animation: fade-up 0.9s var(--ease-out) 0.55s both;
   }
-  .hero-fig svg {
-    display: block;
-    width: 100%;
-    max-height: 72svh;
-    overflow: visible;
+
+  .jump,
+  .cue {
+    display: none;
   }
-  figcaption {
-    margin-top: 8px;
-    font-size: 13.5px;
-    line-height: 1.5;
+
+  /* The ledger: a plate of five facts along the foot of the cover. */
+  .ledger {
+    grid-area: ledger;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-top: clamp(22px, 4svh, 40px);
+    border-top: 1px solid var(--hair);
+  }
+  .ledger li {
+    animation: fade-up 0.8s var(--ease-out) both;
+    animation-delay: calc(0.75s + var(--i) * 70ms);
+  }
+  .ledger li + li {
+    border-left: 1px solid var(--hair);
+  }
+  .ledger a {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 3px;
+    height: 100%;
+    padding: 14px 16px 2px;
     color: var(--ink-3);
-    max-width: 58ch;
+    transition: color 0.2s ease;
   }
-  figcaption em {
-    font-style: normal;
+  .ledger li:first-child a {
+    padding-left: 0;
+  }
+  .k {
+    font-size: 13.5px;
+    line-height: 1.35;
+  }
+  .dots {
+    display: none;
+  }
+  .v {
+    font-size: clamp(19px, 1.62vw, 23px);
+    line-height: 1.15;
+    color: var(--ink);
+    white-space: nowrap;
+    transition: color 0.2s ease;
+  }
+  .ledger a:hover,
+  .ledger a:focus-visible {
+    color: var(--ink-2);
+  }
+  .ledger a:hover .v,
+  .ledger a:focus-visible .v {
     color: var(--accent);
   }
-  .n {
-    color: var(--ink);
-    margin-right: 0.5em;
-  }
-  .readout {
-    display: block;
-    white-space: pre;
-    margin-top: 6px;
-    font-family: var(--sans);
-    font-variant-numeric: tabular-nums;
-    font-size: 13px;
-    color: var(--ink-3);
-    min-height: 1.5em;
+
+  @media (prefers-reduced-motion: reduce) {
+    .ch, .lede, .eyebrow, .legend, .ledger li { animation: none; }
+    .sky, .tags span { transition: none; }
   }
 
-  .ring { fill: none; stroke: var(--ink-4); stroke-width: 1; }
-  .ring-ghost { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 2 5; }
-  .com { stroke: var(--ink-3); stroke-width: 1; }
-  .donor { fill: var(--paper); stroke: var(--ink); stroke-width: 1.25; }
-  .accretor { fill: var(--ink); }
-  .lobe { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 2 3; }
-  .stream :global(circle) { fill: var(--accent); }
-  .cursor { stroke: var(--hair); stroke-width: 1; }
-  .hair { stroke: var(--hair); stroke-width: 1; }
-  .faint { stroke: var(--ink-4); stroke-width: 1; }
-  .dash { fill: none; stroke: var(--ink-3); stroke-width: 1.25; stroke-dasharray: 3 4; }
-  .accent { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; }
-  .dot { fill: var(--ink-3); }
-  .dot-accent { fill: var(--accent); }
-  text { font-family: var(--sans); font-size: 11.5px; fill: var(--ink-3); }
-  text.m { font-family: var(--math); font-style: italic; font-size: 15px; fill: var(--ink-2); }
-  text.m .sub { font-family: var(--cm); font-style: normal; font-size: 10px; }
-  text.acc { fill: var(--accent); }
-  text.cm { font-family: var(--cm); font-size: 12px; fill: var(--ink-3); }
-  .tick-h { stroke: var(--hair); stroke-width: 1; stroke-dasharray: 1 4; }
-  .hint { opacity: 0; transition: opacity 0.4s ease; }
-  :global([data-hero][data-idle]) .hint { opacity: 1; }
-
-  @media (max-width: 600px) {
-    text { font-size: 17px; }
-    text.m { font-size: 21px; }
-    text.cm { font-size: 16px; }
-    .hint { display: none; }
+  /* Short windows: keep the name and the ledger, let the small print go. */
+  @media (max-height: 800px) and (min-width: 881px) {
+    .frame { padding-top: calc(var(--bar) + 14px); padding-bottom: 20px; }
+    .fine { display: none; }
+    .tele { margin-top: 10px; }
+    .tele div { padding-block: 3px; }
+    .id { padding-top: 16px; }
+    h1 { font-size: clamp(72px, min(12.6vw, 18svh), 196px); }
+    .lede { margin-top: 14px; font-size: 17px; }
+    .ledger { margin-top: 18px; }
+    .ledger a { padding-top: 10px; }
   }
-  @media (max-width: 880px) {
-    .pin {
-      grid-template-columns: 1fr;
-      row-gap: 40px;
-      min-height: 0;
-      padding-top: 56px;
+  @media (max-height: 660px) and (min-width: 881px) {
+    .tele { display: none; }
+  }
+
+  @media (max-width: 1100px) {
+    .legend {
+      max-width: 280px;
     }
-    .hero-fig svg {
-      max-height: none;
+    .k {
+      font-size: 12.5px;
+    }
+  }
+
+  /* Phones and small tablets: the stars on top, then everything in one column,
+     and the ledger becomes a list with dotted leaders. */
+  @media (max-width: 880px) {
+    .frame {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding-top: calc(var(--bar) + var(--sky-h, 62vw) + 8px);
+      padding-bottom: 40px;
+    }
+    .sky {
+      height: calc(var(--bar) + var(--sky-h, 62vw) + 56px);
+      -webkit-mask-image: linear-gradient(#000 78%, transparent);
+      mask-image: linear-gradient(#000 78%, transparent);
+    }
+    .tags {
+      height: calc(var(--bar) + var(--sky-h, 62vw) + 56px);
+    }
+    /* On a narrow screen the type sits under the scene, so only the top and the seam are held down. */
+    .hero::after {
+      background:
+        linear-gradient(180deg, rgb(6 8 13 / 0.9), rgb(6 8 13 / 0.6) 5%, transparent 12%),
+        linear-gradient(0deg, rgb(6 8 13 / 1) calc(100% - var(--bar) - var(--sky-h, 62vw) - 30px), transparent calc(100% - var(--bar) - var(--sky-h, 62vw) + 60px));
+    }
+    .cue {
+      display: block;
+      margin-bottom: 18px;
+      font-size: 12.5px;
+      color: var(--ink-3);
+    }
+    .hero .legend .hint,
+    .hero .legend .held,
+    .hero[data-live] .legend .hint {
+      display: none;
+    }
+    .cue .hint {
+      color: inherit;
+    }
+    .id { order: 1; }
+    .ledger { order: 2; }
+    .jump {
+      order: 3;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0 22px;
+      margin-top: 10px;
+      font-size: 15px;
+      color: var(--ink-3);
+      pointer-events: auto;
+    }
+    .jump a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+    }
+    .legend { order: 4; }
+    h1 {
+      font-size: clamp(64px, 21vw, 132px);
+    }
+    .lede {
+      max-width: 40ch;
+    }
+    .ledger {
+      display: block;
+      margin-top: 32px;
+      font-size: 15px;
+    }
+    .ledger li + li {
+      border-left: 0;
+    }
+    .ledger li {
+      border-bottom: 1px solid var(--hair);
+    }
+    .ledger a,
+    .ledger li:first-child a {
+      flex-direction: row;
+      align-items: baseline;
+      gap: 10px;
+      padding: 12px 0;
+      color: var(--ink-2);
+    }
+    .k {
+      font-size: 15px;
+      white-space: nowrap;
+    }
+    .dots {
+      display: block;
+      flex: 1;
+      min-width: 16px;
+      border-bottom: 1px dotted var(--ink-4);
+      transform: translateY(-0.28em);
+    }
+    .v {
+      font-size: 17px;
+    }
+    .legend {
+      max-width: none;
+      margin-top: 28px;
+      animation-delay: 0.9s;
+    }
+  }
+  @media (max-width: 420px) {
+    .k {
+      font-size: 13.5px;
     }
   }
 </style>

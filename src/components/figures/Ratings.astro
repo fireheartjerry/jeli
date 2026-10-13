@@ -65,7 +65,7 @@ const payload = JSON.stringify({
 });
 ---
 
-<Figure name="ratings" n={6} title="TopsOJ ratings" label="TopsOJ rating histories of eight contestants, with the rating distribution" readout={readout}>
+<Figure name="ratings" n={7} title="TopsOJ ratings" label="TopsOJ rating histories of eight contestants, with the rating distribution" readout={readout}>
   <svg class="rt" viewBox={`0 0 ${W} ${H}`} role="img" data-g={payload} aria-label={`Ratings of eight anonymous TopsOJ contestants after each contest from October 2023 to January 2026, as step lines across the rating tiers from Bronze to Amethyst. The top-rated contestant finished at ${end.r}. Beside it, the current ratings of all ${ratings.ratedUsers} rated users in bins of 100, with the median at ${median}.`}>
     <g class="tiers">
       {thresholds.map((v) => <line class="rule" x1={L} x2={HX + HW + 20} y1={f(y(v))} y2={f(y(v))} />)}

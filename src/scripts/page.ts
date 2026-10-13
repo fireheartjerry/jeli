@@ -18,6 +18,6 @@ if (!reducedMotion()) {
 }
 
 console.log(
-  "%cHi. The figures on this page are drawn from real data and real physics.\nSource: github.com/fireheartjerry/jeli",
+  "%cHi. The cover is a live simulation: 60,000 collectors on Kepler orbits, solved on your GPU, all from one seed.\nThe figures below it are drawn from real data. Source: github.com/fireheartjerry/jeli",
   "font: 12px/1.6 ui-monospace, monospace; color: #2743d6",
 );

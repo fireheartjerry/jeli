@@ -11,7 +11,7 @@ export default function (root: HTMLElement) {
 
   // Scene.
   const meshG = $<SVGGElement>(".dd-mesh");
-  const pool = qa<SVGPathElement>(root, ".dd-f").map((el) => ({ el, d: "", fill: "", stroke: "" }));
+  const pool = qa<SVGPathElement>(root, ".dd-f").map((el) => ({ el, d: "", shade: "", tint: "", hot: el.classList.contains("hot") }));
   const grid = $(".dd-grid"), axX = $(".dd-ax-x"), axZ = $(".dd-ax-z");
   const gzLines = qa<SVGLineElement>(root, ".dd-gz"), gzLabels = qa<SVGTextElement>(root, ".dd-gzl");
 
@@ -98,15 +98,17 @@ export default function (root: HTMLElement) {
       el.setAttribute("class", "dd-f");
       for (const a of meshG.getAttributeNames()) if (a.startsWith("data-astro-cid")) el.setAttribute(a, "");
       meshG.append(el);
-      pool.push({ el, d: "", fill: "", stroke: "" });
+      pool.push({ el, d: "", shade: "", tint: "", hot: false });
     }
+    // Faces carry their lighting, not a colour: the stylesheet mixes it from the theme.
     for (let i = 0; i < pool.length; i++) {
       const p = pool[i], f = faces[i];
       const d = f ? f.d : "";
       if (p.d !== d) p.el.setAttribute("d", (p.d = d));
       if (!f) continue;
-      if (p.fill !== f.fill) p.el.setAttribute("fill", (p.fill = f.fill));
-      if (p.stroke !== f.stroke) p.el.setAttribute("stroke", (p.stroke = f.stroke));
+      if (p.shade !== f.shade) p.el.style.setProperty("--shade", (p.shade = f.shade));
+      if (p.tint !== f.tint) p.el.style.setProperty("--tint", (p.tint = f.tint));
+      if (p.hot !== f.hot) p.el.classList.toggle("hot", (p.hot = f.hot));
     }
 
     const fl = floor(cam);

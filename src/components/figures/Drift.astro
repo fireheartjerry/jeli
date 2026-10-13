@@ -98,9 +98,13 @@ const drift = (x: number, y: number, r = 7) =>
 const frame = (w: number) => ({
   strip: `M${B.x} ${TAB}V${B.y + 10}Q${B.x} ${B.y} ${B.x + 10} ${B.y}H${B.x + w - 10}Q${B.x + w} ${B.y} ${B.x + w} ${B.y + 10}V${TAB}Z`,
 });
+// The caption names the focused window's outline by its tone, and ink is dark
+// by day and bright by night, so it is written once per theme (CSS shows one).
+const caption = (tone: string) =>
+  `The large window is the chat and the narrow one is the feed my extension opens. The ${tone} outline marks which window has focus, and the readout times the wait.`;
 ---
 
-<Figure name="drift" n={11} title="Drift" label="Drift, a Chrome extension that opens your feed in a side window while ChatGPT, Claude or Gemini is thinking, and brings you back when the answer is ready" readout="back in 0.4 s">
+<Figure name="drift" n={14} title="Drift" label="Drift, a Chrome extension that opens your feed in a side window while ChatGPT, Claude or Gemini is thinking, and brings you back when the answer is ready" readout="back in 0.4 s">
   <svg
     class="dr"
     viewBox={`0 0 ${W} ${H}`}
@@ -111,12 +115,13 @@ const frame = (w: number) => ({
     aria-label="A Chrome window with a chat. I ask for the derivative of x to the x and the model starts thinking. Drift's popup under its toolbar icon asks: scroll while you wait? Yes opens a focused side window with a feed. The answer streams in: write x to the x as e to the x ln x and use the chain rule, so the derivative is x to the x times ln x plus 1. A toast says the response is ready, the side window collapses, and focus returns to the chat."
   >
     <defs>
+      {/* The shimmer is an alpha mask, so the sweep carries opacity only and no colour. */}
       <linearGradient id="dr-sweep" x1="0" x2="1" y1="0" y2="0">
-        <stop offset="0" stop-color="#000" />
-        <stop offset="0.5" stop-color="#fff" />
-        <stop offset="1" stop-color="#000" />
+        <stop offset="0" stop-opacity="0" />
+        <stop offset="0.5" stop-opacity="1" />
+        <stop offset="1" stop-opacity="0" />
       </linearGradient>
-      <mask id="dr-shim" maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
+      <mask id="dr-shim" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
         <rect class="shim" x={CL - 70} y="120" width="64" height="30" fill="url(#dr-sweep)" />
       </mask>
       <clipPath id="dr-type"><rect class="type-clip" x={CL + 14} y="314" width="0" height="32" /></clipPath>
@@ -264,7 +269,7 @@ const frame = (w: number) => ({
       </g>
     </g>
   </svg>
-  <Fragment slot="caption">The large window is the chat and the narrow one is the feed my extension opens. The dark outline marks which window has focus, and the readout times the wait.</Fragment>
+  <Fragment slot="caption"><span class="dr-day">{caption("dark")}</span><span class="dr-night">{caption("bright")}</span></Fragment>
 </Figure>
 
 <style is:global>
@@ -329,9 +334,9 @@ const frame = (w: number) => ({
   .fig svg.dr .side.focus .sw { stroke: var(--ink); }
   .fig svg.dr .wdot { fill: var(--hair); }
   .fig svg.dr text.sw-t { font-size: 11px; fill: var(--ink-3); }
-  .fig svg.dr .av { fill: rgb(20 20 19 / 0.08); }
-  .fig svg.dr .cap { stroke: rgb(20 20 19 / 0.1); stroke-width: 4; stroke-linecap: round; }
-  .fig svg.dr .cap.c2 { stroke: rgb(20 20 19 / 0.06); }
+  .fig svg.dr .av { fill: rgb(var(--ink-rgb) / 0.08); }
+  .fig svg.dr .cap { stroke: rgb(var(--ink-rgb) / 0.1); stroke-width: 4; stroke-linecap: round; }
+  .fig svg.dr .cap.c2 { stroke: rgb(var(--ink-rgb) / 0.06); }
   .fig svg.dr .toast-r { fill: var(--panel); stroke: var(--ink); stroke-width: 1; }
   .fig svg.dr text.toast-t { font-size: 12px; fill: var(--ink); font-weight: 500; }
   .fig svg.dr text.toast-s { font-size: 11px; fill: var(--accent); }
@@ -347,6 +352,12 @@ const frame = (w: number) => ({
   .fig svg.dr .hist-on { fill: var(--panel-2); }
   .fig svg.dr .tcaret { fill: var(--accent); }
   .fig svg.dr .toast-a { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* One caption per theme (see the frontmatter). The night one shows in the
+     same three cases that global.css gives the night tokens to. */
+  .fig .dr-night { display: none; }
+  :root[data-theme="dark"] .fig .dr-day, :root:not([data-theme]) .fig .dr-day, [data-night] .fig .dr-day { display: none; }
+  :root[data-theme="dark"] .fig .dr-night, :root:not([data-theme]) .fig .dr-night, [data-night] .fig .dr-night { display: inline; }
 
   @media (max-width: 560px) {
     .fig svg.dr { aspect-ratio: 640 / var(--hm); }

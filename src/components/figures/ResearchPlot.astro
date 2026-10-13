@@ -98,6 +98,14 @@ const bn = binary(QS[BN.qi], BN.eta, BN.th, BN.cx, BN.cy, BN.k);
 const RC = wide
   ? { chipY: bnIn.y0 + 17, chipX: [SX + 64, SX + 112, SX + 150], qx: SX + 12, eta: bnIn.y0 + 46, verd: bnIn.y0 + 64, dl: bnIn.y0 + 98, da: bnIn.y0 + 118, rule: bnIn.y0 + 81, lx: SX + 104 }
   : { chipY: bnIn.y0 + 20, chipX: [SX + 250, SX + 306, SX + 350], qx: SX + 186, eta: bnIn.y0 + 56, verd: bnIn.y0 + 78, dl: bnIn.y0 + 110, da: bnIn.y0 + 132, rule: bnIn.y0 + 94, lx: SX + 186 };
+// What a chip answers to. On the narrow drawing the areas meet halfway between
+// neighbours and are 50 units tall, so each is at least 40 px on a phone.
+const HIT = RC.chipX.map((x, i) => {
+  if (wide) return { x: x - 20, y: RC.chipY - 16, w: 40, h: 34 };
+  const left = i === 0 ? x - 28 : (RC.chipX[i - 1] + x) / 2;
+  const right = i === RC.chipX.length - 1 ? x + 28 : (x + RC.chipX[i + 1]) / 2;
+  return { x: left, y: RC.chipY - 25, w: right - left, h: 50 };
+});
 const arrowAng = -2.35; // radial arrow on the donor's ring, upper left
 const arr = (e: number, r: number) => {
   const ca = Math.cos(arrowAng), sa = Math.sin(arrowAng);
@@ -325,7 +333,7 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
       <text class="m" x={RC.qx} y={RC.chipY} dominant-baseline="central">q</text>
       {QS.map((q, i) => (
         <g class={`chip${i === BN.qi ? " on" : ""}`} data-i={i}>
-          <rect class="chit" x={RC.chipX[i] - 20} y={RC.chipY - 16} width="40" height="34" rx="4" />
+          <rect class="chit" x={HIT[i].x} y={HIT[i].y} width={HIT[i].w} height={HIT[i].h} rx="4" />
           <text class={`cm c-${QCOL[i]}`} x={RC.chipX[i]} y={RC.chipY} text-anchor="middle" dominant-baseline="central">{q}</text>
           <line class={`cbar s-${QCOL[i]}`} x1={RC.chipX[i] - 9} x2={RC.chipX[i] + 9} y1={RC.chipY + 12} y2={RC.chipY + 12} />
         </g>

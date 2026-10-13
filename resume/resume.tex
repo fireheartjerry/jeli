@@ -39,9 +39,9 @@
 \setlength{\parindent}{0pt}
 
 % ---- Rhythm: every gap on the page comes from these four lengths ----
-\newlength{\sectionabove}\setlength{\sectionabove}{12pt}  % before a section rule
+\newlength{\sectionabove}\setlength{\sectionabove}{10.5pt}  % before a section rule
 \newlength{\sectionbelow}\setlength{\sectionbelow}{5pt}  % rule to first entry
-\newlength{\entrygap}\setlength{\entrygap}{7.5pt}        % between entries
+\newlength{\entrygap}\setlength{\entrygap}{6pt}          % between entries
 \newlength{\bulletgap}\setlength{\bulletgap}{2.5pt}        % heading to bullets
 
 \titleformat{\section}{\scshape\raggedright\large}{}{0em}{}[\vspace{-3pt}\titlerule]
@@ -96,40 +96,49 @@
 \section{Education}
 \begin{entries}
   \entry{University of Waterloo}{Expected 2029}
-        {Bachelor of Computer Science $|$ Schulich Leader Scholarship (\$100,000)}{Waterloo, Canada}
+        {Bachelor of Computer Science $|$ Schulich Leader Scholarship (\$100,000+)}{Waterloo, Canada}
 \end{entries}
 
 \section{Experience}
 \begin{entries}
+  \role{Waterloo Defence}{Software Lead}{Sept.\ 2026 -- Present}
+  \begin{bullets}
+    \item Lead software for a student team's autonomous counter-drone turret, targeting the 2027 DND CUAS Urban Sandbox.
+    \item Build camera detection and tracking of small drones, a ballistic solver for lead, drag, and drop, and a MuJoCo sim.
+  \end{bullets}
+
   \role{Mathos AI (YC W24)}{Software Engineer Intern}{June 2026 -- Present}
   \begin{bullets}
-    \item Shipped MP4 export for AI math videos, rendering Remotion jobs in isolated AWS Fargate sandboxes via Celery.
+    \item Shipped MP4 export for AI math videos (Remotion on AWS Fargate via Celery) and SES/EventBridge lifecycle emails.
     \item Built an OAuth 2.0 and MCP server so ChatGPT and Claude users can generate and download Mathos videos in chat.
-    \item Shipped lifecycle emails on AWS SES and EventBridge with engagement tracking and Gmail reply threading.
     \item Rebuilt the AI tutor's step grading on a fast judge model plus SymPy checks, sharply improving accuracy and speed.
   \end{bullets}
 
   \role{TopsOJ}{Founder \& Lead Developer}{July 2023 -- Present}
   \begin{bullets}
-    \item Built a competitive-math judge with 100,000+ users in 180+ countries (Google Analytics) and 128,000+ submissions.
-    \item Designed EloMMR ratings; led a 30-person team across engineering, contest ops, and sponsors like 3Blue1Brown.
+    \item Built a competitive-math judge with 100,000+ users in 180+ countries (Google Analytics); led a 30-person team.
   \end{bullets}
 
   \role{Quoted Tech Computers}{Software Engineer Intern}{July 2025 -- Aug.\ 2025}
   \begin{bullets}
-    \item Automated barcode-label generation and CUPS printing with Node.js/Express, cutting manual processing time by 70\%.
-    \item Built Playwright/Selenium scrapers that structure competitor catalogs for pricing and inventory analysis.
+    \item Automated barcode-label printing (Node.js), cutting manual processing time by 70\%; built Playwright catalog scrapers.
   \end{bullets}
 \end{entries}
 
 \section{Research}
 \begin{entries}
+  \entry{AI Agents}{2026}
+        {Sole author; accepted at two NeurIPS 2026 workshops}{Sydney}
+  \begin{bullets}
+    \item ``Verifying the Second Agent: Controlled Experiments on Recursive Delegation in Coding Agents.'' In two within-task crossover campaigns on verifier-scored repository repairs, recursive agent trees spent 6$\times$ to 12$\times$ the tokens of a single agent and no contrast resolved a gain in verified fixes; 90\% of refused sibling patches collided at the line level.
+  \end{bullets}
+
   \entry{Computational Astrophysics}{Nov.\ 2024 -- Mar.\ 2026}
         {Sole author of three papers, supervised by Dr.\ Alexander Mushtukov (University of Oxford)}{Remote}
   \begin{bullets}
-    \item \href{https://doi.org/10.3847/2515-5172/ae4513}{``Ballistic Mass Transfer Necessarily Contracts Orbits in Binary Star Systems,''} \textit{Research Notes of the AAS} (2026). Showed the orbit loses angular momentum as $1-f$ and shrinks at every mass ratio.
+    \item \href{https://doi.org/10.3847/2515-5172/ae4513}{``Ballistic Mass Transfer Necessarily Contracts Orbits in Binary Star Systems,''} \textit{Research Notes of the AAS} (2026).
     \item \href{https://doi.org/10.64336/001c.159153}{``On the Conditions Under Which Instantaneous Mass-Transfer Mappings Reproduce Conservative Limits,''} \textit{Journal of High School Science} (2026), \textbf{Best Manuscript}. A velocity-rescaling closure cut orbit error from 22\% to under $10^{-4}$\%.
-    \item \href{https://arxiv.org/abs/2608.19107}{``The Effective Velocity of Transferred Mass,''} arXiv:2608.19107, under review at \textit{Astronomische Nachrichten}. Unified transfer models under one parameter $\eta$ that decides whether orbits widen or shrink.
+    \item \href{https://arxiv.org/abs/2608.19107}{``The Effective Velocity of Transferred Mass,''} arXiv:2608.19107, under review at \textit{Astronomische Nachrichten}.
   \end{bullets}
 \end{entries}
 
@@ -147,7 +156,7 @@
 
   \project{\link{https://chromewebstore.google.com/detail/drift/agihdlojchhjpflceecmfknffggofdhf}{\textbf{Drift}}}{JavaScript, Chrome Extensions API}{2026}
   \begin{bullets}
-    \item Built a Chrome extension that opens a focused feed while ChatGPT, Claude, or Gemini think; Featured on the Web Store.
+    \item Built a Chrome extension that opens a focused feed while ChatGPT, Claude, or Gemini think; Web Store Featured.
   \end{bullets}
 
   \project{\link{https://github.com/fireheartjerry/worldline-engine}{\textbf{Worldline Engine}}}{C++, raylib, CMake}{2026}
@@ -166,9 +175,8 @@
 \section{Technical Skills}
 \begin{entries}
   \item\small
-  \textbf{Languages:} C/C++, Python, TypeScript, JavaScript, SQL\\[1pt]
-  \textbf{Frameworks:} Node.js, Express, React, Next.js, Celery, NumPy, SciPy, Godot, raylib, Three.js\\[1pt]
-  \textbf{Tools:} AWS (Fargate, SES, S3), Git, Linux, SQLite, CMake, OpenCV, MediaPipe, Playwright, WebSockets
+  \textbf{Languages:} C/C++, Python, TypeScript, JavaScript, SQL\hspace{0.5em}$|$\hspace{0.5em}\textbf{Tools:} AWS (Fargate, SES, S3), Git, Linux, SQLite\\[1pt]
+  \textbf{Frameworks:} Node.js, Express, React, Next.js, Celery, NumPy, SciPy, Godot, raylib, Three.js, OpenCV, MediaPipe
 \end{entries}
 
 \end{document}

@@ -1,0 +1,382 @@
+---
+// Fig: "Could a router pick the right tasks?". Static pre-task routers from
+// the NeurIPS 2026 workshop paper "Verifying the Second Agent", tested on
+// unseen repositories: the verified solve rate of the tasks each policy would
+// choose, on the depth campaign's arms (appendix Table 21) and on the return
+// campaign's arms (Table 25).
+// Every policy is drawn against the best constant (the accent line): its stem
+// runs from the constant to its own value, so left of the line is worse.
+// The two tables report different kinds of interval, and the figure keeps them
+// apart. Depth: the 95% interval of each policy's difference from the
+// constant, drawn as a whisker on the same scale and printed beside the row.
+// Return: 95% intervals on the values themselves, which do not fit the shared
+// 0 to 40% axis; they are not drawn and are read out when a row is picked.
+// Two layouts; a container query shows one. The script reveals the drawing.
+// Every mark that encodes a measurement or a count (a stem, whose length is the
+// difference from the constant; a marker; an interval; the tie bracket; the 39
+// picks) appears whole; only the constant, a vertical reference, is drawn on.
+// The script never prints a number of its own.
+import Figure from "../Figure.astro";
+
+interface Props { n?: number }
+const { n = 3 } = Astro.props;
+
+const f = (v: number) => Math.round(v * 100) / 100;
+const sg = (v: number) => (v === 0 ? "0.0" : `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(1)}`);
+const pct = (v: number) => `${v.toFixed(1)}%`;
+
+type Row = {
+  k: string;
+  /** Name used in the plate readout, where space is short. */
+  short: string;
+  /** Verified solve rate, percent. */
+  v: number;
+  /** Depth rows: difference from the constant, percentage points. */
+  d?: number;
+  /** 95% interval. Depth: of the difference, in points. Return: of the value itself, in percent. */
+  lo?: number;
+  hi?: number;
+  ref?: boolean; oracle?: boolean; tie?: boolean;
+};
+const CHARTS: { id: "depth" | "return"; title: string; meta: string; rows: Row[] }[] = [
+  {
+    id: "depth", title: "Depth campaign arms", meta: "41 tasks, 37 repositories",
+    rows: [
+      { k: "D threshold", short: "D threshold", v: 30.5, d: 3.7, lo: -3.6, hi: 12.5 },
+      { k: "best constant", short: "best constant", v: 26.8, ref: true },
+      { k: "ridge treatment learner", short: "ridge treatment", v: 26.8, d: 0, lo: -11.1, hi: 11.5 },
+      { k: "ridge outcome learner", short: "ridge outcome", v: 24.4, d: -2.4, lo: -9.8, hi: 5.1 },
+      { k: "difficulty only", short: "difficulty only", v: 24.4, d: -2.4, lo: -7.3, hi: 0 },
+      { k: "always 7-node shared write", short: "always 7-node", v: 23.2, d: -3.7, lo: -16.7, hi: 10.3 },
+      { k: "boosted treatment learner", short: "boosted treatment", v: 13.4, d: -13.4, lo: -23.2, hi: -5.0 },
+    ],
+  },
+  {
+    id: "return", title: "Return campaign arms", meta: "39 tasks, 37 repositories",
+    rows: [
+      { k: "oracle benchmark", short: "oracle", v: 38.5, lo: 25.6, hi: 52.6, oracle: true },
+      { k: "ridge treatment learner", short: "ridge treatment", v: 28.2, lo: 15.4, hi: 43.2, tie: true },
+      { k: "best constant", short: "best constant", v: 28.2, lo: 15.0, hi: 42.5, ref: true, tie: true },
+      { k: "always single agent", short: "always single agent", v: 28.2, lo: 15.5, hi: 42.1, tie: true },
+      { k: "D threshold", short: "D threshold", v: 20.5, lo: 10.3, hi: 32.1 },
+      { k: "always findings return", short: "findings return", v: 20.5, lo: 11.5, hi: 30.8 },
+      { k: "always shared write", short: "shared write", v: 19.2, lo: 9.8, hi: 30.0 },
+    ],
+  },
+];
+const PICKS = 39; // held-out tasks; the fitted ridge router chose the single agent on every one
+const VMAX = 40;
+
+// What the plate readout shows for a picked row. The unit says which kind of
+// interval it is: points for a difference (depth), percent for a value (return).
+const said = (id: string, r: Row) => {
+  if (id === "depth") return r.ref ? `${r.short}: ${pct(r.v)}, the reference` : `${r.short}: ${sg(r.d!)} pp [${sg(r.lo!)}, ${sg(r.hi!)}]`;
+  return `${r.short}: ${pct(r.v)} [${r.lo!.toFixed(1)}, ${r.hi!.toFixed(1)}]${r.oracle ? ", not runnable" : ""}`;
+};
+const SAID_PICKS = `ridge router: ${PICKS} of ${PICKS} to one agent`;
+// The plate readout's lines as the scroll story plays. The script shows a line
+// with a number in it only once the mark for that number is fully shown, and
+// it never computes a number of its own.
+const STORY = (() => {
+  const [depth, ret] = CHARTS;
+  const top = depth.rows[0];
+  const refs = [depth, ret].map((c) => pct(c.rows.find((r) => r.ref)!.v));
+  const excl = depth.rows.find((r) => r.d !== undefined && (r.lo! > 0 || r.hi! < 0))!;
+  return {
+    start: "static routers against the best constant",
+    refs: `best constant: ${refs[0]} and ${refs[1]}`,
+    ref: refs.map((v) => `best constant ${v}`),
+    lead: `${top.k} ${pct(top.v)} vs constant ${refs[0]}`,
+    first: said(depth.id, top),
+    excl: said(depth.id, excl),
+    stay: "ridge router stays on the constant",
+  };
+})();
+
+function view(wide: boolean) {
+  const W = wide ? 640 : 400;
+  const k = wide ? 6.35 : 8.2; // user units per percentage point, shared by both charts
+  // Each row is two lines: its label (and, on the depth arms, its difference
+  // and interval), then its marks with the value at the right.
+  // A row's hit area is its full pitch. Stacked, that is about 34px under a finger.
+  const pitch = wide ? 31 : 42;
+  const first = wide ? 46 : 48; // first label line
+  const drop = wide ? 15 : 17; // label line to stem
+  const axisGap = wide ? 16 : 18, f1Gap = wide ? 36 : 40, f2Gap = wide ? 18 : 20;
+  // Stacked: the second chart starts below the first one's footer and its padded hit area.
+  const below = first + 6 * pitch + drop + axisGap + f1Gap + f2Gap + 32;
+  const rDot = wide ? 3.5 : 4.6;
+  const cap = wide ? 4 : 5.5;
+  // The return chart is the wider one: its oracle and its bracket note need the room.
+  const frames = wide ? [{ x: 0, y: 0, w: 296 }, { x: 330, y: 0, w: 310 }] : [{ x: 0, y: 0, w: 398 }, { x: 0, y: below, w: 398 }];
+
+  const charts = CHARTS.map((c, ci) => {
+    const F = frames[ci], cw = F.w;
+    const x0 = F.x + 2;
+    const x = (v: number) => f(x0 + v * k);
+    const refV = c.rows.find((r) => r.ref)!.v;
+    const refX = x(refV);
+    const rows = c.rows.map((r, i) => {
+      const ly = F.y + first + i * pitch;
+      // A depth row's interval is on its difference from the constant, so it
+      // is drawn from the constant: constant + lo to constant + hi.
+      const diff = c.id === "depth" && r.d !== undefined;
+      return {
+        ...r, i, ly, y: ly + drop, x: x(r.v), diff,
+        wlo: diff ? x(refV + r.lo!) : 0, whi: diff ? x(refV + r.hi!) : 0,
+        // The interval excludes zero when both ends fall on one side of the constant.
+        excl: diff && (r.lo! > 0 || r.hi! < 0),
+      };
+    });
+    const axisY = rows[rows.length - 1].y + axisGap;
+    const f1 = axisY + f1Gap, f2 = f1 + f2Gap;
+    const ties = rows.filter((r) => r.tie);
+    const tie = ties.length
+      ? (() => {
+          const bx = f(refX + rDot + 6), top = ties[0].y - 6, bot = ties[ties.length - 1].y + 6;
+          const mid = (top + bot) / 2, lh = wide ? 15 : 17;
+          return { d: `M${bx} ${top}h4V${bot}h-4`, tx: bx + 11, y: [mid - lh, mid, mid + lh] };
+        })()
+      : null;
+    const oracle = rows.find((r) => r.oracle);
+    // The one depth interval that excludes zero gets a note under the chart.
+    // Its key repeats the mark: a whisker's end, the dotted gap, the constant.
+    const ex = rows.find((r) => r.excl);
+    const kw = wide ? 1 : 1.3; // key size
+    const note = ex ? { i: ex.i, x1: f(F.x + 10 * kw), x2: f(F.x + 22 * kw), tx: f(F.x + 31 * kw) } : null;
+    // Return footer: one cell per held-out task the ridge router routed.
+    const cs = wide ? 5.4 : 7.5, cp = (cw - cs - 2) / (PICKS - 1);
+    const cells = { pitch: f(cp), size: cs, x0, y: f(f2 - cs / 2), d: Array.from({ length: PICKS }, (_, j) => `M${f(x0 + j * cp)} ${f(f2 - cs / 2)}h${cs}v${cs}h-${cs}z`).join("") };
+    return { ...c, ci, F, x0, x, refV, refX, rows, axisY, f1, f2, tie, oracle, note, cells, right: F.x + cw, top: F.y + first - 7 };
+  });
+
+  const H = charts[1].f2 + (wide ? 12 : 18);
+  // Policies are shown nearest the constant first, so the farthest comes last.
+  const far = Math.max(...charts.flatMap((c) => c.rows.map((r) => Math.abs(r.v - c.refV))));
+  const G = {
+    beats: wide ? { a: [0, 0.3], b: [0.22, 0.68], c: [0.62, 1] } : null,
+    // Stacked: each chart plays its three beats as it scrolls in.
+    stack: wide ? null : [{ a: [0.06, 0.2], b: [0.16, 0.36], c: [0.32, 0.52] }, { a: [0.5, 0.64], b: [0.6, 0.8], c: [0.78, 0.98] }],
+    charts: charts.map((c) => ({
+      rows: c.rows.map((r) => ({
+        // t: its distance from the constant as a share of the farthest policy's. It sets the order of arrival only.
+        t: Math.round((Math.abs(r.v - c.refV) / far) * 1e4) / 1e4,
+        oracle: !!r.oracle, tie: !!r.tie, ref: !!r.ref, diff: r.diff, excl: r.excl, say: said(c.id, r),
+      })),
+      note: c.note ? c.note.i : null,
+      cells: { pitch: c.cells.pitch, x0: c.cells.x0 },
+    })),
+    picks: PICKS, picksSay: SAID_PICKS, story: STORY,
+  };
+  return { wide, W, H, k, rDot, cap, pitch, drop, charts, G };
+}
+
+const views = [view(true), view(false)];
+const label = "Verified solve rate of static pre-task routing policies against the best constant policy, on two sets of arms";
+const [DEPTH, RETURN] = CHARTS;
+
+// Every inspectable part is also a button a keyboard can reach. Its label
+// carries, in words, the numbers the plate readout shows for it.
+const words = (v: number) => (v === 0 ? "0.0" : `${v < 0 ? "minus" : "plus"} ${Math.abs(v).toFixed(1)}`);
+const spoken = (id: string, r: Row) => {
+  const head = `${r.k}: ${pct(r.v)} verified solve rate`;
+  if (id === "depth") {
+    if (r.ref) return `${head}. The reference for the depth arms.`;
+    const excl = r.lo! > 0 || r.hi! < 0;
+    return `${head}, ${words(r.d!)} points against the best constant, 95% interval ${words(r.lo!)} to ${words(r.hi!)}.${excl ? " The only interval that excludes zero, on the losing side." : ""}`;
+  }
+  return `${head}, 95% interval ${r.lo!.toFixed(1)} to ${r.hi!.toFixed(1)}.${r.oracle ? " Not runnable." : ""}${r.tie && !r.ref ? " Equal to the best constant." : ""}`;
+};
+const PLOT = "Plot. Tab through its parts for exact values.";
+const aria =
+  `Static pre-task routers, tested on unseen repositories: the verified solve rate of the tasks each policy would choose. ` +
+  `${DEPTH.title}, ${DEPTH.meta}, with each policy's difference from the best constant and the 95% interval of that difference: ` +
+  DEPTH.rows.map((r) => (r.ref ? `${r.k} ${pct(r.v)}, the reference` : `${r.k} ${pct(r.v)}, ${sg(r.d!)} points, ${sg(r.lo!)} to ${sg(r.hi!)}`)).join("; ") +
+  `. No policy's advantage over the constant has an interval excluding zero; the one interval that excludes zero is the boosted treatment learner's, on the losing side. ` +
+  `${RETURN.title}, ${RETURN.meta}, with the 95% interval of each value: ` +
+  RETURN.rows.map((r) => `${r.k} ${pct(r.v)}, ${r.lo!.toFixed(1)} to ${r.hi!.toFixed(1)}${r.oracle ? " (not runnable)" : ""}`).join("; ") +
+  `. On the return arms the fitted ridge router chose the single agent on all ${PICKS} tasks, so it equals the constant exactly.`;
+---
+
+<Figure name="routers" n={n} title="Could a router pick the right tasks?" label={label} readout={SAID_PICKS}>
+  <div class="ro-box">
+    {views.map((v) => (
+      <svg class:list={["ro", v.wide ? "ro-w" : "ro-n"]} viewBox={`0 0 ${v.W} ${v.H}`} role="group" data-g={JSON.stringify(v.G)} aria-label={PLOT} aria-describedby={`ro-${v.wide ? "w" : "n"}-desc`}>
+        <desc id={`ro-${v.wide ? "w" : "n"}-desc`}>{aria}</desc>
+        <g aria-hidden="true">
+          {v.wide && <path class="hair" d={`M313 0V${v.H}`} />}
+          {v.charts.map((c) => (
+            <g class="chart" data-c={c.ci}>
+              <text class="head" x={c.F.x} y={c.F.y + 9} dominant-baseline="central"><tspan class="k">{c.title}</tspan></text>
+              <text class="meta" x={c.right} y={c.F.y + 9} text-anchor="end" dominant-baseline="central">{c.meta}</text>
+              <text class="sub" x={c.F.x} y={c.F.y + 27} dominant-baseline="central">verified solve rate</text>
+              {/* what the numbers beside each depth row, and their whiskers, are */}
+              {c.id === "depth" && <text class="colh" x={c.right} y={c.F.y + 27} text-anchor="end" dominant-baseline="central">vs constant, pp [95% CI]</text>}
+
+              {/* quiet layer: one track per row, the axis and its ticks */}
+              <path class="hair" d={c.rows.map((r) => `M${c.x0} ${r.y}H${c.x(VMAX)}`).join("")} />
+              <path class="faint" d={`M${c.x0} ${c.axisY}H${c.x(VMAX)}` + [0, 5, 10, 15, 20, 25, 30, 35, 40].map((t) => `M${c.x(t)} ${c.axisY}v${t % 10 ? 2.5 : 5}`).join("")} />
+              {[0, 10, 20, 30, 40].map((t) => (
+                <text class="cm tk" x={c.x(t)} y={c.axisY + 8} text-anchor={t ? "middle" : "start"} dominant-baseline="hanging">{t}{t === 40 ? "%" : ""}</text>
+              ))}
+
+              {/* the best constant: every stem and every whisker is measured from this line */}
+              <line class="ref" x1={c.refX} x2={c.refX} y1={c.top} y2={c.axisY} />
+
+              {c.rows.map((r) => (
+                <g class:list={["row", { isref: r.ref, oracle: r.oracle, tie: r.tie, diff: r.diff, excl: r.excl }]} data-c={c.ci} data-i={r.i}>
+                  <text class="rl" x={c.F.x} y={r.ly} dominant-baseline="central">{r.k}</text>
+                  {r.diff && (
+                    <text class="dv" x={c.right} y={r.ly} text-anchor="end" dominant-baseline="central"><tspan class="cmn dd">{sg(r.d!)}</tspan><tspan class="cmn" dx="4">[{sg(r.lo!)}, {sg(r.hi!)}]</tspan></text>
+                  )}
+                  {c.id === "depth" && r.ref && <text class="dv" x={c.right} y={r.ly} text-anchor="end" dominant-baseline="central">reference</text>}
+                  <line class="stem" x1={c.refX} x2={r.x} y1={r.y} y2={r.y} />
+                  {r.diff && (
+                    <>
+                      {r.excl && <line class="gap" x1={r.whi} x2={c.refX} y1={r.y} y2={r.y} />}
+                      {/* the interval is one mark: it is shown whole, never stretched */}
+                      <g class="iv">
+                        <line class="dwh" x1={r.wlo} x2={r.whi} y1={r.y} y2={r.y} />
+                        <path class="dcaps" d={`M${r.wlo} ${r.y - v.cap}v${v.cap * 2}M${r.whi} ${r.y - v.cap}v${v.cap * 2}`} />
+                      </g>
+                    </>
+                  )}
+                  <circle class="dot" cx={r.x} cy={r.y} r={v.rDot} />
+                  {!(c.id === "return" && r.tie) && <text class="cm strong rv" x={c.right} y={r.y} text-anchor="end" dominant-baseline="central">{pct(r.v)}</text>}
+                </g>
+              ))}
+
+              {c.oracle && (
+                <g class="otag">
+                  <text x={c.refX + 8} y={c.oracle.ly} dominant-baseline="central">not runnable</text>
+                </g>
+              )}
+              {c.tie && (
+                <g class="tieb">
+                  <path class="brk" d={c.tie.d} />
+                  <text class="cm strong acc tv" x={c.tie.tx} y={c.tie.y[0]} dominant-baseline="central">{pct(c.refV)}</text>
+                  <text class="tn" x={c.tie.tx} y={c.tie.y[1]} dominant-baseline="central">picked one agent</text>
+                  <text class="tn" x={c.tie.tx} y={c.tie.y[2]} dominant-baseline="central">on all {PICKS} tasks</text>
+                </g>
+              )}
+
+              {/* footer: the one fact each chart turns on */}
+              {c.note && (
+                <g class="foot note" data-i={c.note.i}>
+                  <g class="nb">
+                    <line class="dwh key" x1={c.F.x + 1} x2={c.note.x1} y1={c.f1} y2={c.f1} />
+                    <path class="dcaps key" d={`M${c.note.x1} ${c.f1 - v.cap}v${v.cap * 2}`} />
+                    <line class="gap" x1={c.note.x1} x2={c.note.x2} y1={c.f1} y2={c.f1} />
+                    <line class="ref" x1={c.note.x2} x2={c.note.x2} y1={c.f1 - v.cap - 2} y2={c.f1 + v.cap + 2} />
+                    <text class="fl" x={c.note.tx} y={c.f1} dominant-baseline="central">the only interval that excludes zero,</text>
+                    <text class="fl" x={c.note.tx} y={c.f2} dominant-baseline="central">and it is on the losing side</text>
+                  </g>
+                </g>
+              )}
+              {c.id === "return" && (
+                <g class="foot picks">
+                  <text class="fl" x={c.F.x} y={c.f1} dominant-baseline="central">ridge router's picks</text>
+                  <text class="fv" x={c.right} y={c.f1} text-anchor="end" dominant-baseline="central"><tspan class="cmn strong">{PICKS} of {PICKS}</tspan> single agent</text>
+                  {/* the 39 picks are one mark: they arrive together, never as a part-filled strip */}
+                  <g class="strip">
+                    <path class="cells-bg" d={c.cells.d} />
+                    <path class="cells-on" d={c.cells.d} />
+                  </g>
+                  <rect class="scan" x={c.cells.x0 - 2} y={c.cells.y - 2} width={c.cells.size + 4} height={c.cells.size + 4} opacity="0" />
+                </g>
+              )}
+            </g>
+          ))}
+        </g>
+
+        {/* The parts a reader can inspect, by pointer or by keyboard, in reading order.
+            The depth note reads out its row, so it answers to the pointer only.
+            Each part has two rectangles: a padded, invisible hit area sized for a
+            fingertip, and a ring that hugs the visible part and shows keyboard focus.
+            Parts are served as labelled, focusable graphics with a native tooltip; the
+            script turns them into buttons that write to the plate readout instead. */}
+        <g class="hits">
+          {v.charts.map((c) => (
+            <>
+              {c.rows.map((r) => (
+                <>
+                  <rect class="hit" data-c={c.ci} data-i={r.i} tabindex="0" role="img" aria-label={spoken(c.id, r)}
+                    x={c.F.x - 4} y={f(r.ly + v.drop / 2 - v.pitch / 2)} width={c.right - c.F.x + 8} height={v.pitch}><title>{said(c.id, r)}</title></rect>
+                  <rect class="ring" x={c.F.x - 4} y={f(Math.max(r.ly - 9, r.ly + v.drop / 2 - v.pitch / 2 + 0.5))} width={c.right - c.F.x + 8} height={Math.min(v.drop + 17, v.pitch - 1)} rx="4" />
+                </>
+              ))}
+              {c.note && (
+                <rect class="hit" data-c={c.ci} data-i={c.note.i} aria-hidden="true"
+                  x={c.F.x - 4} y={c.f1 - 11} width={c.right - c.F.x + 8} height={c.f2 - c.f1 + 22} rx="4"><title>{said(c.id, c.rows[c.note.i])}</title></rect>
+              )}
+              {c.id === "return" && (
+                <rect class="hit" data-k="picks" tabindex="0" role="img"
+                  aria-label={`The fitted ridge router chose the single agent on ${PICKS} of ${PICKS} held-out tasks.`}
+                  x={c.F.x - 4} y={c.f1 - (v.wide ? 11 : 16)} width={c.right - c.F.x + 8} height={c.f2 - c.f1 + (v.wide ? 22 : 32)}><title>{SAID_PICKS}</title></rect>
+              )}
+              {c.id === "return" && <rect class="ring" x={c.F.x - 4} y={c.f1 - 11} width={c.right - c.F.x + 8} height={c.f2 - c.f1 + 22} rx="4" />}
+            </>
+          ))}
+        </g>
+      </svg>
+    ))}
+  </div>
+  <Fragment slot="caption">
+    Stems run from the best constant policy to each router's verified solve rate on unseen repositories; depth-arm whiskers are
+    95% intervals of the difference. Return-arm intervals are on the values; pick a row to read them. The oracle is not
+    runnable: a null with identical arms reproduces 81% of its gap.
+  </Fragment>
+</Figure>
+
+<style is:global>
+  /* Layout follows the plate's own width (see Overlap.astro for the rationale). */
+  .fig .ro-box { container-type: inline-size; }
+  .fig svg.ro-w { --u: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
+  .fig .plot svg.ro-n { --u: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
+  @container (max-width: 539.98px) {
+    .fig .plot svg.ro-w { display: none; }
+    .fig .plot svg.ro-n { display: block; }
+  }
+
+  .fig svg.ro text { font-size: calc(11 * var(--u)); }
+  .fig svg.ro text.cm, .fig svg.ro tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--u)); letter-spacing: 0; }
+  .fig svg.ro tspan.k { fill: var(--ink); font-weight: 500; }
+  .fig svg.ro tspan.strong { fill: var(--ink); }
+  .fig svg.ro text.rl, .fig svg.ro text.fl, .fig svg.ro text.fv, .fig svg.ro text.tn { fill: var(--ink-2); }
+  .fig svg.ro .row.isref text.rl, .fig svg.ro .row.isref text.rv { fill: var(--accent); }
+  .fig svg.ro .row.oracle text.rl { fill: var(--ink-3); }
+  .fig svg.ro tspan.dd { fill: var(--ink-2); }
+  .fig svg.ro .row.excl text.dv, .fig svg.ro .row.excl tspan.dd { fill: var(--ink); }
+  .fig svg.ro text.rv, .fig svg.ro text.dv, .fig svg.ro .tieb text, .fig svg.ro .otag text { paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+
+  .fig svg.ro .ref { stroke: var(--accent); stroke-width: 1.25; }
+  .fig svg.ro .stem { stroke: var(--ink-3); stroke-width: 1.25; stroke-linecap: round; }
+  .fig svg.ro .dot { fill: var(--ink); stroke: var(--panel); stroke-width: 1.5; }
+  .fig svg.ro .row.isref .dot { fill: var(--accent); }
+  .fig svg.ro .row.oracle .stem { stroke-dasharray: 2 3; stroke-linecap: butt; }
+  .fig svg.ro .row.oracle .dot { fill: var(--panel); stroke: var(--ink-2); stroke-width: 1.25; }
+  .fig svg.ro .row.oracle text.rv { fill: var(--ink-2); }
+  .fig svg.ro .brk { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-linejoin: round; }
+
+  /* Depth: the interval of each difference, on the constant's own scale. The
+     whisker takes over from the stem; quiet where it crosses the constant, full
+     ink for the one that stops short of it. */
+  .fig svg.ro .row.diff .stem { stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.ro .dwh, .fig svg.ro .dcaps { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linecap: round; }
+  .fig svg.ro .row.excl .dwh, .fig svg.ro .row.excl .dcaps, .fig svg.ro .dwh.key, .fig svg.ro .dcaps.key { stroke: var(--ink); stroke-width: 1.75; }
+  .fig svg.ro .row.excl .stem { opacity: 0; }
+  .fig svg.ro .gap { stroke: var(--ink-2); stroke-width: 1.25; stroke-dasharray: 1 3; stroke-linecap: round; }
+
+  .fig svg.ro .cells-bg { fill: none; stroke: var(--ink); stroke-opacity: 0.2; stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.ro .cells-on { fill: var(--accent); fill-opacity: 0.8; stroke: var(--accent); stroke-opacity: 0.8; stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.ro .scan { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+
+  /* Pointer or keyboard: a row or a footer reads out its exact numbers. */
+  .fig svg.ro .hit { fill: transparent; stroke: none; pointer-events: all; }
+  .fig svg.ro[data-live] .hit { touch-action: pan-y; cursor: crosshair; }
+  .fig svg.ro .hit:focus { outline: none; }
+  .fig svg.ro .ring { fill: none; stroke: none; pointer-events: none; }
+  .fig svg.ro .hit:focus-visible + .ring { stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  .fig svg.ro .row, .fig svg.ro .foot, .fig svg.ro .otag, .fig svg.ro .tieb { transition: opacity 0.2s ease; }
+  .fig svg.ro.focus .row:not(.on), .fig svg.ro.focus .foot:not(.on), .fig svg.ro.focus .otag:not(.on), .fig svg.ro.focus .tieb:not(.on) { opacity: 0.36; }
+</style>

@@ -1,0 +1,261 @@
+---
+import Base from "../../layouts/Base.astro";
+import Header from "../../components/Header.astro";
+import Footer from "../../components/Footer.astro";
+import Palette from "../../components/Palette.astro";
+import Delegation from "../../components/figures/Delegation.astro";
+import Overlap from "../../components/figures/Overlap.astro";
+import Handoff from "../../components/figures/Handoff.astro";
+import Routers from "../../components/figures/Routers.astro";
+import { paper, bibtex } from "../../data/paper";
+---
+
+<Base
+  title={`${paper.title} · Jerry Li`}
+  description="A short version of my NeurIPS 2026 workshop paper: trees of 7 and 15 coding agents spent 6 and 12 times the tokens of one agent, and no comparison resolved a gain in verified fixes."
+  jsonld={[
+    {
+      "@context": "https://schema.org",
+      "@type": "ScholarlyArticle",
+      headline: `${paper.title}: ${paper.subtitle}`,
+      author: { "@id": "https://yuzeli.ca/#jerry" },
+      datePublished: "2026",
+      isPartOf: { "@type": "Event", name: `NeurIPS 2026 workshops: ${paper.workshops[0].full}; ${paper.workshops[1].full}` },
+    },
+  ]}
+>
+  <Header crumb="Research" />
+
+  <main class="wrap" id="top">
+    <header class="head">
+      <p class="kicker"><a class="ln" href="/#research">Research</a></p>
+      <h1>{paper.title}</h1>
+      <p class="sub">{paper.subtitle}</p>
+      <p class="meta">
+        Jerry Li, sole author. Accepted at two NeurIPS 2026 workshops in Sydney:{" "}
+        {paper.workshops[0].full}, and {paper.workshops[1].full}.
+      </p>
+    </header>
+
+    <div class="prose">
+      <h2 id="question">The question</h2>
+      <p>
+        A coding agent can do a task itself, or spawn other agents, hand them pieces, and merge what
+        comes back. Does a tree of agents that costs several times as much deliver more correct work?
+      </p>
+
+      <h2 id="experiment">The experiment</h2>
+      <p>
+        Two campaigns on DeepSWE: repository repairs from public GitHub projects in five languages,
+        97 of 113 tasks gradable. A fix counts only if an external verifier passes every failing test
+        and breaks none. Every comparison is between arms on the same task, with one model
+        (gpt-5.6-luna), fixed prompts, tools and per-agent turn budget, and a 6,000,000-token cap
+        that never bound. Run order is randomised; intervals are bootstrapped over repositories.
+      </p>
+      <p>
+        The depth campaign varies the tree: one agent, then balanced trees of 3, 7 and 15. The return
+        campaign fixes it at seven and changes only what workers hand back.
+      </p>
+    </div>
+
+    <div class="plate wide"><Delegation n={1} /></div>
+
+    <div class="prose">
+      <h2 id="cost">1. Trees cost more, with no resolved gain</h2>
+      <p>
+        Trees of 7 and 15 agents spent 5.98 and 12.50 times the tokens of one agent. Verified success
+        did not follow: −4.00 points (95% interval −15.09 to +8.00) at 7 agents and −6.03 (−16.96 to
+        +5.56) at 15, and the 3-agent tree was resolvably worse at −11.54 (−20.93 to −2.05). A verified
+        fix cost $0.58 with one agent and $6.92 with 15.
+      </p>
+
+      <h2 id="overlap">2. The tree repeats its own work</h2>
+      <p>
+        Explicit coordination is under a fifth of a percent of the tokens, so the cost is not
+        overhead. Sibling agents touch the same files more often than the task alone predicts,
+        by 9.8 points (5.0 to 15.1) at 7 agents, and 149 of 165 patches a parent refused, 90.3%,
+        collide line for line when replayed.
+      </p>
+    </div>
+
+    <div class="plate"><Overlap n={2} /></div>
+
+    <div class="prose">
+      <p>
+        If merging is the bottleneck, one writer should fix it. In the return campaign workers handed
+        back written findings and only the root wrote code. That removed every shared write and moved
+        verified success by +1.25 points (−9.76 to +12.82). The design had 80% power at a 16.1-point
+        effect, so this is unresolved, not proof of no effect.
+      </p>
+    </div>
+
+    <div class="plate"><Handoff n={3} /></div>
+
+    <div class="prose">
+      <h2 id="routers">3. No tested router resolved an advantage</h2>
+      <p>
+        Delegating only where it helps would rescue the average. Routers trained on 23 features known
+        before a run and tested on unseen repositories did not: none beat the best constant choice
+        with an interval excluding zero (best +0.037, −0.036 to +0.125), and one fitted router chose
+        the single agent for all 39 tasks.
+      </p>
+    </div>
+
+    <div class="plate"><Routers n={4} /></div>
+
+    <div class="prose">
+      <h2 id="limits">Scope and limits</h2>
+      <p>
+        For this model, harness, benchmark and budget, one agent is the defensible default. The cost
+        multiple is precise; the correctness return is bounded but unresolved, and a larger
+        study could still find a modest effect either way. Nothing here speaks to other models, flat
+        teams or other ways to merge. A harness that watches for overlap once workers start could stop
+        paying for branches that find nothing new. I did not build that controller.
+      </p>
+
+      <h2 id="cite">Cite</h2>
+      <p>
+        The camera-ready version is not public yet. For the manuscript,{" "}
+        <a class="ln" href="mailto:fireheartjerry@gmail.com">email me</a>.
+      </p>
+      <pre class="bib" data-bib>{bibtex}</pre>
+      <p class="tools">
+        <button type="button" class="ln" data-copy-bib>Copy BibTeX</button>
+        <span class="said" aria-live="polite" data-said></span>
+      </p>
+      <p class="back"><a class="ln" href="/#research">Back to research</a></p>
+    </div>
+  </main>
+
+  <Footer n={5} />
+  <Palette
+    local={[
+      { label: "The question", href: "#question" },
+      { label: "The experiment", href: "#experiment", keys: "method design setup model benchmark deepswe" },
+      { label: "Trees cost more, with no resolved gain", href: "#cost", keys: "finding one tokens depth" },
+      { label: "The tree repeats its own work", href: "#overlap", keys: "finding two overlap handoff merge" },
+      { label: "No tested router resolved an advantage", href: "#routers", keys: "finding three routing policy" },
+      { label: "Scope and limits", href: "#limits", keys: "limitations caveats" },
+      { label: "Cite", href: "#cite", keys: "bibtex citation reference" },
+    ]}
+  />
+
+  <script>
+    import "../../scripts/figures";
+
+    const btn = document.querySelector<HTMLButtonElement>("[data-copy-bib]");
+    const said = document.querySelector<HTMLElement>("[data-said]");
+    const bib = document.querySelector<HTMLElement>("[data-bib]");
+    btn?.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(bib!.textContent ?? "");
+        said!.textContent = "Copied";
+      } catch {
+        // Clipboard blocked: select the entry so it can be copied by hand.
+        getSelection()?.selectAllChildren(bib!);
+        said!.textContent = "Selected; press copy";
+      }
+      window.setTimeout(() => (said!.textContent = ""), 1800);
+    });
+  </script>
+</Base>
+
+<style>
+  main {
+    padding-top: clamp(48px, 8vw, 112px);
+  }
+  .head {
+    max-width: 880px;
+  }
+  .kicker {
+    font-size: 15px;
+    color: var(--ink-3);
+    margin-bottom: 18px;
+  }
+  .kicker a {
+    padding-block: 10px;
+  }
+  h1 {
+    font-size: clamp(40px, 6.4vw, 96px);
+    line-height: 0.98;
+    letter-spacing: -0.042em;
+  }
+  .sub {
+    margin-top: 18px;
+    font-size: clamp(19px, 1.62vw, 23px);
+    line-height: 1.3;
+    letter-spacing: -0.012em;
+    color: var(--ink-2);
+    max-width: 30ch;
+  }
+  .meta {
+    margin-top: 22px;
+    font-size: 15px;
+    color: var(--ink-3);
+    max-width: 62ch;
+  }
+  .prose {
+    max-width: 660px;
+    margin-top: clamp(40px, 5vw, 64px);
+    color: var(--ink-2);
+  }
+  .prose h2 {
+    font-size: 21px;
+    line-height: 1.25;
+    letter-spacing: -0.012em;
+    color: var(--ink);
+    margin-top: 1.9em;
+  }
+  .prose h2:first-child {
+    margin-top: 0;
+  }
+  .prose p {
+    margin-top: 0.75em;
+  }
+  .prose p :global(a.ln) {
+    padding-block: 10px;
+  }
+  .plate {
+    max-width: 720px;
+    margin-top: clamp(32px, 4vw, 48px);
+  }
+  .plate.wide {
+    max-width: none;
+  }
+  .bib {
+    margin: 14px 0 0;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font: 13.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--ink-2);
+    background: var(--panel);
+    border: 1px solid var(--hair);
+    border-radius: 9px;
+  }
+  /* On a narrow screen the entry wraps, so no line runs out of sight. */
+  @media (max-width: 640px) {
+    .bib {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+  }
+  .tools {
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    font-size: 15px;
+  }
+  .tools button {
+    padding-block: 10px;
+    color: var(--ink);
+  }
+  .said {
+    color: var(--accent);
+  }
+  .back {
+    font-size: 15px;
+  }
+  .back a {
+    padding-block: 10px;
+  }
+</style>

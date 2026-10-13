@@ -176,6 +176,18 @@ const radius = (m: number) => 0.75 + 10.5 * Math.cbrt(m);
 
 /** Generate and fully simulate the universe for a seed, into `u`. */
 export function generate(seed: string, u: Universe): Universe {
+  const next = generator(seed, u);
+  while (!next(Infinity)) {}
+  return u;
+}
+
+/**
+ * The same simulation in resumable pieces: each call works for about `budget`
+ * milliseconds and returns true once `u` is complete. A page uses this so the
+ * 900 frames never hold up a frame of its own. Only one may be in progress at
+ * a time, because they share the integrator's scratch arrays.
+ */
+export function generator(seed: string, u: Universe): (budget: number) => boolean {
   const rnd = mulberry32(fingerprint(seed));
   const gauss = () => (rnd() + rnd() + rnd() - 1.5) * 1.41; // ~N(0, 1)
   const n = 1 + 52 + Math.floor(rnd() * 29); // 52 to 80 orbiters
@@ -263,7 +275,12 @@ export function generate(seed: string, u: Universe): Universe {
   u.energy[0] = e0;
   u.dE[0] = 0;
   let dmax = 0, dmaxF = 0;
-  for (let f = 1; f < FRAMES; f++) {
+  let f = 1;
+  return (budget: number) => {
+  const t0 = performance.now();
+  for (; f < FRAMES; f++) {
+    // Checked every frame: before the engine has optimised this loop, one frame alone can take milliseconds.
+    if (performance.now() - t0 > budget) return false;
     for (let s = 0; s < SUBSTEPS; s++) {
       for (let i = 0; i < n; i++) {
         VX[i] += 0.5 * AX[i] * dt; VY[i] += 0.5 * AY[i] * dt; VZ[i] += 0.5 * AZ[i] * dt;
@@ -283,7 +300,8 @@ export function generate(seed: string, u: Universe): Universe {
   }
   u.dEmax = dmax;
   u.dEmaxFrame = dmaxF;
-  return u;
+  return true;
+  };
 }
 
 /**

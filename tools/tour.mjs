@@ -4,10 +4,13 @@ import os from "node:os";
 import fs from "node:fs";
 const [w = "1440", h = "900"] = process.argv.slice(2);
 const exe = `${os.homedir()}/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;
+// SCHEME=dark shoots the night theme, otherwise day.
+const scheme = process.env.SCHEME === "dark" ? "dark" : "light";
 const out = process.env.OUT ?? "/tmp/tour";
 fs.mkdirSync(out, { recursive: true });
 const b = await chromium.launch({ executablePath: exe });
 const p = await b.newPage({ viewport: { width: +w, height: +h } });
+await p.addInitScript((t) => localStorage.setItem("theme", t), scheme);
 const errors = [];
 p.on("pageerror", (e) => errors.push(e.message));
 p.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -22,7 +25,7 @@ for (const n of names) {
     const top = await p.evaluate((n) => document.querySelector(`[data-fig="${n}"]`).getBoundingClientRect().top + scrollY, n);
     await smooth(top - frac * +h);
     await p.waitForTimeout(700);
-    await p.screenshot({ path: `${out}/${w}-${n}-${tag}.png` });
+    await p.screenshot({ path: `${out}/${w}-${n}-${tag}${scheme === "dark" ? "-dark" : ""}.png` });
   }
 }
 console.log(names.join(" "));

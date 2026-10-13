@@ -1,4 +1,5 @@
 // Screenshot the running site at scroll positions: node tools/shoot.mjs [w] [h] frac1 frac2 ...
+// Env: URL, OUT, SCHEME=dark.
 import { chromium } from "playwright-core";
 import os from "node:os";
 import fs from "node:fs";
@@ -8,7 +9,9 @@ const cache = `${os.homedir()}/Library/Caches/ms-playwright`;
 const dir = fs.readdirSync(cache).find((d) => d.startsWith("chromium-"));
 const exe = `${cache}/${dir}/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;
 const browser = await chromium.launch({ executablePath: fs.existsSync(exe) ? exe : undefined, channel: fs.existsSync(exe) ? undefined : "chrome" });
+// SCHEME=dark shoots the night theme, otherwise day. The site opens at night unless a choice is stored.
 const page = await browser.newPage({ viewport: { width: +w, height: +h }, deviceScaleFactor: 1 });
+await page.addInitScript((t) => localStorage.setItem("theme", t), process.env.SCHEME === "dark" ? "dark" : "light");
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -24,8 +27,9 @@ for (const f of fracs.length ? fracs : ["0"]) {
     for (let i = 1; i <= n; i++) { window.scrollTo(0, s + ((t - s) * i) / n); await new Promise((r) => requestAnimationFrame(r)); }
   }, target);
   await page.waitForTimeout(900);
-  await page.screenshot({ path: `${out}/${w}-${f}.png` });
-  console.log(`${out}/${w}-${f}.png`);
+  const tag = process.env.SCHEME === "dark" ? "-dark" : "";
+  await page.screenshot({ path: `${out}/${w}-${f}${tag}.png` });
+  console.log(`${out}/${w}-${f}${tag}.png`);
 }
 if (errors.length) console.log("ERRORS:\n" + [...new Set(errors)].join("\n"));
 await browser.close();

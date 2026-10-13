@@ -125,7 +125,7 @@ const H2 = Math.max(HB, HC);
 const readout = `${fmt(ga.totals.activeUsers)} users`;
 ---
 
-<Figure name="topsojga" n={4} size="stage" screen title="TopsOJ in Google Analytics" label="TopsOJ analytics: monthly users, time spent by page, and how visitors arrive" readout={readout}>
+<Figure name="topsojga" n={5} size="stage" screen title="TopsOJ in Google Analytics" label="TopsOJ analytics: monthly users, time spent by page, and how visitors arrive" readout={readout}>
   <div class="gd">
     <section class="gd-p gd-a">
       <header class="gd-h">
@@ -291,10 +291,10 @@ const readout = `${fmt(ga.totals.activeUsers)} users`;
   .gd-note { color: var(--ink-3); font-family: var(--cm); font-size: 13px; }
   .sw { display: inline-block; width: 12px; height: 8px; border-radius: 1.5px; }
   .sw-tot { height: 0; border-top: 1.75px solid var(--accent); border-radius: 0; }
-  .sw-new { background: rgb(39 67 214 / 0.14); }
-  .sw-ret { background: rgb(118 87 201 / 0.28); box-shadow: inset 0 1px 0 var(--s-violet); }
+  .sw-new { background: rgb(var(--accent-rgb) / 0.14); }
+  .sw-ret { background: color-mix(in srgb, var(--s-violet) 28%, transparent); box-shadow: inset 0 1px 0 var(--s-violet); }
   .sw-eng { height: 0; border-top: 1.25px dashed var(--ink-3); border-radius: 0; }
-  .sw-bar { background: rgb(20 20 19 / 0.22); }
+  .sw-bar { background: rgb(var(--ink-rgb) / 0.22); }
   .sw-con { background: var(--s-violet); opacity: 0.6; }
   .sw-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
   .gd-asvg.narrow { display: none; }

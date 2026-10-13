@@ -68,7 +68,7 @@ const ramp = [1, 10, 100, 1000, 10000].map((v, i) => ({ v, x: 134 + i * 34, a: l
 const readout = `${gaSite.totals.activeUsers.toLocaleString("en-US")} users`;
 ---
 
-<Figure name="topsojmap" n={3} size="stage" title="TopsOJ by country" label="World map of TopsOJ active users by country and territory" readout={readout}>
+<Figure name="topsojmap" n={4} size="stage" title="TopsOJ by country" label="World map of TopsOJ active users by country and territory" readout={readout}>
   <div class="tm" data-map={payload} role="img" aria-label={`A dot map of the world. The ${lit} countries and territories where TopsOJ has active users are lit, shaded by active users on a log scale: Singapore ${fmt(countries[idx("Singapore")].s)}, China ${fmt(countries[idx("China")].s)}, the United States ${fmt(countries[idx("United States")].s)}, Brazil ${fmt(countries[idx("Brazil")].s)}, Canada ${fmt(countries[idx("Canada")].s)} and Vietnam ${fmt(countries[idx("Vietnam")].s)}. Toronto is marked.`}>
     <canvas aria-hidden="true" style="display:none"></canvas>
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} aria-hidden="true">

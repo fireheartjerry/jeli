@@ -23,6 +23,7 @@ export const bibtex = `@inproceedings{li2026second,
 /** The sections of the home page, in order; the index rail and the palette share this list. */
 export const sections = [
   { id: "top", label: "Cover" },
+  { id: "about", label: "About" },
   { id: "work", label: "Work" },
   { id: "research", label: "Research" },
   { id: "projects", label: "Projects" },

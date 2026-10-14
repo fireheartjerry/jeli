@@ -22,7 +22,7 @@ const end = `moved ${(F_MAX * 100).toFixed(1)}%   ballistic ${aBallistic(F_MAX).
   readout={end}
 >
   <div class="ls" data-night>
-    <img class="still" src="/roche.svg" alt="" width="1200" height="800" loading="lazy" decoding="async" />
+    <img class="still" src="/roche.svg" alt="" width="1132" height="604" loading="lazy" decoding="async" />
     <canvas data-sky aria-hidden="true"></canvas>
   </div>
   <Fragment slot="caption">
@@ -30,7 +30,8 @@ const end = `moved ${(F_MAX * 100).toFixed(1)}%   ballistic ${aBallistic(F_MAX).
     to the level of the pass at <i class="mi">L</i><sub>1</sub> and spills into its companion's well.
     Scrolling moves mass across: follow the gas as a ballistic stream and the orbit shrinks to 0.89 of
     its starting size, where the classical answer is 1.23. The stream is integrated from the three-body
-    equations; the disc's drag and the depth of the wells are schematic.
+    equations; the disc's drag and the depth of the wells are schematic. Point at the ground to set a
+    parcel of gas down: the line drawn through it is the highest level it can reach.
   </Fragment>
 </Figure>
 
@@ -50,22 +51,24 @@ const end = `moved ${(F_MAX * 100).toFixed(1)}%   ballistic ${aBallistic(F_MAX).
     height: 100%;
   }
   .still {
-    object-fit: contain;
     transition: opacity 0.6s ease;
   }
   canvas {
     opacity: 0;
     transition: opacity 0.6s ease;
+    /* A finger dragged across the ground moves the probe; dragged up or down it scrolls the page. */
+    touch-action: pan-y;
   }
   :global([data-fig="landscape"][data-live]) canvas {
     opacity: 1;
+    cursor: crosshair;
   }
   :global([data-fig="landscape"][data-live]) .still {
     opacity: 0;
   }
   @media (max-width: 560px) {
     .ls {
-      aspect-ratio: 1 / 0.86;
+      aspect-ratio: 1 / 0.9;
     }
   }
 </style>

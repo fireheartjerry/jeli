@@ -4,6 +4,8 @@ import Header from "../components/Header.astro";
 import Section from "../components/Section.astro";
 import Entry from "../components/Entry.astro";
 import Hero from "../components/Hero.astro";
+import Cosmos from "../components/Cosmos.astro";
+import About from "../components/About.astro";
 import Footer from "../components/Footer.astro";
 import Palette from "../components/Palette.astro";
 import Submissions from "../components/figures/Submissions.astro";
@@ -53,10 +55,13 @@ const record = [
     },
   ]}
 >
+  <Cosmos cover />
   <Header cover />
 
   <main id="top">
     <Hero />
+
+    <About />
 
     <Section id="work" title="Work" lede="Shipped software: AI video at a YC startup, fire control for a counter-drone turret, and a math judge used in 182 countries.">
       <Entry title="Mathos AI" href="https://mathos.ai" role="Software engineering intern" period="2026 to now" tags="Python, Celery, Remotion, AWS Fargate, SES, Next.js, OAuth 2.0, MCP">
@@ -191,7 +196,7 @@ const record = [
 
       <div class="also">
         <h3>Also</h3>
-        <ul>
+        <ul data-reveal="rows">
           <li>
             <a class="ln" href="https://github.com/fireheartjerry/porchlight" target="_blank" rel="noopener">Porchlight</a>
             <p>
@@ -214,7 +219,7 @@ const record = [
 
     <Section id="record" title="Record" lede="Scholarships, papers and contest results.">
       <div class="record-grid">
-        <dl class="record">
+        <dl class="record" data-reveal="rows">
           {record.map((r) => (
             <div>
               <dt>{r.what}</dt>
@@ -226,7 +231,7 @@ const record = [
             <dt>Elsewhere</dt>
             <dd>
               9,000+ followers on <a class="ln" href="https://www.linkedin.com/in/fireheartjerry/" target="_blank" rel="noopener">LinkedIn</a>.
-              First on Tokenboard's worldwide ranking in August 2026, past 20 billion tokens through coding agents.
+              First on Tokenboard's worldwide ranking in August 2026. Over 100 billion tokens used with coding agents to date.
             </dd>
           </div>
         </dl>
@@ -239,8 +244,8 @@ const record = [
   <Palette />
 
   <script>
-    import "../scripts/figures";
     import "../scripts/page";
+    import "../scripts/figures";
   </script>
 </Base>
 
@@ -349,11 +354,21 @@ const record = [
     margin: 0;
   }
   .record > div {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     column-gap: 16px;
     padding-block: 13px;
-    border-bottom: 1px solid var(--hair);
+  }
+  /* The rule under each row is a line that can be drawn. */
+  .record > div::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 1px;
+    background: var(--hair);
+    transform: scaleX(var(--rule, 1));
+    transform-origin: left;
   }
   .record > div:first-child {
     padding-top: 0;
@@ -373,8 +388,8 @@ const record = [
     font-size: 15px;
     color: var(--ink-3);
   }
-  .record .reach {
-    border-bottom: 0;
+  .record .reach::after {
+    content: none;
   }
   .record .reach dd :global(a) {
     padding-block: 6px;

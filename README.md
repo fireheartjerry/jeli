@@ -13,14 +13,44 @@ npm run build    # static output in dist/
 - `src/pages/index.astro` is the home page; copy lives there. `src/pages/research/` holds the short
   version of the NeurIPS paper. `src/data/paper.ts` is the one place the paper's title, venue and
   BibTeX are written down.
-- The cover (`src/components/Hero.astro`, `src/scripts/hero.ts`, `src/scripts/cosmos.ts`) is a live
-  WebGL scene: the Solar System with a Dyson swarm going up at 1 AU. Everything is generated from
-  one seed, and every body moves on a Kepler orbit solved in the vertex shader, so 60,000
-  collectors cost the CPU nothing per frame. Scrolling builds the sphere. The shafts and bloom come
-  from a second small pass: the light sources drawn alone, with every collector standing in the
-  way, smeared outward from the Sun. A machine that cannot hold the frame rate gives up sharpness
-  first, then that pass. `tools/cover.mjs` renders the stills used without JavaScript or WebGL, and
-  in the footer.
+- The scene (`src/components/Cosmos.astro`, `src/scripts/voyage.ts`, `src/scripts/cosmos.ts`) is one
+  WebGL canvas fixed behind the whole page: the Solar System with a Dyson swarm going up at 1 AU.
+  Everything is generated from one seed, and every body moves on a Kepler orbit solved in the
+  vertex shader, so 60,000 collectors cost the CPU nothing per frame. The camera makes one take
+  of the page. On the cover (`src/components/Hero.astro`) scrolling builds the sphere and pulls
+  the camera back and round the Sun, and the beam is lit before the cover lets go. The cover is
+  held still while that happens: it is sticky inside a taller box (`[data-hold]`), never pinned, so
+  nothing on it is moved in the document. The bar is clear glass while the cover is held and shows
+  the camera's distance from the Sun; each section's title turns the camera a little as it reaches
+  the bar, and sinks behind its line as the breadcrumb takes its name. Below it the
+  camera keeps going, past Saturn, Uranus and Neptune and through the Kuiper belt to 140 AU, rising
+  over the ecliptic so the orbits open into rings, until the sphere is one gold star; its distance
+  is carried in its logarithm, so the sphere shrinks by the same factor for every screen scrolled.
+  The footer is the same move run backwards, home to the closed sphere. The pointer leans the
+  camera, and a drag on the cover or the footer swings it before it returns to its mark. 16 Psyche
+  and the boulders near it are real meshes (`src/scripts/geo/psyche.ts`), built from the seed in
+  idle slices and hung at fixed places in the world. The galaxy behind is painted once into a
+  texture and grained with stars in the shader; the point stars are drawn out along the way the
+  camera turned while the shutter was open. The shafts and bloom come from a second small pass:
+  the light sources drawn alone, with every collector standing in the way, smeared outward from
+  the Sun. Far out the scene is drawn in less detail (no light pass, a share of the collectors,
+  then a point of light) and at half the frame rate when nothing is moving. A machine that cannot
+  hold the frame rate gives up sharpness first, then the light pass. Without JavaScript, without
+  WebGL or under reduced motion there is no fixed scene: the cover and the footer show the stills
+  that `tools/cover.mjs` renders.
+- The page's own motion is one vocabulary (`src/scripts/motion.ts`): two curves, "arrive" and
+  "swap", three lengths, and nothing overshoots. `src/scripts/reveal.ts` is how things arrive:
+  type rises from behind its own line, hairlines draw from the left, a plate is plotted (two pens
+  run down its sides as it enters, the sheet let out between them), and the About paragraphs are
+  read into as they cross the window. A block opts in with
+  `data-reveal`, and is only ever held back when there is a script to bring it in.
+  `src/scripts/scroll.ts` eases a wheel's scroll (Lenis; touch is left alone) and sends the page to
+  a section: a glide if it is near, a cut if it is far (two blades close and open over the jump).
+- Going from one page to another is a cross-document view transition (`src/styles/transitions.css`,
+  `src/scripts/transit.ts`): the bar holds, the page leaves and the next arrives, the paper's title
+  is carried between its heading and its page, and by night the sky is carried under the page as a
+  still (Chrome photographs a live WebGL canvas as a white sheet). A change of theme is a
+  terminator crossing the window (`src/scripts/theme.ts`).
 - Every other figure is a plate (`src/components/Figure.astro`) around one SVG or canvas. The SVG
   is rendered at build time in its finished state, so the page reads without JavaScript and under
   `prefers-reduced-motion`. `src/scripts/figures.ts` lazy-loads `src/scripts/figures/<name>.ts` for
@@ -38,8 +68,41 @@ npm run build    # static output in dist/
 
 ## Résumé
 
-`resume/resume.tex` mirrors the Overleaf project and builds `public/resume.pdf`
+`resume/resume.tex` mirrors the Overleaf project "Jerry Li - Resume Master - 2027 Applications" and builds `public/resume.pdf`
 (`tectonic -X compile resume.tex`). It compiles with pdfLaTeX too.
+
+## Frame by frame
+
+`tools/qa/` records any animation on the site a frame at a time, the same way every run, and
+measures every frame. The page's clocks are replaced by one the tool owns (`clock.js`), the
+document's own timeline is frozen and stepped by hand, and each of the page's 60 frames a second
+is photographed with what the page reported at that frame.
+
+```bash
+npx astro build --outDir .qa/dist
+QA_DIST=.qa/dist node tools/qa/run.mjs              # every take in tools/qa/manifest.mjs
+QA_DIST=.qa/dist node tools/qa/run.mjs home.fig     # only takes whose id starts with this
+```
+
+Each take leaves `.qa/seq/<id>/` with its frames, contact sheets (`sheet-N.jpg`, with a strip
+showing how much each frame changed) and `analysis.json`. A frame is flagged when it is blank,
+held between moving frames, changed far more than its neighbours, or when something tracked
+changed speed abruptly, stepped backwards, or the page changed height. `.qa/ledger.md` lists every
+take with its flags, and anything on the pages that no take covers. Frame pacing is a different
+question, answered in real time by `tools/perf.mjs`.
+
+Two things are not stepped. A page giving way to another cannot be (with the clock held, Chrome
+draws the page being left as a white sheet), so `tools/qa/live.mjs` records every crossing in real
+time from the compositor and flags any frame brighter than both ends. `tools/qa/checks.mjs` checks
+three things over whole pages: everything that arrives ends up plainly there (resolved), nothing
+moves under reduced motion (calm), and the pages read without JavaScript (plain).
+
+```bash
+QA_DIST=.qa/dist node tools/qa/live.mjs
+QA_DIST=.qa/dist node tools/qa/checks.mjs
+```
+
+Every frame is kept as a JPEG, so `.qa/` grows by about a gigabyte per full run; delete old runs.
 
 ## Tools
 

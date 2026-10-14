@@ -73,8 +73,8 @@ const strips = [
 ];
 const major = [1, 2, 5, 10, 20];
 const minor = [3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19];
-const tickPath = (y: number) =>
-  major.map((r) => `M${xr(r)} ${y}v-8`).join("") + minor.map((r) => `M${xr(r)} ${y}v-4`).join("");
+// One line per tick, in rank order, so each can grow as the pen drawing the ruler passes it.
+const ticks = [...major.map((r) => ({ r, h: 8 })), ...minor.map((r) => ({ r, h: 4 }))].sort((a, b) => a.r - b.r);
 
 // ---------- 3. AIME ----------
 const AY = 562;
@@ -83,6 +83,8 @@ const aime = [2024, 2025, 2026].map((yr, i) => ({ yr, x: 100 + i * 220 }));
 const geo = {
   total, goldEnd, lengths, n: COLS * ROWS, cells: cells.map((c) => [c.x, c.y]),
   XL, XR, start: xr(20), cell: CELL,
+  // A USACO contest is three problems; a problem's verdict is in once its third of the points is.
+  thirds: [1, 2, 3].map((k) => Math.ceil((k * COLS * ROWS) / 3)),
 };
 ---
 
@@ -138,7 +140,7 @@ const geo = {
         <text class="sec nm" x="0" y={s.y - 60}><tspan class="k short">{s.short}</tspan></text>
         <text class="sec nm full" x="0" y={s.y - 60}><tspan class="k">{s.full}</tspan></text>
         <line class="track" x1={XL} x2={XR} y1={s.y} y2={s.y} />
-        <path class="ticks" d={tickPath(s.y)} />
+        {ticks.map((t) => <line class="tick" data-r={t.r} x1={xr(t.r)} x2={xr(t.r)} y1={s.y} y2={s.y - t.h} />)}
         {[{ r: s.ca, k: "ca" }, { r: s.world, k: "world" }].map((m) => (
           <g class={`mk ${m.k}${si === 0 && m.k === "ca" ? " best" : ""}`} data-x={xr(m.r)} data-y={s.y}>
             <g class="needle" transform={`translate(${xr(m.r)} ${s.y})`}>
@@ -152,7 +154,7 @@ const geo = {
         ))}
       </g>
     ))}
-    {major.map((r) => <text class="cm tk" x={xr(r)} y={strips[1].y + 10} text-anchor="middle" dominant-baseline="hanging">{r}</text>)}
+    {major.map((r) => <text class="cm tk" data-r={r} x={xr(r)} y={strips[1].y + 10} text-anchor="middle" dominant-baseline="hanging">{r}</text>)}
     <text class="axl" x={XR} y={strips[1].y - 60} text-anchor="end">rank, log</text>
 
     <!-- ===== 3. AIME ===== -->
@@ -176,18 +178,26 @@ const geo = {
 </Figure>
 
 <style is:global>
-  /* --u is 1px on desktop, about 1.9px on a phone, so labels stay near 10px. */
+  /* The plate is as tall as its own figure. Beside the record's list it would otherwise be stretched to the
+     list's height, and move with it while the list's lines are being set. */
+  figure.fig[data-fig="contests"] { height: auto; }
+  /* --cs-u is 1px on desktop, about 1.9px on a phone, so labels stay near 10px.
+     (Its own name: the page registers --u as a number, for its hairlines.) */
   .fig svg.cs {
-    --u: clamp(1px, calc(3.49px - 0.4036vw), 1.914px);
+    --cs-u: clamp(1px, calc(3.49px - 0.4036vw), 1.914px);
+    /* A ruler is read by sliding along it; up and down is still the page's. */
+    touch-action: pan-y;
   }
-  .fig svg.cs text { font-size: calc(11 * var(--u)); fill: var(--ink-3); }
-  .fig svg.cs text.cm { font-size: calc(11.5 * var(--u)); }
-  .fig svg.cs text.count { font-size: calc(12 * var(--u)); fill: var(--ink); }
+  .fig svg.cs text { font-size: calc(11 * var(--cs-u)); fill: var(--ink-3); }
+  .fig svg.cs text.cm { font-size: calc(11.5 * var(--cs-u)); }
+  .fig svg.cs text.count { font-size: calc(12 * var(--cs-u)); fill: var(--ink); }
   .fig svg.cs tspan.k { fill: var(--ink); font-weight: 500; }
   .fig svg.cs text.step { fill: var(--ink-2); }
   .fig svg.cs .div.top text.step { fill: var(--accent); }
   .fig svg.cs .badge { fill: var(--panel); stroke: var(--ink); stroke-width: 1.1; stroke-linejoin: round; }
   .fig svg.cs .pip { fill: var(--ink); }
+  /* Reaching Platinum is a change of state: the badge and its name take the accent on the page's own curve. */
+  .fig svg.cs .badge, .fig svg.cs .pip, .fig svg.cs text.step { transition: fill var(--t-state) var(--ease-io), stroke var(--t-state) var(--ease-io); }
   .fig svg.cs .div.top .badge { fill: var(--accent); stroke: var(--accent); }
   .fig svg.cs .div.top .pip { fill: var(--panel); }
   .fig svg.cs .riser { stroke-dasharray: 2 3; }
@@ -201,19 +211,25 @@ const geo = {
   .fig svg.cs .strip .full { opacity: 0; }
   .fig svg.cs .strip.on .full { opacity: 1; }
   .fig svg.cs .strip.on .short { opacity: 0; }
-  .fig svg.cs .nm { transition: opacity 0.2s; }
-  .fig svg.cs .strip .short, .fig svg.cs .strip .full { transition: opacity 0.2s; }
-  .fig svg.cs .track { stroke: var(--ink-4); stroke-width: 1; }
+  /* One label for the other: the one leaving goes first, then the other comes, so the two are never read through each other. */
+  .fig svg.cs .strip .short, .fig svg.cs .strip .full { transition: opacity var(--t-press) var(--ease-io); }
+  .fig svg.cs .strip.on .full, .fig svg.cs .strip:not(.on) .short { transition-delay: var(--t-press); }
+  .fig svg.cs .track { stroke: var(--ink-4); stroke-width: 1; transition: stroke var(--t-state) var(--ease-out); }
   .fig svg.cs .strip.on .track { stroke: var(--ink); }
-  .fig svg.cs .ticks { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.cs .tick { stroke: var(--ink-4); stroke-width: 1; }
+  /* Reading a ruler: the tick under the pointer, and the rank it stands for. */
+  .fig svg.cs .probe line { stroke: var(--ink); stroke-width: 1.25; stroke-linecap: round; }
+  .fig svg.cs .probe text { fill: var(--ink); font-size: calc(11.5 * var(--cs-u)); }
+  .fig svg.cs text.tk { transition: fill var(--t-press) var(--ease-out); }
+  .fig svg.cs text.tk.read { fill: var(--ink); }
   .fig svg.cs .mk-c { fill: var(--panel); stroke: var(--ink); stroke-width: 1.4; }
   .fig svg.cs .mk.ca .mk-c { fill: var(--ink); }
   .fig svg.cs .mk.best .mk-c { fill: var(--accent); stroke: var(--accent); }
   .fig svg.cs .lead { fill: none; stroke: var(--ink-4); stroke-width: 1; }
-  .fig svg.cs text.cl { fill: var(--ink-2); font-size: calc(11 * var(--u)); }
+  .fig svg.cs text.cl { fill: var(--ink-2); font-size: calc(11 * var(--cs-u)); }
   .fig svg.cs .mk.best text.cl { fill: var(--accent); }
-  .fig svg.cs text.tk { font-size: calc(11 * var(--u)); }
-  .fig svg.cs text.axl { font-size: calc(11 * var(--u)); }
+  .fig svg.cs text.tk { font-size: calc(11 * var(--cs-u)); }
+  .fig svg.cs text.axl { font-size: calc(11 * var(--cs-u)); }
   .fig svg.cs .ay-o { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1.25; }
 
   .fig svg.cs .aline { stroke: var(--ink); stroke-width: 1.25; }

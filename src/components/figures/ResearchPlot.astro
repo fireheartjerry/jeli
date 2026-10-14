@@ -76,6 +76,8 @@ const zCurve: Pt[] = Array.from({ length: 25 }, (_, i) => {
 });
 const zBox = { x0: bx(Z.t0), x1: bx(Z.t1), y0: by(Z.hi), y1: by(Z.lo) };
 const zBrk = { x: SX + SW - 12, top: zIn.y0 + 12, bot: zy(aFinal) };
+// The patch behind the cursor's value in (b): type is larger on the narrow drawing.
+const TAG = wide ? [42, 14] : [58, 20];
 const zCon = wide
   ? `M${zBox.x1} ${zBox.y0}L${zIn.x0} ${zIn.y0 + 7}M${zBox.x1} ${zBox.y1}L${zIn.x0} ${zIn.y1 - 7}`
   : `M${r2((zBox.x0 + zBox.x1) / 2)} ${zBox.y1}V${zIn.y0}`; // straight down, between the tick labels
@@ -90,13 +92,16 @@ const cLines = QS.map((q) => ({ q, x0: cx(0), y0: cy(1), x1: cx(1), y1: cy(respL
 const ecLabel = (v: number) => v.toFixed(3).replace(/0+$/, "");
 // Binary diagram, final state: q = 1, ballistic (η = 1).
 const bnIn = { x0: SX, x1: SX + SW, y0: C.y0 + insTop(), y1: C.y0 + insTop() + insH(2) };
+// The stars' labels ride outside them as the pair turns, so the diagram is sized
+// for the widest pair (q = 0.4) to clear the q chips above it and the column of
+// numbers beside it at every phase. `lab` is how far a label sits from its star.
 const BN = wide
-  ? { cx: SX + 56, cy: bnIn.y0 + 80, th: -0.55, qi: 1, eta: 1, k: 0.9 }
-  : { cx: SX + 90, cy: bnIn.y0 + 76, th: -0.55, qi: 1, eta: 1, k: 1.2 };
+  ? { cx: SX + 56, cy: bnIn.y0 + 84, th: -0.55, qi: 1, eta: 1, k: 0.84, lab: 11 }
+  : { cx: SX + 90, cy: bnIn.y0 + 76, th: -0.55, qi: 1, eta: 1, k: 1.2, lab: 14 };
 const bn = binary(QS[BN.qi], BN.eta, BN.th, BN.cx, BN.cy, BN.k);
 // Right-hand column of the diagram's inset.
 const RC = wide
-  ? { chipY: bnIn.y0 + 17, chipX: [SX + 64, SX + 112, SX + 150], qx: SX + 12, eta: bnIn.y0 + 46, verd: bnIn.y0 + 64, dl: bnIn.y0 + 98, da: bnIn.y0 + 118, rule: bnIn.y0 + 81, lx: SX + 104 }
+  ? { chipY: bnIn.y0 + 17, chipX: [SX + 64, SX + 112, SX + 150], qx: SX + 12, eta: bnIn.y0 + 46, verd: bnIn.y0 + 64, dl: bnIn.y0 + 98, da: bnIn.y0 + 118, rule: bnIn.y0 + 81, lx: SX + 114 }
   : { chipY: bnIn.y0 + 20, chipX: [SX + 250, SX + 306, SX + 350], qx: SX + 186, eta: bnIn.y0 + 56, verd: bnIn.y0 + 78, dl: bnIn.y0 + 110, da: bnIn.y0 + 132, rule: bnIn.y0 + 94, lx: SX + 186 };
 // What a chip answers to. On the narrow drawing the areas meet halfway between
 // neighbours and are 50 units tall, so each is at least 40 px on a phone.
@@ -118,7 +123,7 @@ const arr = (e: number, r: number) => {
 };
 const lab = (x: number, y: number, s: number) => {
   const dx = x - BN.cx, dy = y - BN.cy, d = Math.hypot(dx, dy) || 1;
-  return { x: r2(x + (dx / d) * (s + 13)), y: r2(y + (dy / d) * (s + 11)) };
+  return { x: r2(x + (dx / d) * (s + BN.lab)), y: r2(y + (dy / d) * (s + BN.lab - 2)) };
 };
 const l1 = lab(bn.x1, bn.y1, bn.s1), l2 = lab(bn.x2, bn.y2, bn.s2);
 const stream = (() => {
@@ -127,10 +132,20 @@ const stream = (() => {
   return `M${r2(bn.x1 + ux * (bn.s1 + 3))} ${r2(bn.y1 + uy * (bn.s1 + 3))}L${r2(bn.x2 - ux * (bn.s2 + 3))} ${r2(bn.y2 - uy * (bn.s2 + 3))}`;
 })();
 
+// Each panel's block on the plate (the plot, and on phones the inset under it):
+// the script times each panel's story by where its own block is in the window.
+const blocks = [0, 1, 2].map((k) => ({ top: Y0[k] + T, bottom: wide ? Y0[k] + B : Y0[k] + insTop() + insH(k) }));
 const G = {
-  L, R, T, B, SX, SW,
-  a: { curves: aCurves, q0: QS, fmax: A.fmax },
-  b: { curve: bCurve, x0: bx(0), yOne, q0: Bp.q0, tmax: Bp.tmax, err: err.toFixed(1), z: Z, zCurve, brk: 8 + zBrk.bot - zBrk.top },
+  W, H, L, R, T, B, SX, SW, blocks,
+  a: { curves: aCurves, q0: QS, fmax: A.fmax, y0: A.y0, lo: A.lo, hi: A.hi, lead: r2(Math.hypot(13, ay(0.99) - aC.y + 4) + 8) },
+  b: {
+    curve: bCurve, x0: bx(0), yOne, yFin, y0: Bp.y0, lo: Bp.lo, hi: Bp.hi, q0: Bp.q0, tmax: Bp.tmax, err: err.toFixed(1),
+    z: Z, zCurve, brk: 8 + zBrk.bot - zBrk.top,
+    // The zoom's own axes, for the cursor that follows the main plot into it.
+    zx0: zx(Z.t0), zx1: zx(Z.t1), zy0: zy(Z.lo), zy1: zy(Z.hi),
+    zbox: [zBox.x0, zBox.y0, r2(zBox.x1 - zBox.x0), r2(zBox.y1 - zBox.y0)],
+    tag: TAG,
+  },
   c: { lines: cLines, lo: C.lo, hi: C.hi, y0: C.y0, bn: BN, arrowAng },
 };
 
@@ -177,12 +192,18 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
     <text class="m yl" transform={`translate(12 ${A.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle">L<tspan class="u">/</tspan>L<tspan class="sb" dy="3">0</tspan></text>
     <text class="m xl" x={xAt()} y={A.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging">{wide ? "f" : <>f<tspan class="u"> = Δ</tspan>M<tspan class="u">/</tspan>M<tspan class="sb" dy="3">d0</tspan></>}</text>
 
+    <line class="curl cura" x1={aEnd[0]} x2={aEnd[0]} y1={A.y0 + T - 4} y2={A.y0 + B} opacity="0" />
     <path class="dash ref" d={`M${ax(0)} ${ay(1)}L${ax(A.fmax)} ${ay(1 - A.fmax)}`} />
     {aCurves.map((pts, i) => <path class={`lc s-${QCOL[i]}`} d={pathOf(pts)} stroke-dashoffset={-7 * i} />)}
     <g class="acall">
       <path class="lead" d={`M${aC.x + 3} ${aC.y - 4}L${aC.x + 16} ${ay(0.99)}H${aC.x + 24}`} />
       <circle class="lead-dot" cx={aC.x} cy={aC.y} r="1.8" />
-      <text class="m" x={aC.x + 28} y={ay(0.99)} dominant-baseline="central"><tspan class="u">1 − </tspan>f<tspan class="u">, every </tspan>q<tspan class="sb" dy="3">0</tspan></text>
+      <g class="atext">
+        {/* Twice over: the first copy is only a margin of the plate's own ground round the letters, so a cursor passes behind the words and not through them. */}
+        {[true, false].map((under) => (
+          <text class:list={["m", { hal: under }]} x={aC.x + 28} y={ay(0.99)} dominant-baseline="central"><tspan class="u">1 − </tspan>f<tspan class="u">, every </tspan>q<tspan class="sb" dy="3">0</tspan></text>
+        ))}
+      </g>
     </g>
     <circle class="dot-accent ha" cx={aEnd[0]} cy={aEnd[1]} r="3.5" />
 
@@ -190,7 +211,7 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
       <rect class="inset" x={SX} y={aIn.y0} width={SW} height={aIn.h} rx="7" />
       {wide ? (
         <>
-          <text class="ann" x={SX + 12} y={aIn.y0 + 15} dominant-baseline="central"><tspan class="mi">f</tspan> = Δ<tspan class="mi">M</tspan>/<tspan class="mi">M</tspan><tspan class="sbs" dy="3">d0</tspan><tspan dy="-3"> = 15%</tspan></text>
+          <text class="ann" x={SX + 12} y={aIn.y0 + 15} dominant-baseline="central"><tspan class="mi">f</tspan> = Δ<tspan class="mi">M</tspan>/<tspan class="mi">M</tspan><tspan class="sbs" dy="3">d0</tspan><tspan dy="-3"> = </tspan><tspan class="fv">15%</tspan></text>
           <text class="m hd" x={SX + SW - 12} y={aIn.y0 + 15} text-anchor="end" dominant-baseline="central">a<tspan class="u">/</tspan>a<tspan class="sb" dy="3">0</tspan></text>
           <line class="hair" x1={SX + 12} x2={SX + SW - 12} y1={aIn.y0 + 27} y2={aIn.y0 + 27} />
           {QS.map((q0, i) => (
@@ -208,7 +229,7 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
         </>
       ) : (
         <>
-          <text class="ann" x={SX + 12} y={aIn.y0 + 20} dominant-baseline="central">at <tspan class="mi">f</tspan> = 15%</text>
+          <text class="ann" x={SX + 12} y={aIn.y0 + 20} dominant-baseline="central">at <tspan class="mi">f</tspan> = <tspan class="fv">15%</tspan></text>
           {QS.map((q0, i) => (
             <g class="arow">
               <text class="m" x={aCol[i]} y={aIn.y0 + 20} text-anchor="end" dominant-baseline="central">q<tspan class="sb" dy="3">0</tspan><tspan class="u" dy="-3"> = {q0}</tspan></text>
@@ -247,14 +268,26 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
     <text class="m yl" transform={`translate(12 ${Bp.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle">a<tspan class="u">/</tspan>a<tspan class="sb" dy="3">0</tspan></text>
     <text class="xl" x={xAt()} y={Bp.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging"><tspan class="mi">t</tspan>, orbits</text>
 
-    <line class="dotted" x1={L} x2={R} y1={yFin} y2={yFin} />
-    <text class="ann anl" x={L + 8} y={yFin - 8}>analytic {aFinal.toFixed(3)}</text>
+    <line class="curl curbl" x1={bx(Bp.tmax)} x2={bx(Bp.tmax)} y1={Bp.y0 + T - 4} y2={Bp.y0 + B} opacity="0" />
+    <line class="dotted anline" x1={L} x2={R} y1={yFin} y2={yFin} />
+    <g class="anl">
+      {[true, false].map((under) => (<text class:list={["ann", { hal: under }]} x={L + 8} y={yFin - 8}>analytic {aFinal.toFixed(3)}</text>))}
+    </g>
     <path class="dash noc" d={`M${bx(0)} ${yOne}H${bx(Bp.tmax)}`} />
-    <text class="ann nocl" x={L + 8} y={yOne - 8}>no closure</text>
+    <g class="nocl">
+      {[true, false].map((under) => (<text class:list={["ann", { hal: under }]} x={L + 8} y={yOne - 8}>no closure</text>))}
+    </g>
     <path class="accent clo" d={pathOf(bCurve)} />
     <g class="clol">
       <path class="lead" d={`M${bLead.x} ${bLead.y - 5}V${by(bLead.v) + 8}`} />
-      <text class="ann acc" x={R - 6} y={by(bLead.v)} text-anchor="end" dominant-baseline="central">velocity-rescaling closure</text>
+      {[true, false].map((under) => (<text class:list={["ann", under ? "hal" : "acc"]} x={R - 6} y={by(bLead.v)} text-anchor="end" dominant-baseline="central">velocity-rescaling closure</text>))}
+    </g>
+    <line class="gap" x1={bx(Bp.tmax)} x2={bx(Bp.tmax)} y1={yOne} y2={yFin} opacity="0" />
+    <g class="cur curb" opacity="0">
+      <circle class="cdn" cx={bx(Bp.tmax)} cy={yOne} r="2.5" />
+      <circle class="cdc" cx={bx(Bp.tmax)} cy={yFin} r="3.5" />
+      <rect class="cbk" x={bx(Bp.tmax) - 5 - TAG[0]} y={yFin + 13 - TAG[1] / 2} width={TAG[0]} height={TAG[1]} rx="2" />
+      <text class="cm acc cvt" x={bx(Bp.tmax) - 8} y={yFin + 13} text-anchor="end" dominant-baseline="central">{aFinal.toFixed(3)}</text>
     </g>
     <circle class="dot hn" cx={bx(Bp.tmax)} cy={yOne} r="2.5" />
     <circle class="dot-accent hc" cx={bx(Bp.tmax)} cy={yFin} r="3.5" />
@@ -269,14 +302,16 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
       {[44, 46, 48, 50].map((t) => (
         <line class="hair" x1={zx(t)} x2={zx(t)} y1={zy(Z.hi)} y2={zy(Z.lo)} />
       ))}
+      <line class="curl zcurl" x1={zx(Z.t1)} x2={zx(Z.t1)} y1={zy(Z.hi)} y2={zy(Z.lo)} opacity="0" />
       {[44, 46, 48, 50].map((t) => (
         <text class="cm tl" x={zx(t)} y={zIn.y1 - 13} text-anchor={t === 44 ? "start" : t === 50 ? "end" : "middle"} dominant-baseline="central">{t}</text>
       ))}
       <line class="dotted" x1={zx(Z.t0)} x2={zx(Z.t1)} y1={zy(aFinal)} y2={zy(aFinal)} />
-      <text class="ann" x={zx(Z.t0) + 3} y={zy(aFinal) - 8}>analytic</text>
+      {[true, false].map((under) => (<text class:list={["ann", { hal: under }]} x={zx(Z.t0) + 3} y={zy(aFinal) - 8}>analytic</text>))}
       <path class="accent zclo" d={pathOf(zCurve)} />
       <circle class="zring" cx={zx(Z.t1)} cy={zy(aFinal)} r="6.5" />
       <circle class="dot-accent zhc" cx={zx(Z.t1)} cy={zy(aFinal)} r="3" />
+      <circle class="cdc zcur" cx={zx(Z.t1)} cy={zy(aFinal)} r="3" opacity="0" />
       <text class="cm strong zv" x={zx(Z.t1) - 11} y={zy(aFinal) + 15} text-anchor="end" dominant-baseline="central">{aFinal.toFixed(4)}</text>
       <path class="ink zbrk" d={`M${zBrk.x - 4} ${zBrk.bot}h4V${zBrk.top}h-4`} />
       <path class="zbrkx" d={`M${zBrk.x - 4} ${zBrk.top + 14}l8 -4M${zBrk.x - 4} ${zBrk.top + 18}l8 -4`} />
@@ -306,8 +341,13 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
     ))}
     <text class="m yl" transform={`translate(12 ${C.y0 + (T + B) / 2}) rotate(-90)`} text-anchor="middle"><tspan class="u">(Δ</tspan>L<tspan class="u">/</tspan>L<tspan class="u">)/</tspan>δm</text>
     <text class="m xl" x={xAt()} y={C.y0 + B + XT} text-anchor={xAnchor} dominant-baseline="hanging">η</text>
-    <text class="ann" x={L + 8} y={cy(0.2)} dominant-baseline="central"><tspan class="mi">L</tspan> rises</text>
-    <text class="ann" x={L + 8} y={cy(-2.35)} dominant-baseline="central"><tspan class="mi">L</tspan> falls</text>
+    <line class="curl curcl" x1={cx(0.5)} x2={cx(0.5)} y1={C.y0 + T - 4} y2={C.y0 + B} opacity="0" />
+    {[[0.2, "rises"], [-2.35, "falls"]].map(([v, way]) => (
+      <g class="cann">
+        {/* (The lower label stands on the tinted half of the plot, so its margin is built the way that ground is: the plate, then the tint.) */}
+        {((v as number) < 0 ? ["hal", "hal tint", ""] : ["hal", ""]).map((cls) => (<text class:list={["ann", cls]} x={L + 8} y={cy(v as number)} dominant-baseline="central"><tspan class="mi">L</tspan> {way}</text>))}
+      </g>
+    ))}
 
     {cLines.map((l, i) => (
       <line class={`drop s-${QCOL[i]}`} x1={cx(l.ec)} x2={cx(l.ec)} y1={cy(0)} y2={C.y0 + B} />
@@ -320,10 +360,9 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
     ))}
     {cLines.map((l, i) => <circle class={`ec f-${QCOL[i]}`} cx={cx(l.ec)} cy={cy(0)} r="3" />)}
     <g class="ccall">
-      <text class="ann" x={R - 6} y={cy(0) - 8} text-anchor="end">Δ<tspan class="mi">L</tspan> = 0</text>
+      {[true, false].map((under) => (<text class:list={["ann", { hal: under }]} x={R - 6} y={cy(0) - 8} text-anchor="end">Δ<tspan class="mi">L</tspan> = 0</text>))}
     </g>
-    <g class="cur" opacity="0">
-      <line class="curl" x1={cx(0.5)} x2={cx(0.5)} y1={C.y0 + T - 4} y2={C.y0 + B} />
+    <g class="cur curc" opacity="0">
       {cLines.map((l, i) => <circle class={`cd f-${QCOL[i]}${i === 1 ? " sel" : ""}`} cx={cx(0.5)} cy={cy(respL(0.5, l.q))} r={i === 1 ? 3.5 : 2.5} />)}
     </g>
 
@@ -349,10 +388,12 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
       <circle class="rip" cx={BN.cx} cy={BN.cy} r={r2(bn.r1)} opacity="0" />
       <path class="barr" d={arr(bn.e, bn.r1)} />
       <path class="strm" d={stream} />
+      {[0, 1, 2].map(() => <circle class="pk" cx={BN.cx} cy={BN.cy} r="1.7" opacity="0" />)}
       <circle class="st1" cx={r2(bn.x1)} cy={r2(bn.y1)} r={r2(bn.s1)} />
       <circle class="st2" cx={r2(bn.x2)} cy={r2(bn.y2)} r={r2(bn.s2)} />
-      <text class="m sl1" x={l1.x} y={l1.y} text-anchor="middle" dominant-baseline="central">M<tspan class="sb" dy="3">1</tspan></text>
-      <text class="m sl2" x={l2.x} y={l2.y} text-anchor="middle" dominant-baseline="central">M<tspan class="sb" dy="3">2</tspan></text>
+      {/* (The label of the star nearer the centre rides on the other's orbit, so each keeps a margin of its own ground.) */}
+      {[true, false].map((under) => (<text class:list={["m sl1", { hal: under }]} x={l1.x} y={l1.y} text-anchor="middle" dominant-baseline="central">M<tspan class="sb" dy="3">1</tspan></text>))}
+      {[true, false].map((under) => (<text class:list={["m sl2", { hal: under }]} x={l2.x} y={l2.y} text-anchor="middle" dominant-baseline="central">M<tspan class="sb" dy="3">2</tspan></text>))}
 
       <line class="hair" x1={RC.lx} x2={SX + SW - 12} y1={RC.rule} y2={RC.rule} />
       <text class="m" x={RC.lx} y={RC.dl} dominant-baseline="central"><tspan class="u">Δ</tspan>L<tspan class="u">/</tspan>L</text>
@@ -362,5 +403,8 @@ const sub = (k: number) => (wide ? { x: 104, y: Y0[k] + 9 } : { x: 0, y: Y0[k] +
       </g>
     </g>
   </g>
-  <rect class="hit" x={L - 50} y={C.y0 + T - 12} width={R - L + 64} height={B - T + 44} rx="6" />
+  <rect class="hit" data-p="a" x={L - 10} y={A.y0 + T - 12} width={R - L + 24} height={B - T + 36} rx="6" />
+  <rect class="hit" data-p="b" x={L - 10} y={Bp.y0 + T - 12} width={R - L + 24} height={B - T + 36} rx="6" />
+  <rect class="hit" data-p="z" x={zIn.x0} y={zIn.y0} width={SW} height={zIn.y1 - zIn.y0} rx="7" />
+  <rect class="hit" data-p="c" x={L - 50} y={C.y0 + T - 12} width={R - L + 64} height={B - T + 44} rx="6" />
 </svg>

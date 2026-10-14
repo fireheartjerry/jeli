@@ -1,15 +1,23 @@
 // Fig: one MP4 export at Mathos, start to finish.
 //
-// The whole figure is a pure function of one clock. `draw(layout, frame, sink)`
-// decides every moving attribute for a moment of story time and hands it to a
-// sink. On the server the sink collects attributes, so the page ships the
-// finished state; in the browser the sink writes to the DOM and skips anything
-// that has not changed. Nothing is drawn twice in two places.
+// The whole figure is a pure function of a few clocks. `draw(layout, frame, sink)`
+// decides every moving attribute for a moment and hands it to a sink. On the
+// server the sink collects attributes, so the page ships the finished state; in
+// the browser the sink writes to the DOM and skips anything that has not
+// changed. Nothing is drawn twice in two places.
 //
 // Story time is in seconds. Our job is queued at 0. Other jobs (all examples)
 // run on a fixed schedule around it, one sandbox each, so the scroll story is
-// just a window onto a system that is already working, and the ambient loop is
-// the same clock left running.
+// just a window onto a system that is already working. The scroll runs that
+// clock as far as the video coming back into the chat; from there the same
+// clock is left running, and that is the ambient loop.
+//
+// Two things keep the picture calm at any speed. What happens is decided by
+// story time, but how a thing arrives has a floor in screen time: the browser's
+// sink lets an opacity, a row or a label take a few frames to follow its value,
+// however fast the scroll is running the clock. And what the eye could not
+// follow at that speed (other people's packets, a scan line) thins out as the
+// clock runs faster, the way it would in a time-lapse.
 //
 // The page imports this module to render the finished state, so nothing here
 // may need a browser to load: the motion helpers (and GSAP with them) are
@@ -19,7 +27,9 @@
 // The schedule
 // =====================================================================
 
+/** Where the scroll story begins. */
 const T_START = -6;
+/** The moment the page is served at: the finished drawing. The running clock passes it a few seconds after the delivery. */
 export const T_END = 16.9;
 /** Frames a sandbox renders per second of story time. A pace for the drawing, not a measurement. */
 const FPS = 30;
@@ -36,25 +46,98 @@ const PACK = 0.4; // frames become one file
 const DOWN = 0.9; // its one render over, the sandbox leaves the drawing
 const TRAVEL = 1.4; // the file reaches the store
 const DROP = 0.3; // the last of that: falling into the store
+/** How far through being made a sandbox is when its outline is closed, and when its lock shuts. Its render begins at 1. */
+const DRAWN = 0.62, SEAL = 0.68;
+/**
+ * The sandbox we follow stands empty while the request is made, so that ours
+ * is seen being made for it: on the turn before ours for that slot nobody
+ * queued a job. Every other turn has one.
+ */
+const NONE = -SLOTS;
+/**
+ * And it stands empty again while our video goes back to the chat: the jobs
+ * that follow ours into that slot are handed over this much late, so the next
+ * sandbox is the first thing drawn once the story is told, at the speed things
+ * happen.
+ */
+const REST = 1.9;
+/** A slot says it is empty only if it will be for at least this long, and a moment after its last sandbox has gone. */
+const IDLE = 1.5, PAUSE = 0.3;
 
 /** Our job: 240 frames, rendered from 2.2 to 10.2, stored at 12. */
 export const OURS = { id: "7c2e", frames: 240, file: "derivative.mp4" };
 const R0 = S0 + PROV;
 const R1 = R0 + OURS.frames / FPS;
 const STORED = R1 + PACK + TRAVEL;
-const BACK = 12.6; // the file is in the chat
-/** Lifecycle email keeps its own time. Nothing in the export feeds it. */
-const MAIL_EVERY = 11.5; // seconds between one account event and the next
-const MAIL_FIRST = 5.6;
+
+// The request. Only the scroll ever plays it, so its parts overlap: each is
+// given long enough to be seen at a reading scroll, and the next begins before
+// it has finished.
+const TYPE0 = -5.6, TYPE1 = -4.1; // the question is typed
+const CHIP = -3.8; // the assistant answers with a tool call
+const CALL0 = -3.3, CALL1 = -2.4; // which goes down to the gate, and stops there
+const PRESS = -2.1; // the user allows it
+const TOKEN0 = -1.95, TOKEN1 = -1.05; // a token goes back up to the chat
+const PASS0 = -1.2; // and the call goes through: it is a job in the queue at 0
+// The delivery.
+const BACK0 = STORED + 0.1; // the file leaves the store
+const BACK = STORED + 0.75; // it is in the chat
+const DONE = STORED + 1.4; // and the reply under it is written
+
+/**
+ * Lifecycle email keeps its own time, in real seconds, and never the same gap
+ * twice running. Nothing in the export feeds it, and the scroll does not run it.
+ */
+const MAIL_AT = [0, 9.5, 16.5, 28.5, 36.5];
+const MAIL_LOOP = 47;
 const MAIL_LANDS = 2.8; // from the event to the message in the inbox
+/** Where that clock stands in the finished drawing: the last message delivered, the next event a moment away. */
+const MAIL0 = 8.7;
+
+/** How long an opacity takes to follow its value, seconds of screen time. Nothing on the plate changes in one frame. */
+const SOFT = 0.045;
+/** The same, for what has to be out of the way before something else is drawn where it stood. */
+const FAST = 0.02;
+/** And for what is in a sandbox as it leaves: a large part of the plate, which goes more slowly than it would at the scroll's pace. */
+const LEAVE = 0.075;
+/** And a row, a file on the stack or a marker to reach the place it has been sent to. */
+const GLIDE = 0.07;
+/** The same, for a thing that is only followed while it can be seen. */
+const SEEN = -GLIDE;
 
 const mod = (a: number, n: number) => ((a % n) + n) % n;
 /** Linear map with clamping: where p sits between a and b, from 0 to 1. */
 const phase = (p: number, a: number, b: number) => Math.min(1, Math.max(0, (p - a) / (b - a)));
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
-const e3 = (u: number) => 1 - (1 - u) ** 3;
-const io = (u: number) => u * u * (3 - 2 * u);
+/**
+ * The site's two curves, the ones motion.ts registers with GSAP as "arrive"
+ * (something coming to rest) and "swap" (one state for another, at rest at
+ * both ends). They are worked out here, once, so the page can make its still
+ * without GSAP: a cubic bezier from (0,0) to (1,1), sampled, and read back by
+ * interpolation.
+ */
+function bezier(x1: number, y1: number, x2: number, y2: number) {
+  const N = 96, ys = new Float32Array(N + 1);
+  const at = (t: number, a: number, b: number) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+  for (let i = 0; i <= N; i++) {
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 32; k++) {
+      const t = (lo + hi) / 2;
+      if (at(t, x1, x2) < i / N) lo = t;
+      else hi = t;
+    }
+    ys[i] = at((lo + hi) / 2, y1, y2);
+  }
+  return (u: number) => {
+    if (u <= 0) return 0;
+    if (u >= 1) return 1;
+    const f = u * N, i = Math.floor(f);
+    return ys[i] + (ys[i + 1] - ys[i]) * (f - i);
+  };
+}
+const arrive = bezier(0.22, 1, 0.36, 1);
+const swap = bezier(0.65, 0, 0.35, 1);
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
@@ -62,20 +145,35 @@ const FRAMES = [165, 180, 240, 195, 210, 150, 225];
 const WAITS = [3.2, 2.0, 2.6, 1.5, 2.8];
 const IDS = ["a1f4", "9b03", "c81d", "e7a2", "3d5f", "b260", "58c9", "f0a7", "2e91", "d43b", "6a0c", "91e8", "4f7d"];
 
-/** When job j is handed to a sandbox. */
-const jobS = (j: number) => S0 + j * GAP;
+/** When job j's turn comes round: one every GAP, each slot in its turn. */
+const turn = (j: number) => S0 + j * GAP;
+/** When job j is handed to a sandbox: on its turn, or a little after it in the slot we follow once ours has been through it. */
+const jobS = (j: number) => turn(j) + (j > 0 && j % SLOTS === 0 ? REST : 0);
 const jobFrames = (j: number) => (j === 0 ? OURS.frames : FRAMES[mod(j, FRAMES.length)]);
 /** When job j joins the queue. */
-const jobA = (j: number) => jobS(j) - (j === 0 ? S0 : WAITS[mod(j, WAITS.length)]);
+const jobA = (j: number) => turn(j) - (j === 0 ? S0 : WAITS[mod(j, WAITS.length)]);
 const jobId = (j: number) => (j === 0 ? OURS.id : IDS[mod(j, IDS.length)]);
+/** When job j's render is over and its sandbox has left the drawing. */
+const jobGone = (j: number) => jobS(j) + PROV + jobFrames(j) / FPS + PACK + DOWN;
 /** When job j's file is in the store. */
 const jobT = (j: number) => jobS(j) + PROV + jobFrames(j) / FPS + PACK + TRAVEL;
+/** The job after job j in the queue, and the job that follows it into its slot. */
+const nextJob = (j: number) => (j + 1 === NONE ? j + 2 : j + 1);
+const nextIn = (j: number) => (j + SLOTS === NONE ? j + 2 * SLOTS : j + SLOTS);
+/** A job's place in the order they were queued (the turn nobody took is not counted), and the job at a place. */
+const place = (j: number) => (j > NONE ? j : j + 1);
+const jobAt = (q: number) => (q > NONE ? q : q - 1);
 /** The job a slot holds at a moment (or is about to be handed). */
-const slotJob = (s: number, tau: number) => s + SLOTS * Math.floor((tau + LEAD - S0 - s * GAP) / CYCLE);
+function slotJob(s: number, tau: number) {
+  if (s > 0) return s + SLOTS * Math.floor((tau + LEAD - S0 - s * GAP) / CYCLE);
+  if (tau >= S0 - LEAD) return SLOTS * Math.max(0, Math.floor((tau - REST + LEAD - S0) / CYCLE));
+  const j = SLOTS * Math.floor((tau + LEAD - S0) / CYCLE);
+  return j === NONE ? NONE - SLOTS : j;
+}
 /** The newest job in the queue. */
 function newest(tau: number) {
   let j = Math.floor((tau - S0 + GAP) / GAP) + 1;
-  while (jobA(j) > tau) j--;
+  while (j === NONE || jobA(j) > tau) j--;
   return j;
 }
 
@@ -221,6 +319,9 @@ function zig(x0: number, x1: number, y: number, amp: number, teeth: number) {
   for (let i = 1; i <= 2 * teeth; i++) d += `L${r2(x0 + st * i)} ${r2(y + (i % 2 ? amp : 0))}`;
   return d;
 }
+
+/** A height in the drawing, and how far down the window it stands (0 the top, 1 the bottom) when something is due. */
+type Mark = readonly [y: number, at: number];
 
 /**
  * One drawing. Wide is 640 across on a twelve-column grid; narrow is 400 across
@@ -369,7 +470,7 @@ export function layout(wide: boolean) {
     reply: `M${reply.x + 0.5} ${rep.yt}` + zig(reply.x + 0.5, reply.x + reply.w - 0.5, rep.yt, -4, wide ? 14 : 12) + `V${reply.y + reply.h - 7.5}a7 7 0 0 1-7 7H${reply.x + 7.5}a7 7 0 0 1-7-7Z`,
     strip: inset(strip), app: inset(app), queue: inset(queue), mail: inset(mail),
     box: [hero, c1, c2].map((b, i) => inset(b, i ? 6 : 8)),
-    // Wires in three sets, so each arrives with its own part of the plate.
+    // Wires in three sets: the request's, the render's, the delivery's.
     w1: seg.call + seg.tok + seg.app,
     w2: seg.disp0 + seg.dispR + seg.out0 + seg.outR,
     w3: seg.res,
@@ -382,33 +483,28 @@ export function layout(wide: boolean) {
     playhead: `M0 ${tl.top}V${tl.bot}M-3 ${tl.top - 3.5}h6l-3 3.5z`,
     sprockets: [fs.y + 3, fs.y + fs.h - 3].map((y) => `M${r2(fs.x + pitch / 4 - 1.5)} ${y}H${fs.x + fs.w}`).join(""),
     cells: Array.from({ length: cells }, (_, c) => `M${r2(fs.x + c * pitch + fs.pad)} ${fs.cy}h${r2(fs.cw)}v${fs.ch}h${r2(-fs.cw)}z`).join(""),
+    needle: `M0 ${fs.y - 3}V${fs.y + fs.h + 3}M-2.6 ${fs.y - 3}h5.2M-2.6 ${fs.y + fs.h + 3}h5.2`,
   };
 
-  // ---------- when the story reaches each part ----------
-  /** Stacked, the plate is taller than the screen: the story follows the reader down it. */
-  const at = (y: number) => clamp(0.137 + 0.729 * (y / H), 0, 1);
-  const win = (y: number, row: number): [number, number] =>
-    wide ? [0.012 * row, 0.07 + 0.012 * row] : [Math.max(0, at(y) - 0.15), Math.max(0.05, at(y) - 0.09)];
-  const b = (f: string, c: string, y: number, row: number) => ({ f, c, a: win(y, row)[0], b: win(y, row)[1] });
-  const builds = [
-    b("chat.f", "chat.c", chat.y, 0), b("", "w1", chat.y, 1), b("", "w2", queue.y + queue.h, 4), b("", "w3", wide ? bk.y : hero.y + hero.h, 6),
-    b("app.f", "app.c", app.y, 1), b("strip.f", "strip.c", strip.y, 2),
-    b("queue.f", "queue.c", queue.y, 3), b("", "box.c", hero.y, 4),
-    b("", "store.c", wide ? bk.y : hero.y + hero.h, 6), b("", "tiles", wide ? bk.y : hero.y + hero.h, 6),
-    b("reply.f", "reply.c", reply.y, 6), b("", "lane.c", lane.y, 7), b("mail.f", "mail.c", wide ? mail.y : lane.y + 30, 8),
-  ];
-  /** Scroll progress to story time, as corner points of a broken line. */
-  const beats: [number, number][] = wide
-    ? [[0, T_START], [0.05, -5.7], [0.3, -0.6], [0.33, 0], [0.385, R0], [0.7, R1], [0.8, STORED], [0.9, 13.6], [1, T_END]]
-    : [[0, T_START], [at(chat.y + 30), -5.6], [at(chip.y + 10), -3.9], [at(strip.y + strip.h), -1.2], [at(queue.y + 14), 0],
-       [at(hero.y - 30), R0], [at(c2.y + ch), R1], [at(store.s0 + 16), STORED], [at(reply.y + 60), 13.6], [Math.min(1, at(H) + 0.05), T_END]];
+  // ---------- where the story is when the scroll has brought each part into view ----------
+  // The plate lets its sheet out from the top at about 0.94 of the window's
+  // height (reveal.ts), so every one of these stands clear of that line. Side
+  // by side the whole plate nearly fits a window, and the story is told by the
+  // time its foot has come in: a plate at rest in the middle of the window is
+  // already running by itself. Stacked it is taller than a window, and the
+  // story follows the reader down it.
+  const marks: Record<"type" | "queued" | "disp" | "s0" | "r0" | "r1" | "stored" | "done" | "mail", Mark> = wide
+    ? {
+        type: [bub.y + bub.h, 0.903], queued: [queue.y0 + queue.pitch, 0.866],
+        disp: [hero.y + hero.h, 0.923], s0: [hero.y + hero.h, 0.91], r0: [hero.y + hero.h, 0.845],
+        r1: [turnY, 0.786], stored: [H, 0.849], done: [H, 0.787], mail: [lane.y + 34, 0.9],
+      }
+    : {
+        type: [bub.y + bub.h, 0.895], queued: [queue.y0 + queue.pitch, 0.78],
+        disp: [hero.y + 12, 0.795], s0: [hero.y + hero.h, 0.981], r0: [hero.y + hero.h, 0.887],
+        r1: [hero.y + hero.h, 0.59], stored: [bk.y + bk.h, 0.697], done: [att.y + att.h, 0.676], mail: [lane.y + 60, 0.9],
+      };
 
-  /** A stage can be pointed at once the plate has drawn it. */
-  const since = (k: string) => builds.find((v) => v.c === k)!.b;
-  const ready: Record<Stage, number> = {
-    chat: since("chat.c"), oauth: since("strip.c"), app: since("app.c"), queue: since("queue.c"),
-    box: since("box.c"), store: since("store.c"), mail: since("mail.c"),
-  };
   // Each stage answers to a pointer, a finger and the keyboard through one
   // rectangle. The hit area is the part plus a margin (more above and below a
   // shallow part, so a fingertip has 40px to land on); the ring hugs the part
@@ -434,7 +530,7 @@ export function layout(wide: boolean) {
   return {
     wide, W, H, chat, bub, ask, chip, cb, strip, sx, btn, tokX, gate, app, abtn, player, jy,
     queue, boxes, pv, tl, fs, dx, ox, turnY, store, tile, reply, att, rep, lane, mx, src, eb, ses, mail, mm,
-    seg, route, trOut, d, builds, beats, hits, ready,
+    seg, route, trOut, d, marks, hits,
     sup: wide ? 4.2 : 5,
     pr: wide ? 2.4 : 2.8,
     call: { y0: cb, stop: gy - 12, y1: queue.y },
@@ -455,13 +551,80 @@ export function layout(wide: boolean) {
 export type Layout = ReturnType<typeof layout>;
 export const LAYOUTS = [layout(true), layout(false)];
 
-/** Scroll progress to story time. */
-export function tauOf(L: Layout, p: number) {
-  const B = L.beats;
-  let i = 1;
-  while (i < B.length - 1 && B[i][0] < p) i++;
-  const a = B[i - 1], b = B[i];
-  return b[0] > a[0] ? lerp(a[1], b[1], clamp((p - a[0]) / (b[0] - a[0]), 0, 1)) : b[1];
+// =====================================================================
+// The scroll, and what it has reached
+// =====================================================================
+
+/** Where a drawing stands in the window, measured when the page is. Lengths in px. */
+export interface Geo {
+  /** The window's height. */
+  vh: number;
+  /** The plate's top, from the top of the window, as the story begins and as the scroll lets go of it. */
+  t0: number;
+  t1: number;
+  /** The drawing's top inside the plate, and px to one of its units. */
+  y0: number;
+  s: number;
+}
+/** Scroll progress at which a height in the drawing stands a given way down the window. */
+const see = (G: Geo, m: Mark) => (G.t0 - (m[1] * G.vh - G.y0 - m[0] * G.s)) / (G.t0 - G.t1);
+
+/** How far either side of a corner the story clock is rounded, as scroll progress: it changes speed over a few frames, never in one. */
+const ROUND = 0.012;
+
+/**
+ * Scroll progress to story time: corner points of a broken line, placed so
+ * that each part of the story plays once the scroll has brought its part of
+ * the plate clear of the edge the plate is being let out from.
+ */
+export function schedule(L: Layout, G: Geo) {
+  const span = Math.max(1, G.t0 - G.t1), px = (n: number) => n / span, M = L.marks;
+  const P = [0, see(G, M.type), see(G, M.queued), see(G, M.disp), see(G, M.s0), see(G, M.r0), see(G, M.r1), see(G, M.stored), see(G, M.done), 1];
+  const TAU = [T_START, TYPE0, 0, S0 - LEAD, S0, R0, R1, STORED, DONE, DONE];
+  // No part of it in less scroll than this, whatever the window.
+  const least = [0, 16, 110, 20, 10, 36, 110, 50, 50];
+  const last = P.length - 2;
+  for (let i = 1; i <= last; i++) P[i] = Math.max(P[i], P[i - 1] + px(least[i]));
+  // In a window too short for all of that the story closes up, so that it is
+  // told by the time the plate stands in the middle of the window (which, side
+  // by side, is at 0.92 of the way or later whatever the window's height).
+  if (P[last] > 0.92) {
+    const k = 0.92 / P[last];
+    for (let i = 1; i <= last; i++) P[i] *= k;
+  }
+  // Past the delivery the clock is not the scroll's (see the loop below); the
+  // line simply carries on at the pace it had, so it comes up to that point
+  // without changing speed.
+  TAU[last + 1] = TAU[last] + ((TAU[last] - TAU[last - 1]) / (P[last] - P[last - 1])) * (1 - P[last]);
+  return {
+    P, TAU,
+    /** From here on the video is back in the chat, and the clock runs by itself. */
+    hand: P[last],
+    /** Scrolling back this far past that point takes the drawing back into the story. */
+    back: px(64),
+    /** The email lane is in view from here. */
+    mail: see(G, M.mail),
+  };
+}
+export type Schedule = ReturnType<typeof schedule>;
+
+/** The area under the broken line, from 0 to q. */
+function area(S: Schedule, q: number) {
+  const P = S.P, T = S.TAU, n = P.length - 1;
+  if (q <= 0) return T[0] * q;
+  let s = 0;
+  for (let i = 1; i <= n; i++) {
+    const a = P[i - 1], b = P[i];
+    if (q >= b) { s += ((T[i - 1] + T[i]) / 2) * (b - a); continue; }
+    return s + ((T[i - 1] + lerp(T[i - 1], T[i], (q - a) / (b - a))) / 2) * (q - a);
+  }
+  return s + T[n] * (q - 1);
+}
+/** Scroll progress to story time: the broken line, averaged over a short stretch so its corners are rounded. */
+export function tauOf(S: Schedule, p: number) {
+  const d = Math.min(ROUND, p, 1 - p);
+  if (d < 1e-5) return p <= 0 ? S.TAU[0] : S.TAU[S.TAU.length - 1];
+  return (area(S, p + d) - area(S, p - d)) / (2 * d);
 }
 
 // =====================================================================
@@ -470,49 +633,70 @@ export function tauOf(L: Layout, p: number) {
 
 /** Where draw() sends what it decides. Keys name elements (their data-k). */
 export interface Sink {
-  /** A numeric attribute, rounded to d places. */
-  n(k: string, a: string, v: number, d?: number): void;
+  /**
+   * A numeric attribute, rounded to d places. With `tc` it follows its value
+   * over about that many seconds of screen time. A negative `tc` follows the
+   * same way while the element can be seen, and simply moves it while it cannot
+   * (a thing that comes back somewhere else should not be seen flying there).
+   */
+  n(k: string, a: string, v: number, d?: number, tc?: number): void;
   /** Any other attribute. */
   s(k: string, a: string, v: string): void;
   /** Text content. */
   t(k: string, v: string): void;
   /** A class, on or off. */
   c(k: string, name: string, on: boolean): void;
-  /** Position, and optionally turn and scale. */
-  m(k: string, x: number, y: number, rot?: number, sc?: number): void;
-  /** Opacity. */
-  o(k: string, v: number): void;
+  /** Position, and optionally turn and scale. With `tc` the position follows. */
+  m(k: string, x: number, y: number, rot?: number, sc?: number, tc?: number): void;
+  /** Opacity. It always follows (SOFT) unless told to cut with a `tc` of 0. */
+  o(k: string, v: number, tc?: number): void;
   /** Whether a key has moved on to a new version since it was last asked. Always true on the server. */
   fresh(k: string, v: number): boolean;
+  /** One mark for another: the element dips, `set` changes it at the bottom of the dip, and it comes back. `now` skips the dip. */
+  dip(k: string, set: () => void, now?: boolean): void;
+  /** One label rolling over to the next: `k` takes the new text and rises into place as its twin `k2` carries the old one out. `now` skips the roll. */
+  roll(k: string, k2: string, v: string, now?: boolean): void;
 }
 
 export interface Frame {
   /** Story time, seconds. */
   tau: number;
-  /** Scroll progress, 0 to 1: only the plate assembling itself reads this. */
-  p: number;
-  /** Seconds since the story ended, for what arrives late. */
-  late: number;
   /** Wall clock, for things that turn or blink. */
   now: number;
+  /** The email lane's own clock, seconds. */
+  mail: number;
+  /** 1 while the clock runs at the speed things happen; toward 0 as the scroll runs it faster than the eye can follow. */
+  calm: number;
+  /** The frame of the big sandbox's render the reader is pointing at, as a fraction of it; below 0 for none. */
+  peek: number;
+  /** How far the picture in the sandbox has gone over to that frame, 0 to 1. */
+  mix: number;
   /** Measured widths of the two lines of the question, when known. */
   w1: number;
   w2: number;
 }
+/** The finished drawing: the moment the page is served at, and the scroll story ends on. */
+export const still = (): Frame => ({ tau: T_END, now: 0, mail: MAIL0, calm: 1, peek: -1, mix: 0, w1: 0, w2: 0 });
+
+/** What the big sandbox is showing, left here by draw() for the readout: frames in its render (0 if it has none), the one in its picture, the slope there. */
+const SHOWN = { n: 0, frame: 0, slope: 0 };
 
 export const transform = (x: number, y: number, rot = 0, sc = 1) =>
   `translate(${r2(x)} ${r2(y)})` + (rot ? ` rotate(${r2(rot)})` : "") + (sc !== 1 ? ` scale(${r2(sc)})` : "");
 
 /** Dash length of anything drawn on with pathLength="1"; a hair over, so a finished stroke has no gap. */
 const DASH = 1.002;
+/** The bright stroke at the head of a sandbox's outline while it is being drawn, as a share of the outline. */
+const NIB = 0.024;
 const STATE = ["queued", "rendering", "done"];
-const SEAL = ["1 render · starting", "1 render · sealed"];
+const SEALS = ["1 render · starting", "1 render · sealed"];
 /** Queue glyphs, drawn about their own centre: a ring, three quarters of one (it turns), a tick. */
 const GLYPH = ["M3.4 0A3.4 3.4 0 1 1-3.4 0A3.4 3.4 0 1 1 3.4 0", "M0-3.6A3.6 3.6 0 1 1-3.6 0", "M-3.4 .2l2.3 2.4 4.4-4.9"];
 const MINUS = "−";
+const slopeText = (hundredths: number) => (hundredths < 0 ? MINUS : "") + (Math.abs(hundredths) / 100).toFixed(2);
 
 // Keys are built once; nothing is concatenated per frame.
-const ROW = Array.from({ length: 12 }, (_, i) => ({ g: `q${i}`, gl: `q${i}g`, id: `q${i}i`, src: `q${i}f`, s: `q${i}s` }));
+const ROW = Array.from({ length: 12 }, (_, i) => ({ g: `q${i}`, gl: `q${i}g`, id: `q${i}i`, src: `q${i}f`, s: `q${i}s`, r: `q${i}r` }));
 const BOX = Array.from({ length: SLOTS }, (_, i) => ({ g: `b${i}`, o: `b${i}o`, c: `b${i}c`, l: `b${i}l`, id: `b${i}i`, st: `b${i}s`, p: `b${i}p`, n: `b${i}n`, pk: `d${i}`, pg: `b${i}g` }));
 const TILES = 8;
 const TILE = Array.from({ length: TILES }, (_, i) => `t${i}`);
@@ -521,23 +705,13 @@ const MSG = Array.from({ length: 3 }, (_, i) => ({ g: `mr${i}`, dot: `mr${i}d`, 
 const SUBJECT = [0.62, 0.86, 0.5, 0.74, 0.94];
 
 export function draw(L: Layout, f: Frame, out: Sink) {
-  const tau = f.tau, p = f.p, now = f.now;
-
-  // ---------- the plate assembles as it arrives ----------
-  for (let i = 0; i < L.builds.length; i++) {
-    const b = L.builds[i], e = e3(phase(p, b.a, b.b));
-    if (b.f) {
-      out.n(b.f, "stroke-dashoffset", (1 - e) * DASH, 3);
-      out.n(b.f, "fill-opacity", e, 2);
-    }
-    out.o(b.c, phase(e, 0.3, 1));
-  }
+  const tau = f.tau, now = f.now, calm = f.calm;
 
   // ---------- the question types itself into the chat ----------
-  const ty = phase(tau, -5.6, -4.3);
+  const ty = phase(tau, TYPE0, TYPE1);
   const w1 = f.w1 || L.bub.w1, w2 = f.w2 || L.bub.w2, k1 = w1 / (w1 + w2);
   const u1 = phase(ty, 0, k1), u2 = phase(ty, k1, 1);
-  out.o("bub", phase(tau, -5.85, -5.6));
+  out.o("bub", phase(tau, TYPE0 - 0.35, TYPE0));
   out.n("bub.l1", "width", ty >= 1 ? L.bub.w : 3 + w1 * u1, 1);
   out.n("bub.l2", "width", ty >= 1 ? L.bub.w : u2 > 0 ? 3 + w2 * u2 : 0, 1);
   const typing = ty > 0 && ty < 1;
@@ -545,137 +719,177 @@ export function draw(L: Layout, f: Frame, out: Sink) {
   if (typing) out.m("bub.caret", L.bub.tx + (u2 > 0 ? w2 * u2 : w1 * u1) + 2, u2 > 0 ? L.bub.y2 : L.bub.y1);
 
   // ---------- the assistant answers with a tool call ----------
-  out.o("ask", phase(tau, -4.25, -4.1));
-  out.n("ask.sk", "x2", lerp(L.ask.x0, L.ask.x1, e3(phase(tau, -4.2, -3.85))), 1);
-  const chp = e3(phase(tau, -4.0, -3.7));
+  out.o("ask", phase(tau, TYPE1, TYPE1 + 0.35));
+  out.n("ask.sk", "x2", lerp(L.ask.x0, L.ask.x1, arrive(phase(tau, TYPE1 + 0.1, TYPE1 + 0.9))), 1);
+  const chp = arrive(phase(tau, CHIP, CHIP + 0.8));
   out.o("chip", chp);
-  out.m("chip", 0, (1 - chp) * 4);
-  const back = tau >= BACK;
-  out.o("chip.spin", back ? 0 : 1);
-  if (!back) out.m("chip.spin", L.chip.gx, L.chip.gy, (now * 300) % 360);
-  out.o("chip.tick", back ? 1 : 0);
-  out.o("chip.key", phase(tau, -1.8, -1.65));
+  out.m("chip", 0, (1 - chp) * 5);
+  // It turns until the video is back; then a tick is drawn in its place.
+  const ok = phase(tau, BACK, BACK + 0.25), tick = phase(tau, BACK + 0.1, BACK + 0.5);
+  out.o("chip.spin", 1 - ok);
+  if (ok < 1) out.m("chip.spin", L.chip.gx, L.chip.gy, (now * 300) % 360);
+  out.o("chip.tick", tick > 0 ? 1 : 0);
+  out.n("chip.tick", "stroke-dashoffset", (1 - tick) * DASH, 3);
+  out.o("chip.key", phase(tau, TOKEN1 - 0.15, TOKEN1 + 0.2));
 
   // The call stops at the gate until the user has authorised, then goes through.
-  const g1 = io(phase(tau, -3.6, -3.1)), g2 = io(phase(tau, -1.25, -0.05));
+  const g1 = swap(phase(tau, CALL0, CALL1)), g2 = swap(phase(tau, PASS0, -0.05));
   const cy = lerp(lerp(L.call.y0, L.call.stop, g1), L.call.y1, g2);
-  const calling = tau > -3.6 && tau < 0.1;
-  out.o("pk.call", calling ? Math.min(phase(tau, -3.6, -3.5), 1 - phase(tau, -0.05, 0.1)) : 0);
+  const calling = tau > CALL0 && tau < 0.1;
+  out.o("pk.call", calling ? Math.min(phase(tau, CALL0, CALL0 + 0.15), 1 - phase(tau, -0.05, 0.1)) : 0);
   if (calling) out.n("pk.call", "cy", cy, 1);
   out.n("tr.call", "stroke-dashoffset", (1 - (cy - L.call.y0) / (L.call.y1 - L.call.y0)) * DASH, 3);
 
-  const open = e3(phase(tau, -1.7, -1.3));
+  const open = arrive(phase(tau, PRESS + 0.55, PRESS + 1.05));
   out.m("gate.sh", L.gate.px, L.gate.py - 1.6 * open, 24 * open);
-  ping(out, "gate.ping", phase(tau, -1.5, -0.95));
-  out.c("consent", "wait", tau >= -3.1 && tau < -2.6);
-  out.c("allow", "press", tau >= -2.6 && tau < -2.35);
-  out.c("allow", "done", tau >= -2.6);
-  out.o("consent.ok", phase(tau, -2.5, -2.3));
-  const ci = e3(phase(tau, -3.1, -2.65));
-  out.o("cur.allow", Math.min(phase(tau, -3.2, -3.05), 1 - phase(tau, -2.3, -2.0)));
+  ping(out, "gate.ping", phase(tau, PRESS + 0.75, PRESS + 1.5), 1);
+  out.c("consent", "wait", tau >= CALL1 - 0.1 && tau < PRESS);
+  out.c("allow", "press", tau >= PRESS && tau < PRESS + 0.25);
+  out.c("allow", "done", tau >= PRESS);
+  out.o("consent.ok", phase(tau, PRESS + 0.1, PRESS + 0.6));
+  const ci = arrive(phase(tau, CALL0 + 0.3, PRESS - 0.05));
+  out.o("cur.allow", Math.min(phase(tau, CALL0 + 0.3, CALL0 + 0.55), 1 - phase(tau, PRESS + 0.35, PRESS + 0.8)));
   out.m("cur.allow", lerp(L.cur.ax0, L.cur.ax1, ci), lerp(L.cur.ay0, L.cur.ay1, ci));
   // The token goes back up to the chat, which sends it with every call from then on.
-  const tk = io(phase(tau, -2.4, -1.75));
-  out.o("tok", Math.min(phase(tau, -2.4, -2.3), 1 - phase(tau, -1.82, -1.7)));
+  const tk = swap(phase(tau, TOKEN0, TOKEN1));
+  out.o("tok", Math.min(phase(tau, TOKEN0, TOKEN0 + 0.15), 1 - phase(tau, TOKEN1 - 0.1, TOKEN1 + 0.1)));
   out.m("tok", L.tokX, lerp(L.tok.y0, L.tok.y1, tk));
   out.n("tr.tok", "stroke-dashoffset", (1 - tk) * DASH, 3);
 
   // ---------- meanwhile, other people press Export MP4 in the app ----------
-  const n = newest(tau), n1 = n + 1;
+  const n = newest(tau), n1 = nextJob(n);
   let au = 0, ain = 0, press = false;
   if (n1 !== 0) {
     const a = jobA(n1);
     au = phase(tau, a - 0.9, a);
-    ain = e3(phase(tau, a - 1.5, a - 1.02)) * (1 - e3(phase(tau, a - 0.8, a - 0.3)));
-    press = tau >= a - 1.02 && tau < a - 0.8;
+    ain = arrive(phase(tau, a - 1.5, a - 1.02)) * (1 - arrive(phase(tau, a - 0.8, a - 0.3))) * calm;
+    press = calm > 0.5 && tau >= a - 1.02 && tau < a - 0.8;
   }
   out.m("cur.app", lerp(L.cur.px0, L.cur.px1, ain), lerp(L.cur.py0, L.cur.py1, ain));
   out.c("app.btn", "press", press);
   const sent = au > 0 && au < 1;
-  out.o("pk.app", sent ? Math.min(1, au * 10, (1 - au) * 10) : 0);
+  out.o("pk.app", sent ? Math.min(1, au * 10, (1 - au) * 10) * calm : 0);
   if (sent) {
-    along(L.route.app, io(au));
+    along(L.route.app, swap(au));
     out.n("pk.app", "cx", PT[0], 1);
     out.n("pk.app", "cy", PT[1], 1);
   }
 
-  // ---------- the queue: one row per job, oldest first ----------
+  // ---------- the queue: one row per job, newest first ----------
+  // A job joins at the top, where its wire comes in, and the rest move down a row.
   const Q = L.queue, R = Q.rows;
   const arr = jobA(n);
-  const shift = e3(phase(tau, arr, arr + 0.4)); // the list moves up a row for the newest job
+  const shift = arrive(phase(tau, arr, arr + 0.4));
   let ourY = -1, ourO = 0;
-  for (let j = n - R; j <= n; j++) {
-    const K = ROW[mod(j, R + 1)];
-    const y = Q.y0 + (j - (n - R) - shift) * Q.pitch;
-    const o = j === n - R ? 1 - shift : j === n ? shift : 1;
-    out.m(K.g, 0, y);
-    out.o(K.g, o);
-    if (out.fresh(K.g, j)) {
+  const top = place(n);
+  for (let q = top - R; q <= top; q++) {
+    const j = jobAt(q), K = ROW[mod(q, R + 1)];
+    const taken = out.fresh(K.g, j);
+    const y = Q.y0 + (top - q - 1 + shift) * Q.pitch;
+    const o = q === top - R ? 1 - shift : q === top ? shift : 1;
+    if (taken) {
       out.t(K.id, jobId(j));
       out.c(K.g, "our", j === 0);
       if (Q.src) out.t(K.src, j === 0 ? "from chat" : "from app");
+      // A row comes in from the end of the list it joins at, at the pace the others make room for it.
+      const from = q === top ? Q.y0 - Q.pitch : q === top - R ? Q.y0 + R * Q.pitch : y;
+      out.m(K.g, 0, from);
+      out.o(K.g, q === top || q === top - R ? 0 : o, 0);
+      if (j === 0) {
+        out.n("q.our", "y", from + 1, 1);
+        out.o("q.our", 0, 0);
+      }
     }
+    out.m(K.g, 0, y, 0, 1, GLIDE);
+    out.o(K.g, o);
     const state = tau < jobS(j) ? 0 : tau < jobT(j) ? 1 : 2;
     if (out.fresh(K.s, state)) {
-      out.t(K.s, STATE[state]);
-      out.s(K.gl, "d", GLYPH[state]);
       out.c(K.g, "st-q", state === 0);
       out.c(K.g, "st-r", state === 1);
       out.c(K.g, "st-d", state === 2);
+      out.roll(K.s, K.r, STATE[state], taken);
+      out.dip(K.gl, () => out.s(K.gl, "d", GLYPH[state]), taken);
     }
     out.m(K.gl, Q.gx, Q.pitch / 2, state === 1 ? (now * 300 + j * 67) % 360 : 0);
     if (j === 0) { ourY = y; ourO = o; }
   }
   out.o("q.our", ourY >= 0 ? ourO : 0);
-  if (ourY >= 0) out.n("q.our", "y", ourY + 1, 1);
+  if (ourY >= 0) out.n("q.our", "y", ourY + 1, 1, GLIDE);
 
   // ---------- the sandboxes: one per render, drawn, sealed, used once ----------
+  let pen = -1, penAt = 0, penOn = 0, penOurs = false;
   for (let k = 0; k < SLOTS; k++) {
     const B = BOX[k], G = L.boxes[k];
-    const j = slotJob(k, tau), t = tau - jobS(j), N = jobFrames(j), r1 = PROV + N / FPS;
+    const j = slotJob(k, tau), t = tau - jobS(j), N = jobFrames(j), r1 = PROV + N / FPS, ours = j === 0;
+    // Other people's packets and pings blur away when the scroll runs the clock; ours are always drawn.
+    const seen = ours ? 1 : calm;
+    if (out.fresh(B.o, j)) {
+      out.t(B.id, jobId(j));
+      out.c(B.g, "our", ours);
+    }
 
     // The worker hands the job over.
     const du = phase(t, -LEAD, 0), handing = du > 0 && du < 1;
-    out.o(B.pk, handing ? Math.min(1, du * 8, (1 - du) * 8) : 0);
-    out.c(B.pk, "our", j === 0);
+    out.o(B.pk, handing ? Math.min(1, du * 8, (1 - du) * 8) * seen : 0);
+    out.c(B.pk, "our", ours);
     if (handing) {
-      along(L.route.disp[k], io(du));
+      along(L.route.disp[k], swap(du));
       out.n(B.pk, "cx", PT[0], 1);
       out.n(B.pk, "cy", PT[1], 1);
     }
 
-    const prov = e3(phase(t, 0, PROV)), down = phase(t, r1 + PACK, r1 + PACK + DOWN);
-    const here = t >= 0 && down < 1;
-    out.o(B.o, here ? 1 : 0);
-    // Drawn on from its first corner. When its render is over it goes the same way: it is not used again.
-    out.n(B.o, "stroke-dashoffset", here ? (down > 0 ? -down : 1 - prov) * DASH : DASH, 3);
-    out.o(B.c, here ? Math.min(phase(prov, 0.4, 1), 1 - phase(down, 0, 0.7)) : 0);
-    // Between jobs the slot is empty, and says why.
-    if (k === 0) out.o("b0e", t < 0 ? 1 : t < 0.2 ? 1 - t / 0.2 : phase(down, 0.72, 1));
-    const shut = e3(phase(t, 0.42, PROV));
-    out.m(B.l, G.lx + 2.8, G.ly - 1.5 - 1.6 * (1 - shut), 24 * (1 - shut));
-    ping(out, B.pg, phase(t, PROV - 0.06, PROV + 0.5));
-    // Once every frame is drawn they are wound into one file, toward the rail.
-    const spool = io(phase(t, r1, r1 + PACK));
-    if (out.fresh(B.o, j)) {
-      out.t(B.id, jobId(j));
-      out.c(B.g, "our", j === 0);
+    // Its outline is drawn on from the first corner, with a bright point at the
+    // pen. When its render is over it goes the same way: it is not used again.
+    const pu = phase(t, 0, PROV), down = phase(t, r1 + PACK, r1 + PACK + DOWN);
+    const here = t >= 0 && down < 1, line = phase(pu, 0, DRAWN);
+    out.o(B.o, here ? 1 : 0, 0);
+    out.n(B.o, "stroke-dashoffset", here ? (down > 0 ? -down : 1 - line) * DASH : DASH, 3);
+    if (here && pu > 0 && line < 1) {
+      pen = k;
+      penAt = line;
+      penOn = Math.min(1, pu * 12, (1 - line) * 8);
+      penOurs = ours;
     }
+    out.o(B.c, here ? Math.min(phase(pu, 0.1, 0.4), 1 - phase(down, 0, 0.6)) : 0, down > 0 ? LEAVE : SOFT);
+    // Between jobs the slot is empty, and says why, if it stays empty for long
+    // enough to be read. The note is gone before the next job sets off. Run
+    // fast by the scroll, a gap is over before it could be read: only the one
+    // that is there as the story begins is drawn then.
+    if (k === 0) {
+      const gone = jobGone(j), next = jobS(nextIn(j)) - LEAD;
+      const note = t < 0 || next - gone < IDLE ? 0 : Math.min(phase(tau, gone + PAUSE, gone + PAUSE + 0.3), 1 - phase(tau, next - 0.3, next));
+      out.o("b0e", note * (j < 0 ? 1 : calm), FAST);
+    }
+    const shut = arrive(phase(pu, SEAL - 0.16, SEAL + 0.06));
+    out.m(B.l, G.lx + 2.8, G.ly - 1.5 - 1.6 * (1 - shut), 24 * (1 - shut));
+    ping(out, B.pg, phase(t, PROV * SEAL, PROV + 0.5), seen);
+    // Once every frame is drawn they are wound into one file, toward the rail.
+    const spool = swap(phase(t, r1, r1 + PACK));
     const fr = clamp((t - PROV) * FPS, 0, N), fi = Math.floor(fr);
 
     if (k > 0) {
-      // A small sandbox shows only its progress.
+      // A small sandbox shows only its progress, a cell at a time.
       const done = Math.floor((fr / N) * L.fs.n + 1e-6), end = G.sx0 + done * G.sp - 2;
       out.o(B.p, done > 0 && spool < 1 ? 1 : 0);
       out.n(B.p, "x1", lerp(G.sx0, end, spool), 1);
-      out.n(B.p, "x2", end, 1);
+      out.n(B.p, "x2", end, 1, SEEN);
       if (out.fresh(B.n, fi * 1000 + N)) out.t(B.n, `${fi} / ${N}`);
       continue;
     }
 
-    // The large one shows the render itself.
-    const seal = t < 0.5 ? 0 : 1;
-    if (out.fresh(B.st, seal)) out.t(B.st, SEAL[seal]);
+    // The large one shows the render itself. Its parts come up one after the
+    // next as it is drawn: the picture, the timeline, the strip of frames.
+    const seal = pu < SEAL ? 0 : 1;
+    if (out.fresh(B.st, seal)) out.dip(B.st, () => out.t(B.st, SEALS[seal]), pu <= 0 || !here);
+    const v0 = arrive(phase(pu, 0.18, 0.5)), v1 = arrive(phase(pu, 0.3, 0.62)), v2 = arrive(phase(pu, 0.42, 0.74));
+    out.o("pv", v0, 0);
+    out.m("pv", 0, (1 - v0) * 4);
+    out.o("tl", v1, 0);
+    out.m("tl", 0, (1 - v1) * 4);
+    out.o("fs", v2, 0);
+    out.m("fs", 0, (1 - v2) * 4);
+    out.n("pv.curve", "stroke-dashoffset", (1 - phase(pu, 0.22, 0.74)) * DASH, 3);
+
     const l = LESSONS[lessonOf(j)], P = L.pv, T = L.tl, F = L.fs;
     if (out.fresh("pv.curve", j)) {
       const art = lessonArt(L, lessonOf(j), j);
@@ -696,9 +910,12 @@ export function draw(L: Layout, f: Frame, out: Sink) {
       out.t("tl.N", L.wide ? ` / ${N}` : `of ${N} frames`);
       out.t("tl.end", String(N));
     }
-    // The frame being drawn: the tangent at this frame's point, and its slope.
+    // The frame in the picture: the tangent at that frame's point, and its
+    // slope. It is the frame being drawn, unless the reader is pointing back
+    // along the strip at one already drawn.
     const u = fr / N;
-    const x0 = lerp(l.dom[0], l.dom[1], u), m = l.d(x0);
+    const us = f.mix > 0 && f.peek >= 0 ? lerp(u, Math.min(f.peek, u), f.mix) : u;
+    const x0 = lerp(l.dom[0], l.dom[1], us), m = l.d(x0);
     const kx = P.w / (l.v[1] - l.v[0]), ky = P.h / (l.v[3] - l.v[2]);
     const px = P.x + (x0 - l.v[0]) * kx, pyy = P.y + (l.v[3] - l.f(x0)) * ky;
     const tdx = kx, tdy = -ky * m, h = P.tan / Math.hypot(tdx, tdy);
@@ -719,24 +936,37 @@ export function draw(L: Layout, f: Frame, out: Sink) {
     out.n("pv.rise", "x2", runX, 1);
     out.n("pv.rise", "y2", pyy - 0.5 * m * ky, 1);
     const sl = Math.round(m * 100);
-    if (out.fresh("pv.m", sl)) out.t("pv.m", (sl < 0 ? MINUS : "") + (Math.abs(sl) / 100).toFixed(2));
+    if (out.fresh("pv.m", sl)) out.t("pv.m", slopeText(sl));
+    SHOWN.n = here && t >= PROV && spool < 1 ? N : 0;
+    SHOWN.frame = Math.min(N, Math.floor(us * N + 1e-6));
+    SHOWN.slope = sl;
+    // A needle on the strip marks the frame pointed at.
+    out.o("peek", SHOWN.n ? f.mix : 0);
+    out.m("peek", F.x + us * F.w, 0);
 
     const hx = lerp(T.x0, T.x1, u);
     out.m("tl.ph", hx, 0);
     out.n("tl.clip", "width", hx - T.x0, 1);
     if (out.fresh("tl.f", fi)) out.t("tl.f", String(fi));
-    const done = Math.min(F.n, Math.floor(u * F.n + 1e-6));
+    // The strip: each cell is wiped on from its left edge as its frames are drawn.
+    const cells = Math.min(F.n, u * F.n), done = Math.min(F.n, Math.floor(cells + 1e-6)), part = cells - done;
     out.n("fs.clip", "x", F.x + F.w * spool, 1);
-    out.n("fs.clip", "width", done * F.pitch * (1 - spool), 1);
+    out.n("fs.clip", "width", (done * F.pitch + (done < F.n && part > 0 ? F.pad + part * F.cw : 0)) * (1 - spool), 1);
     const drawing = fr > 0 && fr < N;
     out.o("fs.cur", drawing ? 1 : 0);
-    out.o("fs.scan", drawing ? 1 : 0);
+    // (At a reading scroll a cell lasts a frame or two: the line that sweeps it would only flicker.)
+    out.o("fs.scan", drawing ? calm : 0);
     if (drawing) {
       const cx = F.x + done * F.pitch + F.pad;
-      out.n("fs.cur", "x", cx, 1);
-      // Within the cell, a line sweeps across as its frames are drawn.
-      out.m("fs.scan", cx + (u * F.n - done) * F.cw, 0);
+      out.n("fs.cur", "x", cx, 1, SEEN);
+      out.m("fs.scan", cx + part * F.cw, 0);
     }
+  }
+  out.o("pen", pen >= 0 ? penOn : 0, 0);
+  if (pen >= 0) {
+    out.s("pen", "d", L.d.box[pen]);
+    out.c("pen", "our", penOurs);
+    out.n("pen", "stroke-dashoffset", NIB - penAt, 4);
   }
 
   // ---------- files: down the rail, into the store, three deep ----------
@@ -744,62 +974,68 @@ export function draw(L: Layout, f: Frame, out: Sink) {
   for (let j = jm - TILES + 1; j <= jm; j++) {
     const K = TILE[mod(j, TILES)];
     const r1 = jobS(j) + PROV + jobFrames(j) / FPS, T = r1 + PACK + TRAVEL;
-    if (tau < r1 + PACK * 0.4) { out.o(K, 0); continue; }
+    if (j === NONE || tau < r1 + PACK * 0.4) { out.o(K, 0); continue; }
     // How many files have landed on top of this one.
     let rank = 0;
     for (let i = jm - TILES + 1; i <= jm; i++) {
-      if (i === j) continue;
+      if (i === j || i === NONE) continue;
       const Ti = jobT(i);
-      if (Ti > T || (Ti === T && i > j)) rank += io(phase(tau, Ti - DROP, Ti));
+      if (Ti > T || (Ti === T && i > j)) rank += swap(phase(tau, Ti - DROP, Ti));
     }
     if (rank >= 3) { out.o(K, 0); continue; }
     out.c(K, "our", j === 0);
+    // On the rail a file of someone else's is a blur at the speed the scroll runs things; falling in, and on the stack, it is there.
+    const seen = j === 0 ? 1 : calm;
     if (tau < T - DROP) {
       const rt = L.route.out[mod(j, SLOTS)];
-      const u = io(phase(tau, r1 + PACK, T - DROP));
+      const u = swap(phase(tau, r1 + PACK, T - DROP));
       along(rt, u);
-      const grow = e3(phase(tau, r1 + PACK * 0.4, r1 + PACK));
+      const grow = arrive(phase(tau, r1 + PACK * 0.4, r1 + PACK));
       // On end in the chute, level on the run to the store.
-      out.m(K, PT[0], PT[1], 90 * (1 - io(phase(u * rt.total, rt.at[1] - 16, rt.at[1] + 16))), 0.6 + 0.4 * grow);
-      out.o(K, grow);
+      out.m(K, PT[0], PT[1], 90 * (1 - swap(phase(u * rt.total, rt.at[1] - 16, rt.at[1] + 16))), 0.6 + 0.4 * grow);
+      out.o(K, grow * seen);
     } else if (tau < T) {
       const v = phase(tau, T - DROP, T);
       out.m(K, L.store.cx, lerp(L.turnY, L.store.s0, v * v));
       out.o(K, 1);
     } else {
-      out.m(K, L.store.cx, L.store.s0 + rank * L.store.sp);
+      out.m(K, L.store.cx, L.store.s0 + rank * L.store.sp, 0, 1, SEEN);
       out.o(K, 1 - phase(rank, 2.3, 3));
     }
   }
-  const o1 = phase(tau, R1, R1 + PACK), o2 = io(phase(tau, R1 + PACK, STORED - DROP)), o3 = phase(tau, STORED - DROP, STORED);
+  const o1 = phase(tau, R1, R1 + PACK), o2 = swap(phase(tau, R1 + PACK, STORED - DROP)), o3 = phase(tau, STORED - DROP, STORED);
   out.n("tr.out", "stroke-dashoffset", (1 - (L.trOut.a * o1 + (L.trOut.b - L.trOut.a) * o2 + (1 - L.trOut.b) * o3)) * DASH, 3);
-  out.n("tr.disp", "stroke-dashoffset", (1 - io(phase(tau, S0 - LEAD, S0))) * DASH, 3);
+  out.n("tr.disp", "stroke-dashoffset", (1 - swap(phase(tau, S0 - LEAD, S0))) * DASH, 3);
 
   // ---------- back to the chat ----------
-  const rs = io(phase(tau, 12.15, 12.6));
-  out.o("res", Math.min(phase(tau, 12.15, 12.25), 1 - phase(tau, 12.5, 12.65)));
+  const rs = swap(phase(tau, BACK0, BACK));
+  out.o("res", Math.min(phase(tau, BACK0, BACK0 + 0.15), 1 - phase(tau, BACK - 0.1, BACK + 0.1)));
   along(L.route.res, rs);
   out.m("res", PT[0], PT[1]);
   out.n("tr.res", "stroke-dashoffset", (1 - rs) * DASH, 3);
-  const got = e3(phase(tau, 12.55, 12.95));
-  out.o("rep.ava", phase(tau, 12.5, 12.7));
+  const got = arrive(phase(tau, BACK - 0.1, BACK + 0.4));
+  out.o("rep.ava", phase(tau, BACK - 0.3, BACK));
   out.o("att", got);
   out.m("att", L.wide ? 8 * (1 - got) : 0, L.wide ? 0 : -8 * (1 - got));
-  const said = phase(tau, 12.95, 13.6);
+  const said = phase(tau, BACK + 0.3, DONE);
   out.o("rep.sk", said > 0 ? 1 : 0);
   out.n("rep.sk", "x2", lerp(L.rep.x0, L.rep.x1, said), 1);
   out.o("rep.caret", now % 1.1 < 0.62 ? 1 : 0);
 
   // ---------- lifecycle email, on its own clock ----------
   // An account event reaches EventBridge, which triggers SES, which delivers.
-  // None of it is tied to the export above: the times never line up on purpose.
-  const mi = Math.floor((tau - MAIL_FIRST) / MAIL_EVERY), mc = tau - MAIL_FIRST - mi * MAIL_EVERY;
+  // None of it is tied to the export above, and it runs at the speed it
+  // happens whatever the scroll is doing.
+  const lap = Math.floor(f.mail / MAIL_LOOP), into = f.mail - lap * MAIL_LOOP;
+  let mr = MAIL_AT.length - 1;
+  while (mr > 0 && MAIL_AT[mr] > into) mr--;
+  const mi = lap * MAIL_AT.length + mr, mc = into - MAIL_AT[mr];
   out.c("src", "hot", mc < 0.5);
   ring(out, "src.ring", L.src, phase(mc, 0, 0.6));
-  const h1 = io(phase(mc, 0.4, 0.9)), h2 = io(phase(mc, 1.3, 1.8)), h3 = io(phase(mc, 2.2, MAIL_LANDS));
-  const hopping = (mc > 0.4 && mc < 0.95) || (mc > 1.3 && mc < 1.85);
+  const h1 = swap(phase(mc, 0.4, 0.9)), h2 = swap(phase(mc, 1.3, 1.8)), h3 = swap(phase(mc, 2.2, MAIL_LANDS));
+  const hop = mc < 1.1 ? Math.min(phase(mc, 0.4, 0.5), 1 - phase(mc, 0.88, 0.98)) : Math.min(phase(mc, 1.3, 1.4), 1 - phase(mc, 1.78, 1.88));
   along(mc < 1.1 ? L.route.m1 : L.route.m2, mc < 1.1 ? h1 : h2);
-  out.o("pk.ev", hopping ? 1 : 0);
+  out.o("pk.ev", hop, 0);
   out.n("pk.ev", "cx", PT[0], 1);
   out.n("pk.ev", "cy", PT[1], 1);
   out.c("eb", "hot", mc >= 0.9 && mc < 1.5);
@@ -807,31 +1043,31 @@ export function draw(L: Layout, f: Frame, out: Sink) {
   out.c("ses", "hot", mc >= 1.8 && mc < 2.4);
   ring(out, "ses.ring", L.ses, phase(mc, 1.8, 2.35));
   along(L.route.m3, h3);
-  out.o("pk.env", mc > 2.2 && mc < MAIL_LANDS + 0.15 ? Math.min(1, h3 * 8, 1 - phase(mc, MAIL_LANDS, MAIL_LANDS + 0.15)) : 0);
+  out.o("pk.env", mc > 2.2 && mc < MAIL_LANDS + 0.15 ? Math.min(1, h3 * 8, 1 - phase(mc, MAIL_LANDS, MAIL_LANDS + 0.15)) : 0, 0);
   out.m("pk.env", PT[0], PT[1]);
   // The inbox: the newest message on top, the one before it below, the oldest sliding out.
   const mn = mc >= MAIL_LANDS ? mi : mi - 1;
-  const ms = e3(phase(mc >= MAIL_LANDS ? mc - MAIL_LANDS : 1, 0, 0.5));
+  const ms = arrive(phase(mc >= MAIL_LANDS ? mc - MAIL_LANDS : 1, 0, 0.5));
   for (let i = mn - 2; i <= mn; i++) {
     const K = MSG[mod(i, 3)], M = L.mm;
-    out.m(K.g, 0, M.top + (mn - i - 1 + ms) * M.pitch);
-    out.o(K.g, i === mn ? ms : 1);
-    out.o(K.dot, i === mn ? 1 : 0);
     if (out.fresh(K.g, i)) out.n(K.sk, "x2", M.x + M.len * SUBJECT[mod(i, SUBJECT.length)], 1);
+    out.m(K.g, 0, M.top + (mn - i - 1 + ms) * M.pitch);
+    out.o(K.g, i === mn ? ms : 1, 0);
+    out.o(K.dot, i === mn ? 1 : 0);
   }
 }
 
 /** A ring that opens once around a lock as it shuts (or opens). */
-function ping(out: Sink, k: string, u: number) {
+function ping(out: Sink, k: string, u: number, seen: number) {
   const on = u > 0 && u < 1;
-  out.o(k, on ? 0.9 * (1 - u) : 0);
-  if (on) out.n(k, "r", 5 + 9 * e3(u), 1);
+  out.o(k, on ? 0.9 * (1 - u) * seen : 0);
+  if (on) out.n(k, "r", 5 + 9 * arrive(u), 1);
 }
 
 /** A pill's outline widening and fading once, as something passes through it. */
 function ring(out: Sink, k: string, b: { x: number; y: number; w: number; h: number }, u: number) {
-  const on = u > 0 && u < 1, g = 7 * e3(u);
-  out.o(k, on ? 0.8 * (1 - u) : 0);
+  const on = u > 0 && u < 1, g = 7 * arrive(u);
+  out.o(k, on ? 0.8 * (1 - u) : 0, 0);
   if (!on) return;
   out.n(k, "x", b.x - g, 1);
   out.n(k, "y", b.y - g, 1);
@@ -862,14 +1098,36 @@ export const SAY: Record<Stage, { full: string; short: string }> = {
 
 const qa = <T extends Element>(root: ParentNode, sel: string) => Array.from(root.querySelectorAll<T>(sel));
 
-/** Writes to the DOM, and only what changed. */
+/** A dip in hand: the element is going down (`set` not yet called) or coming back. */
+interface Dip { k: string; el: SVGElement; set: () => void; t: number; done: boolean }
+/** Seconds down, seconds back, and how far down, for one mark taking another's place. */
+const DIP = 0.05, RISE = 0.17, LOW = 0.15;
+/** A label rolling over: the old text carried out upward, then the new one coming up into its place. `next` is what it should say after that. */
+interface Roll { k: string; el: SVGElement; twin: SVGElement; t: number; next: string | null }
+/** Seconds it takes, how far each travels in the drawing's units, and the share of the time the old word is on its way out. */
+const ROLL = 0.3, RISE_BY = 4, OUT = 0.36;
+
+/**
+ * Writes to the DOM, and only what changed. It also gives everything a floor
+ * in screen time: an opacity, or a position sent with a time constant, follows
+ * its value over a few frames instead of taking it at once, so a clock that the
+ * scroll is running many times too fast still draws a calm picture.
+ */
 class Dom implements Sink {
-  private el: Record<string, Element> = Object.create(null);
+  private el: Record<string, SVGElement> = Object.create(null);
   private num: Record<string, Record<string, number>> = Object.create(null);
   private str: Record<string, Record<string, string>> = Object.create(null);
   private cls: Record<string, Record<string, boolean>> = Object.create(null);
   private ver: Record<string, number> = Object.create(null);
   private txt: Record<string, string> = Object.create(null);
+  /** Where each follower stands: the value last shown, before rounding. */
+  private at: Record<string, Record<string, number>> = Object.create(null);
+  private dips: Dip[] = [];
+  private rolls: Roll[] = [];
+  /** Seconds since the frame before. */
+  private dt = 0;
+  /** Nothing is followed or dipped until the drawing has been made once. */
+  private begun = false;
 
   constructor(svg: SVGSVGElement) {
     for (const el of qa<SVGElement>(svg, "[data-k]")) {
@@ -878,12 +1136,85 @@ class Dom implements Sink {
       this.num[k] = Object.create(null);
       this.str[k] = Object.create(null);
       this.cls[k] = Object.create(null);
+      this.at[k] = Object.create(null);
     }
   }
-  n(k: string, a: string, v: number, d = 2) {
+
+  /** Before a frame is drawn: dips and rolls move on by `dt` seconds. */
+  step(dt: number) {
+    this.dt = dt;
+    for (let i = this.dips.length - 1; i >= 0; i--) {
+      const s = this.dips[i];
+      s.t += dt;
+      if (!s.done && s.t >= DIP) {
+        s.done = true;
+        s.set();
+      }
+      if (s.t >= DIP + RISE) {
+        s.el.style.opacity = "";
+        this.dips.splice(i, 1);
+      } else {
+        const o = s.t < DIP ? 1 - (1 - LOW) * (s.t / DIP) : LOW + (1 - LOW) * arrive((s.t - DIP) / RISE);
+        s.el.style.opacity = o.toFixed(2);
+      }
+    }
+    for (let i = this.rolls.length - 1; i >= 0; i--) {
+      const r = this.rolls[i];
+      r.t += dt;
+      if (r.t < ROLL) {
+        this.pose(r, r.t / ROLL);
+        continue;
+      }
+      this.rest(r);
+      // If the label has been told to change again in the meantime, it rolls on to that.
+      if (r.next !== null && r.next !== this.txt[r.k]) {
+        r.twin.textContent = this.txt[r.k];
+        this.t(r.k, r.next);
+        r.t = 0;
+        r.next = null;
+        this.pose(r, 0);
+      } else this.rolls.splice(i, 1);
+    }
+  }
+  /** After it. */
+  end() {
+    this.begun = true;
+  }
+  /** The next frame is a different moment altogether: nothing is followed into it, it is simply drawn. */
+  snap() {
+    this.begun = false;
+  }
+  /**
+   * A roll part-way: `u` from 0 (the old label in place) to 1 (the new one).
+   * The old word has all but gone before the new one shows, so the two are
+   * never read through each other.
+   */
+  private pose(r: Roll, u: number) {
+    const out = swap(phase(u, 0, OUT)), into = arrive(phase(u, OUT - 0.08, 1));
+    r.el.style.opacity = into.toFixed(2);
+    r.el.style.transform = `translateY(${((1 - into) * RISE_BY).toFixed(2)}px)`;
+    r.twin.style.opacity = (1 - out).toFixed(2);
+    r.twin.style.transform = `translateY(${(-out * RISE_BY).toFixed(2)}px)`;
+  }
+  private rest(r: Roll) {
+    r.el.style.opacity = r.el.style.transform = "";
+    r.twin.style.opacity = "0";
+    r.twin.style.transform = "";
+  }
+
+  /** One step of `a` on its way to `v`; with no time constant it is simply there, and is followed from there. */
+  private follow(k: string, a: string, v: number, tc: number, near: number) {
+    const s = this.at[k], cur = s[a];
+    if (tc === 0 || cur === undefined || !this.begun || (tc < 0 && s.opacity !== undefined && s.opacity <= 0.02)) return (s[a] = v);
+    const next = cur + (v - cur) * (1 - Math.exp(-this.dt / Math.abs(tc)));
+    return (s[a] = Math.abs(v - next) < near ? v : next);
+  }
+
+  n(k: string, a: string, v: number, d = 2, tc = 0) {
     const el = this.el[k];
     if (!el) return;
-    const m = d === 1 ? 10 : d === 3 ? 1000 : 100, r = Math.round(v * m) / m, c = this.num[k];
+    v = this.follow(k, a, v, tc, a === "opacity" ? 0.012 : 0.05);
+    const m = d === 1 ? 10 : d === 3 ? 1000 : d === 4 ? 10000 : 100, r = Math.round(v * m) / m, c = this.num[k];
     if (c[a] === r) return;
     c[a] = r;
     el.setAttribute(a, String(r));
@@ -906,10 +1237,12 @@ class Dom implements Sink {
     this.cls[k][name] = on;
     el.classList.toggle(name, on);
   }
-  m(k: string, x: number, y: number, rot = 0, sc = 1) {
+  m(k: string, x: number, y: number, rot = 0, sc = 1, tc = 0) {
     const el = this.el[k];
     if (!el) return;
     const c = this.num[k];
+    x = this.follow(k, "x", x, tc, 0.05);
+    y = this.follow(k, "y", y, tc, 0.05);
     x = Math.round(x * 10) / 10;
     y = Math.round(y * 10) / 10;
     rot = Math.round(rot * 10) / 10;
@@ -921,22 +1254,69 @@ class Dom implements Sink {
     c.ts = sc;
     el.setAttribute("transform", transform(x, y, rot, sc));
   }
-  o(k: string, v: number) {
-    this.n(k, "opacity", v <= 0.004 ? 0 : v >= 0.996 ? 1 : v, 2);
+  o(k: string, v: number, tc = SOFT) {
+    this.n(k, "opacity", v <= 0.004 ? 0 : v >= 0.996 ? 1 : v, 2, tc);
   }
   fresh(k: string, v: number) {
     if (this.ver[k] === v) return false;
     this.ver[k] = v;
     return true;
   }
+  dip(k: string, set: () => void, now = false) {
+    const el = this.el[k];
+    const i = this.dips.findIndex((s) => s.k === k);
+    if (!el || now || !this.begun) {
+      // Whatever was on its way for this element is overtaken.
+      if (i >= 0) {
+        this.dips[i].el.style.opacity = "";
+        this.dips.splice(i, 1);
+      }
+      return set();
+    }
+    if (i < 0) {
+      this.dips.push({ k, el, set, t: 0, done: false });
+      return;
+    }
+    // Already dipping or coming back: change again from wherever it has got to.
+    const s = this.dips[i];
+    if (s.done) {
+      const o = LOW + (1 - LOW) * arrive((s.t - DIP) / RISE);
+      s.t = DIP * ((1 - o) / (1 - LOW));
+      s.done = false;
+    }
+    s.set = set;
+  }
+  roll(k: string, k2: string, v: string, now = false) {
+    const el = this.el[k], twin = this.el[k2];
+    const i = this.rolls.findIndex((r) => r.k === k);
+    if (!el || !twin || now || !this.begun) {
+      if (i >= 0) {
+        this.rest(this.rolls[i]);
+        this.rolls.splice(i, 1);
+      }
+      return this.t(k, v);
+    }
+    // Mid-roll: let this one land, then roll on.
+    if (i >= 0) {
+      this.rolls[i].next = v;
+      return;
+    }
+    if (this.txt[k] === v) return;
+    twin.textContent = this.txt[k] ?? "";
+    this.t(k, v);
+    const r: Roll = { k, el, twin, t: 0, next: null };
+    this.rolls.push(r);
+    this.pose(r, 0);
+  }
 }
 
 /** The line the plate readout shows for a moment of the story. */
 function storyLine(tau: number, frame: number) {
-  if (tau < -4.0) return "asked in chat";
-  if (tau < -2.6) return "tool call, waiting for consent";
+  if (tau < CHIP + 0.3) return "asked in chat";
+  if (tau < PRESS) return "tool call, waiting for consent";
   if (tau < 0) return "authorised";
   if (tau < S0) return "queued";
+  if (tau < S0 + PROV * SEAL) return "sandbox starting";
   if (tau < R0) return "sandbox sealed";
   if (tau < R1) return `rendering ${frame} / ${OURS.frames} frames`;
   if (tau < STORED) return `${OURS.frames} frames rendered`;
@@ -945,14 +1325,19 @@ function storyLine(tau: number, frame: number) {
 }
 /** A number that changes exactly when storyLine's answer does. */
 const storyKey = (tau: number) =>
-  tau < -4.0 ? -1 : tau < -2.6 ? -2 : tau < 0 ? -3 : tau < S0 ? -4 : tau < R0 ? -5 : tau < R1 ? Math.floor((tau - R0) * FPS) : tau < STORED ? -6 : tau < BACK ? -7 : -8;
+  tau < CHIP + 0.3 ? -1 : tau < PRESS ? -2 : tau < 0 ? -3 : tau < S0 ? -4 : tau < S0 + PROV * SEAL ? -5 : tau < R0 ? -6
+  : tau < R1 ? Math.floor((tau - R0) * FPS) : tau < STORED ? -7 : tau < BACK ? -8 : -9;
 
-function bind(svg: SVGSVGElement, L: Layout) {
+/** Each drawing as it stands in a window before the page has been measured: enough to draw a first frame from. */
+const NOMINAL: Geo[] = [{ vh: 900, t0: 765, t1: 24, y0: 52, s: 0.925 }, { vh: 844, t0: 692, t1: -637, y0: 69, s: 0.8 }];
+
+function bind(svg: SVGSVGElement, L: Layout, i: number) {
   const sink = new Dom(svg);
   const l1 = svg.querySelector<SVGTextElement>('[data-m="l1"]'), l2 = svg.querySelector<SVGTextElement>('[data-m="l2"]');
-  const frame: Frame = { tau: T_START, p: 0, late: 0, now: 0, w1: 0, w2: 0 };
+  const frame: Frame = { ...still(), tau: T_START };
   return {
     svg, L, frame,
+    S: schedule(L, NOMINAL[i]),
     live: false,
     hits: qa<SVGRectElement>(svg, ".hit"),
     /** The stages a keyboard can reach, in reading order. */
@@ -964,8 +1349,14 @@ function bind(svg: SVGSVGElement, L: Layout) {
       frame.w1 = l1.getComputedTextLength();
       frame.w2 = l2.getComputedTextLength();
     },
-    render() {
+    render(dt: number) {
+      sink.step(dt);
       draw(L, frame, sink);
+      sink.end();
+    },
+    /** The next frame drawn is not a continuation of the last. */
+    snap() {
+      sink.snap();
     },
   };
 }
@@ -974,10 +1365,10 @@ export default async function (root: HTMLElement) {
   const { gsap, scrubbed, whileVisible } = await import("../motion");
   const box = root.querySelector<HTMLElement>(".ex-box");
   if (!box) throw new Error("figure element missing: .ex-box");
-  const views = qa<SVGSVGElement>(root, "svg.ex").map((svg, i) => bind(svg, LAYOUTS[i]));
+  const views = qa<SVGSVGElement>(root, "svg.ex").map((svg, i) => bind(svg, LAYOUTS[i], i));
   const readout = root.querySelector<HTMLElement>("[data-readout]");
   let view = views[0];
-  let p = 0, amb = 0, now = 0;
+  let p = 0, now = 0;
   let line = "", lineKey = NaN;
 
   // What is being read out, and why. A stage under the mouse comes first, then
@@ -990,7 +1381,37 @@ export default async function (root: HTMLElement) {
   /** Progress as drawn. */
   const pe = () => p + (1 - p) * force.v;
 
-  // ---- the readout: the job's state, or the stage being read ----
+  // ---- the clock ----
+  // Up to the delivery it is the scroll's: where the page is, is when the
+  // story is. Past it the clock runs by itself, at the speed things happen,
+  // and a few seconds on it passes the moment the page was served at. It is
+  // also let go early if the reader stops once our last frame is rendered:
+  // the delivery is then made at the speed it happens, instead of standing
+  // half done until the page moves again. Going back up the page far enough
+  // to want the story again takes the drawing back into it; what had been
+  // running by itself is cut away, not wound back.
+  let tau = T_START, live = false, clock = T_START, cut = 0;
+  /** Where the scroll stood when the clock was let go, and how long it has now stood where it is, seconds. */
+  let from = 1, stood = -1, rested = 0;
+  /** Story seconds per second of screen time, eased: 1 when things happen at their own speed. */
+  let pace = 0, before = T_START;
+  /** The same, for the clock once it runs by itself: it takes over at the speed the scroll had it going, and settles to 1. */
+  let speed = 1;
+  /** The email lane's clock. It starts when the lane has come into view. */
+  let mail = MAIL0;
+  /** The frame pointed at in the big sandbox, and how far its picture has gone over to it. */
+  let aim = -1, peek = -1, mix = 0, touchEnd = 0;
+  /** The frame under a mouse, and since when it has been on the sandbox: one that is only crossing it shows nothing. */
+  let under = -1, since = 0;
+  const DWELL = 0.12;
+  /** When the loop last ran: after a gap (the plate was off screen, or the tab was) nothing is followed across it. */
+  let seen = 0;
+  const CUT = 0.1;
+  const cutting = (on: boolean) => {
+    for (const v of views) v.svg.classList.toggle("cut", on);
+  };
+
+  // ---- the readout: the job's state, the stage being read, or the frame pointed at ----
   // A stage's sentence is tried in full; if the plate is too narrow for it,
   // the short form goes in instead. Asked once per stage per width.
   const fits: Partial<Record<Stage, string>> = {};
@@ -1002,25 +1423,37 @@ export default async function (root: HTMLElement) {
     }
     return fits[st]!;
   }
+  let frameKey = -1, frameLine = "";
   function say() {
     if (!readout) return;
-    const text = pick ? sentence(pick) : line;
+    let text = pick ? sentence(pick) : line;
+    // Pointing along the big sandbox reads out the frame under the pointer, from the same numbers the picture is drawn with.
+    if (mix > 0.5 && SHOWN.n) {
+      const key = SHOWN.frame * 100000 + SHOWN.slope + 5000;
+      if (key !== frameKey) {
+        frameKey = key;
+        frameLine = `frame ${SHOWN.frame} / ${SHOWN.n} · slope ${slopeText(SHOWN.slope)}`;
+      }
+      text = frameLine;
+    }
     if (readout.textContent !== text) readout.textContent = text;
   }
 
-  function render() {
-    const f = view.frame, e = pe();
-    f.p = e;
-    f.tau = tauOf(view.L, e) + amb;
-    f.late = amb;
+  function render(dt = 0) {
+    const f = view.frame;
+    f.tau = tau;
     f.now = now;
-    view.render();
-    const key = storyKey(f.tau);
+    f.mail = mail;
+    f.calm = clamp(1.35 - pace / 4, 0, 1);
+    f.peek = peek;
+    f.mix = mix;
+    view.render(dt);
+    const key = storyKey(tau);
     if (key !== lineKey) {
       lineKey = key;
-      line = storyLine(f.tau, Math.max(0, key));
-      say();
+      line = storyLine(tau, Math.max(0, key));
     }
+    say();
   }
 
   // ---- the keyboard's one stop ----
@@ -1033,11 +1466,24 @@ export default async function (root: HTMLElement) {
   };
 
   // ---- the scroll story, bound to whichever drawing is showing ----
-  // Side by side, it ends as the plate settles in the middle of the screen.
-  // Stacked, the plate is taller than the screen, so it runs for as long as
-  // the plate takes to pass.
+  // It begins as the plate comes into the window. Side by side it is let go
+  // as the plate's middle passes 45% of the window; stacked, the plate is
+  // taller than the window, so it runs for as long as the plate takes to pass.
   let tl: ReturnType<typeof scrubbed> | null = null;
   let bound = "";
+  /**
+   * Work out when each part of the story plays, from where the drawing stands
+   * in the window. Only read here, when the page is measured.
+   */
+  function plan() {
+    const trig = tl?.scrollTrigger;
+    // (A trigger has no positions until its first refresh, which calls back here.)
+    if (!trig || !(trig.end > trig.start)) return;
+    const plate = root.getBoundingClientRect(), art = view.svg.getBoundingClientRect();
+    if (!art.width) return;
+    const top = plate.top + window.scrollY;
+    view.S = schedule(view.L, { vh: window.innerHeight, t0: top - trig.start, t1: top - trig.end, y0: art.top - plate.top, s: art.width / view.L.W });
+  }
   function drive() {
     for (const v of views) v.live = v.svg.getBoundingClientRect().width > 0;
     view = views.find((v) => v.live) ?? views[0];
@@ -1045,16 +1491,20 @@ export default async function (root: HTMLElement) {
     rove();
     for (const k in fits) delete fits[k as Stage];
     const mode = view.L.wide ? "wide" : "stacked";
-    if (mode === bound) return;
+    if (mode === bound) return plan();
     bound = mode;
     tl?.scrollTrigger?.kill();
     tl?.kill();
-    const clock = { p: 0 };
-    tl = scrubbed(root, view.L.wide ? { start: "top 85%", end: "center 50%" } : { start: "top 72%", end: "bottom 64%" });
-    tl.to(clock, { p: 1, duration: 1, ease: "none" });
-    tl.eventCallback("onUpdate", () => (p = clock.p));
+    const scroll = { p: 0 };
+    tl = scrubbed(root, { start: view.L.wide ? "top 85%" : "top 82%", end: view.L.wide ? "center 45%" : "bottom 64%", onRefresh: plan });
+    tl.to(scroll, { p: 1, duration: 1, ease: "none" });
+    tl.eventCallback("onUpdate", () => (p = scroll.p));
     p = 0;
-    amb = 0;
+    live = false;
+    cut = 0;
+    cutting(false);
+    view.snap();
+    plan();
   }
   drive();
   render();
@@ -1062,6 +1512,26 @@ export default async function (root: HTMLElement) {
     drive();
     render();
   }).observe(box);
+  // What is above the plate can change height after the story has been planned
+  // (type is split into lines to rise, then put back; another figure comes to
+  // life); it is measured again then.
+  {
+    let queued = false;
+    const again = () => {
+      queued = false;
+      const trig = tl?.scrollTrigger;
+      if (!trig) return;
+      trig.refresh();
+      trig.update();
+    };
+    const page = new ResizeObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(again);
+    });
+    page.observe(document.body);
+    page.observe(root);
+  }
   document.fonts?.ready.then(() => {
     view.measure();
     for (const k in fits) delete fits[k as Stage];
@@ -1070,17 +1540,75 @@ export default async function (root: HTMLElement) {
   // ---- one loop: the story where the scroll has put it, then the same clock left running ----
   whileVisible(root, (dt, t) => {
     now = t;
-    if (pe() >= 0.999) amb += dt;
-    else amb = 0;
-    render();
+    const S = view.S, e = pe(), base = tauOf(S, e);
+    const away = t - seen > 0.3;
+    seen = t;
+    if (away) {
+      // Back in view, perhaps somewhere else in the scroll: the drawing is simply made as it should now stand.
+      if (live && e < from - S.back) live = false;
+      cut = 0;
+      cutting(false);
+      view.snap();
+    }
+    rested = Math.abs(e - stood) < 2e-5 ? rested + dt : 0;
+    stood = e;
+    if (live) {
+      // (Let go from rest it gathers speed gently; let go by the scroll it only has to settle.)
+      speed += (1 - speed) * (1 - Math.exp(-dt / (speed < 1 ? 0.12 : 0.04)));
+      clock += dt * speed;
+      // Let go early, the scroll can still carry the story on as far as the delivery.
+      if (e < S.hand && base > clock) clock = base;
+      if (cut) {
+        if (e >= from - S.back) {
+          cut = 0;
+          cutting(false);
+        } else if (t - cut > CUT) {
+          live = false;
+          cut = 0;
+          cutting(false);
+          view.snap();
+        }
+      } else if (e < from - S.back) {
+        cut = t;
+        cutting(true);
+      }
+    } else if (e >= S.hand) {
+      live = true;
+      from = S.hand;
+      clock = base;
+      speed = clamp(pace, 1, 14);
+    } else if (base >= R1 && rested > 0.35) {
+      live = true;
+      from = e;
+      clock = base;
+      speed = 0;
+    }
+    tau = live ? clock : base;
+    // How fast the clock is being run. (A jump is not a speed: the drawing was away, or has just been cut.)
+    const moved = Math.abs(tau - before);
+    before = tau;
+    if (dt > 0 && moved < 1.5) pace += (moved / dt - pace) * (1 - Math.exp(-dt / 0.12));
+    if (e >= S.mail) mail += dt;
+    // The picture in the big sandbox goes over to the frame pointed at, and back.
+    if (touchEnd && t > touchEnd) {
+      touchEnd = 0;
+      aim = -1;
+    }
+    if (under >= 0 && t - since >= DWELL) aim = under;
+    const want = aim >= 0 && SHOWN.n ? 1 : 0;
+    mix += (want - mix) * (1 - Math.exp(-dt / 0.09));
+    if (Math.abs(want - mix) < 0.004) mix = want;
+    if (aim >= 0) peek = peek < 0 || mix < 0.02 ? aim : peek + (aim - peek) * (1 - Math.exp(-dt / 0.05));
+    else if (mix === 0) peek = -1;
+    render(dt);
   });
 
   // ---- pointer, touch and keyboard: a stage says what it does ----
-  const live = document.createElement("p");
-  live.className = "sr-only";
-  live.setAttribute("aria-live", "polite");
-  root.append(live);
-  let liveTimer = 0, tapTimer = 0;
+  const spoken = document.createElement("p");
+  spoken.className = "sr-only";
+  spoken.setAttribute("aria-live", "polite");
+  root.append(spoken);
+  let liveTimer = 0, tapTimer = 0, hoverTimer = 0;
   let lastType = "mouse";
 
   /** Work out what is being read, mark it, and write it. A pointer or a finger is also told through the live line. */
@@ -1098,13 +1626,22 @@ export default async function (root: HTMLElement) {
     // A keyboard reader hears the stage's own label; the live line is for a pointer or a finger.
     if (announce && pick) {
       const text = SAY[pick].full;
-      liveTimer = window.setTimeout(() => (live.textContent = text), 250);
+      liveTimer = window.setTimeout(() => (spoken.textContent = text), 250);
     }
+  }
+  /** A pointer has to rest on a stage for a moment to pick it, and to be off it for one to let it go: crossing a corner picks nothing. */
+  function point(st: Stage | null) {
+    clearTimeout(hoverTimer);
+    if (st === hover) return;
+    hoverTimer = window.setTimeout(() => {
+      hover = st;
+      update(!!st);
+    }, st ? 70 : 110);
   }
   const press = () => {
     for (const v of views) for (const hit of v.keys) hit.setAttribute("aria-pressed", String(held === hit.dataset.st));
   };
-  const finish = (on: boolean) => gsap.to(force, { v: on ? 1 : 0, duration: 0.6, ease: "power2.out", overwrite: true });
+  const finish = (on: boolean) => gsap.to(force, { v: on ? 1 : 0, duration: 0.8, ease: "swap", overwrite: true });
   // Leaving the figure gives the drawing back to the scroll, unless a reading is held.
   root.addEventListener("focusout", (e) => {
     if (!held && !root.contains(e.relatedTarget as Node | null)) finish(false);
@@ -1113,32 +1650,78 @@ export default async function (root: HTMLElement) {
   for (const v of views) {
     v.svg.dataset.live = "";
     v.svg.setAttribute("aria-label", "Plot. Arrow keys move through its parts.");
+    const big = v.L.boxes[0], F = v.L.fs;
+    /** The frame under a pointer, if it is on the big sandbox: where it stands along the strip of frames. */
+    const frameAt = (e: { clientX: number; clientY: number }) => {
+      const r = v.svg.getBoundingClientRect();
+      if (!r.width) return -1;
+      const x = ((e.clientX - r.left) / r.width) * v.L.W, y = ((e.clientY - r.top) / r.height) * v.L.H;
+      return y >= big.y && y <= big.y + big.h ? clamp((x - F.x) / F.w, 0, 1) : -1;
+    };
     for (const hit of v.hits) {
       const st = hit.dataset.st as Stage;
       // The plate readout takes over from the native tooltip.
       hit.querySelector("title")?.remove();
-      // A pointer or a finger can only pick a stage the plate has drawn.
-      const drawn = () => pe() >= v.L.ready[st];
       hit.addEventListener("pointerenter", (e) => {
-        if (e.pointerType !== "mouse" || !drawn()) return;
-        hover = st;
-        update(true);
+        if (e.pointerType === "mouse") point(st);
       });
       hit.addEventListener("pointerleave", (e) => {
-        if (e.pointerType !== "mouse") return;
-        hover = null;
-        update();
+        if (e.pointerType === "mouse") point(null);
       });
+      if (st === "box") {
+        // Along the big sandbox a pointer also steps back through the frames it has drawn.
+        // A finger does the same by dragging across it, or by a tap; a touch that
+        // turns out to be the start of a scroll does nothing.
+        let downX = 0, across = false;
+        const over = (e: PointerEvent) => {
+          if (e.pointerType === "mouse") {
+            const fr = frameAt(e);
+            if (fr >= 0 && under < 0) since = now;
+            under = fr;
+            if (fr < 0) aim = -1;
+          } else if (across || Math.abs(e.clientX - downX) > 8) {
+            across = true;
+            touchEnd = 0;
+            aim = frameAt(e);
+          }
+        };
+        hit.addEventListener("pointerenter", over);
+        hit.addEventListener("pointermove", over);
+        hit.addEventListener("pointerdown", (e) => {
+          downX = e.clientX;
+          across = false;
+        });
+        hit.addEventListener("pointerleave", (e) => {
+          if (e.pointerType === "mouse") under = aim = -1;
+        });
+        // A finger's reading stays a moment after it lifts.
+        hit.addEventListener("pointerup", (e) => {
+          if (e.pointerType !== "mouse" && across) touchEnd = now + 2.5;
+        });
+        hit.addEventListener("pointercancel", () => {
+          if (across) aim = -1;
+        });
+        hit.addEventListener("click", (e) => {
+          if (lastType === "mouse") return;
+          aim = frameAt(e);
+          touchEnd = now + 4;
+        });
+      }
       // A click or a tap should not move the keyboard's place, or leave a ring behind.
       hit.addEventListener("mousedown", (e) => e.preventDefault());
       hit.addEventListener("pointerdown", (e) => (lastType = e.pointerType));
       // A tap, not a scroll that happens to start here: click only fires for the former.
       // A second tap on the same stage lets it go; a tap on another replaces it.
       hit.addEventListener("click", () => {
-        if (lastType === "mouse" || !drawn()) return;
+        if (lastType === "mouse") return;
         clearTimeout(tapTimer);
         tap = tap === st ? null : st;
         if (tap) tapTimer = window.setTimeout(() => { tap = null; update(); }, 6000);
+        // Only a tap that picks the sandbox keeps a frame of it in the picture.
+        if (tap !== "box") {
+          aim = -1;
+          touchEnd = 0;
+        }
         update(true);
       });
     }

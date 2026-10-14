@@ -1,7 +1,7 @@
 // Layout of Fig. "topsojmap": the Equal Earth frame, the hexagonal dot grid,
 // and the curves drawn over it. Pure functions, shared by the build step and
 // the browser.
-import { project, latOf } from "./equalearth";
+import { project, latOf, rowScale, northing } from "./equalearth";
 
 export const VIEW_W = 1200;
 /** Screen units per unit of the projection. */
@@ -60,30 +60,72 @@ export function graticule(): { a: number; lines: Pt[][] }[] {
 const RAD = Math.PI / 180;
 /**
  * The circle of points `d` radians (great-circle) from a centre, projected and
- * cut where it crosses the antimeridian or leaves the frame.
+ * cut where it crosses the antimeridian or leaves the frame. It is walked
+ * rather than returned: `move` starts a run and `line` continues it, so it can
+ * be drawn afresh every frame without making anything.
  */
-export function ring(lon0: number, lat0: number, d: number, steps = 180): Pt[][] {
+export function walkRing(lon0: number, lat0: number, d: number, steps: number, move: (x: number, y: number) => void, line: (x: number, y: number) => void) {
   const p1 = lat0 * RAD, sd = Math.sin(d), cd = Math.cos(d), sp = Math.sin(p1), cp = Math.cos(p1);
-  const out: Pt[][] = [];
-  let cur: Pt[] = [];
-  let prevLon = NaN;
+  let prevLon = NaN, pen = false;
   for (let i = 0; i <= steps; i++) {
     const a = (i / steps) * 2 * Math.PI;
     const lat = Math.asin(sp * cd + cp * sd * Math.cos(a));
     let lon = lon0 * RAD + Math.atan2(Math.sin(a) * sd * cp, cd - sp * Math.sin(lat));
     lon = ((((lon / RAD + 180) % 360) + 360) % 360) - 180;
     const latD = lat / RAD;
-    const jump = Math.abs(lon - prevLon) > 180;
+    const out = latD > LAT_TOP || latD < LAT_BOT;
+    if (out || Math.abs(lon - prevLon) > 180) pen = false;
     prevLon = lon;
-    if (latD > LAT_TOP || latD < LAT_BOT || jump) {
-      if (cur.length > 1) out.push(cur);
-      cur = [];
-      if (latD > LAT_TOP || latD < LAT_BOT) continue;
-    }
-    cur.push(px(lon, latD));
+    if (out) continue;
+    const x = CX + lon * RAD * rowScale(latD) * K, y = PAD_T + (Y_TOP - northing(latD)) * K;
+    if (pen) line(x, y);
+    else move(x, y);
+    pen = true;
   }
-  if (cur.length > 1) out.push(cur);
-  return out;
+}
+
+/**
+ * A meridian is the same curve at every longitude, stretched sideways: at
+ * height ys[j] it stands kx[j] screen units from the central meridian for each
+ * degree of longitude. Sampled from the top of the frame to the bottom.
+ */
+export function meridians(n = 44): { ys: Float32Array; kx: Float32Array } {
+  const ys = new Float32Array(n + 1), kx = new Float32Array(n + 1);
+  for (let j = 0; j <= n; j++) {
+    const lat = LAT_TOP + ((LAT_BOT - LAT_TOP) * j) / n;
+    ys[j] = PAD_T + (Y_TOP - northing(lat)) * K;
+    kx[j] = rowScale(lat) * K * RAD;
+  }
+  return { ys, kx };
+}
+
+/**
+ * The great circle from one place to another, as `n + 1` screen points written
+ * into `out` (x, y pairs) at equal steps of distance. `cut[i]` is 1 where the
+ * step from point i to i + 1 crosses the antimeridian, and so jumps from one
+ * edge of the map to the other. Near the pole the route runs along the top of
+ * the map: on this projection the pole is a line, not a point. Returns the
+ * distance in radians.
+ */
+export function geodesic(lon1: number, lat1: number, lon2: number, lat2: number, n: number, out: Float32Array, cut: Uint8Array) {
+  const a1 = lon1 * RAD, b1 = lat1 * RAD, a2 = lon2 * RAD, b2 = lat2 * RAD;
+  const x1 = Math.cos(b1) * Math.cos(a1), y1 = Math.cos(b1) * Math.sin(a1), z1 = Math.sin(b1);
+  const x2 = Math.cos(b2) * Math.cos(a2), y2 = Math.cos(b2) * Math.sin(a2), z2 = Math.sin(b2);
+  const w = Math.acos(Math.max(-1, Math.min(1, x1 * x2 + y1 * y2 + z1 * z2)));
+  const sw = Math.sin(w) || 1;
+  let prev = NaN;
+  for (let i = 0; i <= n; i++) {
+    const f = i / n;
+    const A = w < 1e-6 ? 1 - f : Math.sin((1 - f) * w) / sw, B = w < 1e-6 ? f : Math.sin(f * w) / sw;
+    const x = A * x1 + B * x2, y = A * y1 + B * y2, z = A * z1 + B * z2;
+    const lon = Math.atan2(y, x) / RAD, lat = Math.asin(Math.max(-1, Math.min(1, z))) / RAD;
+    out[i * 2] = CX + lon * RAD * rowScale(lat) * K;
+    out[i * 2 + 1] = PAD_T + (Y_TOP - northing(lat)) * K;
+    if (i) cut[i - 1] = Math.abs(lon - prev) > 180 ? 1 : 0;
+    prev = lon;
+  }
+  cut[n] = 0;
+  return w;
 }
 
 export const polyline = (pts: Pt[]) => pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join("");

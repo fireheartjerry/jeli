@@ -1,24 +1,132 @@
 ---
+// The page that is not there, drawn as what its title says: a body that had an
+// orbit, took one kick, and is leaving on a hyperbola. The physics is in
+// scripts/geo/escape.ts and the same functions draw this still and every frame
+// of the moving plate (scripts/lost.ts), so the two cannot disagree.
 import Base from "../layouts/Base.astro";
+import Figure from "../components/Figure.astro";
+import { chart, frame, marks, PLATE, STEP } from "../scripts/geo/escape";
+
+const { w: W, h: H, cx, cy, au } = PLATE;
+const c = chart(0);
+// The still: the first departure, well past the star and on its way out.
+const T = Math.round(c.tPeri + 0.4 * (c.tExit - c.tPeri));
+const f = frame(c, T);
+const n = (v: number) => v.toFixed(1);
+
+// Range rings every AU, named along a line up and to the right, clear of the way out.
+const rings = [1, 2, 3, 4, 5, 6];
+const tag = (k: number) => ({ x: cx + k * au * Math.cos(0.72) + 4, y: cy - k * au * Math.sin(0.72) - 3 });
+
+const label =
+  `A star with a faint closed ellipse round it, the orbit this page had. At a marked point on the ellipse the body was kicked by ${c.d.kick.dv.toFixed(1)} km/s. ` +
+  `Its path since is a hyperbola of eccentricity ${f.e}: it passed ${c.d.q.toFixed(2)} AU from the star and is now ${f.r} AU out, ` +
+  `moving at ${f.over} times the local escape speed along a dashed asymptote, toward a speed of ${f.vinf} km/s that it keeps for good.`;
 ---
 
 <Base title="Not found · Jerry Li" noindex>
   <main class="wrap nf">
-    <p class="code num">404</p>
-    <h1>This page lost its orbit.</h1>
-    <p>Whatever was here has drifted off. <a class="ln" href="/">Head back to the start</a>.</p>
+    <div class="say">
+      <p class="code cm">404</p>
+      <h1>This page lost its orbit.</h1>
+      <p>
+        Whatever was here took a kick, and it is leaving faster than escape speed. It will not be
+        back.{" "}<a class="ln" href="/">Head back to the start</a>.
+      </p>
+    </div>
+
+    <div class="plate">
+      <Figure name="lost" n={404} title="A hyperbolic departure" label="A body kicked off a closed orbit and leaving on a hyperbola" readout={`departure 1 · day ${f.day} · ${f.kepler}`}>
+        <div class="scope">
+          <svg class="lo" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} data-lost data-still={T} data-free>
+            <defs>
+              <clipPath id="lo-frame"><rect width={W} height={H} /></clipPath>
+            </defs>
+            <g clip-path="url(#lo-frame)">
+              <g class="rings">
+                {rings.map((k) => <circle class="hair" cx={cx} cy={cy} r={k * au} />)}
+                {rings.slice(0, 3).map((k) => (
+                  <text class:list={["cm", { minor: k > 1 }]} x={n(tag(k).x)} y={n(tag(k).y)}>{k} AU</text>
+                ))}
+              </g>
+
+              {/* One departure: all of this is redrawn when the next one starts. */}
+              <g class="live" data-live>
+                <ellipse class="orbit" data-orbit cx={n(c.orbit.cx)} cy={n(c.orbit.cy)} rx={n(c.orbit.rx)} ry={n(c.orbit.ry)} transform={`rotate(${n(c.orbit.turn)} ${n(c.orbit.cx)} ${n(c.orbit.cy)})`} />
+                <path class="sector free" data-peri d={c.peri} opacity={f.past ? 1 : 0} />
+                <path class="sector" data-wedge d={f.wedge} />
+                <text class="free minor" data-near x={n(c.near.x)} y={n(c.near.y)} text-anchor={c.near.anchor} opacity={f.past ? 1 : 0}>{c.near.label}</text>
+                <line class="asym free" data-asym x1={n(c.asym[0])} y1={n(c.asym[1])} x2={n(c.asym[2])} y2={n(c.asym[3])} />
+                <text class="free" data-named x={n(c.named.x)} y={n(c.named.y)} text-anchor="end">asymptote</text>
+                <path class="ahead free" data-ahead d={c.path} />
+                <path class="accent" data-flown d={c.path} stroke-dasharray={`${n(f.flown)} 4000`} />
+                <path class="marks" data-marks d={marks(c, f.marks)} />
+                <g class="kick free" data-kick>
+                  <line class="ink" x1={n(c.kick.x)} y1={n(c.kick.y)} x2={n(c.kick.x2)} y2={n(c.kick.y2)} />
+                  <path class="head" d="M1.5 0L-5 -2.6L-5 2.6Z" transform={`translate(${n(c.kick.x2)} ${n(c.kick.y2)}) rotate(${n(c.kick.turn)})`} />
+                  <circle class="dot" cx={n(c.kick.x)} cy={n(c.kick.y)} r="2.4" />
+                  <text x={n(c.kick.lx)} y={n(c.kick.ly)} text-anchor={c.kick.anchor}>{c.kick.label}</text>
+                </g>
+                <line class="faint" data-radius x1={cx} y1={cy} x2={n(f.x)} y2={n(f.y)} />
+                <circle class="ghost" data-ghost cx={n(f.gx)} cy={n(f.gy)} r="4" />
+                <line class="ink" data-shaft x1={n(f.x)} y1={n(f.y)} x2={n(f.tx)} y2={n(f.ty)} />
+                <path class="head" data-head d="M1.5 0L-6 -3L-6 3Z" transform={`translate(${n(f.tx)} ${n(f.ty)}) rotate(${n(f.heading)})`} />
+                <path class="ink" data-esc d="M0 -4V4" transform={`translate(${n(f.ex)} ${n(f.ey)}) rotate(${n(f.heading)})`} />
+                <circle class="body" data-body cx={n(f.x)} cy={n(f.y)} r="4.4" />
+              </g>
+
+              <circle class="faint" cx={cx} cy={cy} r="9" />
+              <circle class="dot" cx={cx} cy={cy} r="4.6" />
+            </g>
+          </svg>
+        </div>
+
+        <ul class="key" aria-hidden="true">
+          <li><svg viewBox="0 0 18 10" style="width:18px"><line class="orbit" x1="1" y1="5" x2="17" y2="5" /></svg>the orbit it had</li>
+          <li><svg viewBox="0 0 10 10" style="width:10px"><circle class="ghost" cx="5" cy="5" r="3.6" /></svg>where it should be</li>
+          <li><svg viewBox="0 0 10 10" style="width:10px"><circle class="body" cx="5" cy="5" r="4.2" /></svg>where it is</li>
+          <li><svg viewBox="0 0 24 10" style="width:24px"><line class="ink" x1="1" y1="5" x2="20" y2="5" /><path class="head" d="M23.5 5L16 2L16 8Z" /><path class="ink" d="M10 1V9" /></svg>its speed, ticked at escape speed</li>
+          <li><svg viewBox="0 0 12 10" style="width:12px"><rect class="sector" x="0.5" y="0.5" width="11" height="9" /></svg>swept in {STEP} days: equal areas</li>
+        </ul>
+
+        <dl class="tele">
+          <div><dt>eccentricity <i>e</i></dt><dd class="cm" data-v="e">{f.e}</dd></div>
+          <div><dt>speed, <i>v</i> / <i>v</i><sub>esc</sub></dt><dd class="cm" data-v="over">{f.over}</dd></div>
+          <div><dt>distance <i>r</i></dt><dd class="cm"><span data-v="r">{f.r}</span> <b>AU</b></dd></div>
+          <div><dt>excess speed <i>v</i><sub>∞</sub></dt><dd class="cm" data-vinf><span data-v="vinf">{f.vinf}</span> <b>km/s</b></dd></div>
+        </dl>
+
+        <Fragment slot="caption">
+          One kick left the body faster than escape speed, so its path is no longer closed. It rounds
+          the star once and leaves along the asymptote, slowing toward its excess speed and never
+          below it. Where it is on the hyperbola comes from Kepler's equation,
+          <i class="eq">M</i> = <i class="eq">e</i> sinh <i class="eq">H</i> − <i class="eq">H</i>, solved by Newton's
+          method. Each departure is drawn from the same seed, so the sequence never changes.
+        </Fragment>
+      </Figure>
+    </div>
   </main>
+
+  <script>
+    import "../scripts/lost";
+  </script>
 </Base>
 
 <style>
   .nf {
     min-height: 100svh;
     display: grid;
-    align-content: center;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: clamp(32px, 6vw, 96px);
+    align-items: center;
+    padding-block: clamp(32px, 6vw, 72px);
+  }
+  .say {
+    display: grid;
     gap: 14px;
   }
   .code {
-    font-family: var(--cm);
+    font-size: 17px;
     color: var(--accent);
   }
   h1 {
@@ -26,7 +134,192 @@ import Base from "../layouts/Base.astro";
     letter-spacing: -0.035em;
     line-height: 1.02;
   }
-  p {
+  .say p:not(.code) {
+    max-width: 34ch;
     color: var(--ink-2);
+  }
+  .say a {
+    padding-block: 10px;
+    color: var(--ink);
+  }
+  .plate {
+    max-width: 720px;
+    width: 100%;
+    justify-self: end;
+  }
+  /* There are no arrivals on this page: the plate is simply there. */
+  :global(html[data-motion]:not([data-revealed])) .plate :global([data-reveal]) {
+    visibility: visible;
+  }
+
+  /* The instrument's screen: the plot on an inset dot grid with registration marks, as in Figure.astro. */
+  .scope {
+    position: relative;
+    background-color: var(--panel-2);
+    background-image: radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 1.2px);
+    background-size: 16px 16px;
+    background-position: 8px 8px;
+    border: 1px solid var(--hair);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  .scope::before,
+  .scope::after {
+    content: "";
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border: 0 solid var(--ink-4);
+    pointer-events: none;
+  }
+  .scope::before { top: 6px; left: 6px; border-top-width: 1px; border-left-width: 1px; }
+  .scope::after { bottom: 6px; right: 6px; border-bottom-width: 1px; border-right-width: 1px; }
+
+  /* Strokes that are this plate's own; the rest are the shared ones in Figure.astro. */
+  .plate :global(.orbit) { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 4; }
+  .plate :global(.ghost) { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1.25; }
+  .plate :global(.body) { fill: var(--accent); stroke: var(--panel-2); stroke-width: 1.5; }
+  .plate :global(.head) { fill: var(--ink); }
+  .plate :global(.sector) { fill: var(--accent-soft); stroke: none; }
+  .lo .ahead { fill: none; stroke: var(--accent); stroke-width: 1; stroke-dasharray: 1 5; stroke-linecap: round; opacity: 0.7; }
+  .lo .asym { stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 7 5; }
+  .lo .marks { fill: var(--panel-2); stroke: var(--accent); stroke-width: 1; }
+  .lo .kick text { fill: var(--ink-2); }
+  /* A label that lies over a line is given a little of the ground to stand on. */
+  .lo text { paint-order: stroke; stroke: var(--panel-2); stroke-width: 3px; stroke-linejoin: round; }
+  /* What the kick brings (the new path, its asymptote, the mark of the kick) comes in as one change of state, and one departure gives way to the next the same way. */
+  .lo .free,
+  .lo .live,
+  .lo .ghost {
+    transition: opacity var(--t-state) var(--ease-io);
+  }
+  .lo:not([data-free]) .free,
+  .lo[data-swap] .live {
+    opacity: 0;
+  }
+
+  .key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    margin-top: 12px;
+    font-size: 12.5px;
+    color: var(--ink-3);
+  }
+  .key li {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  /* (Figure.astro stretches every svg in a plot to its full width; these are glyphs.) */
+  .plate .key :global(svg) {
+    flex: none;
+    display: block;
+    height: 10px;
+    overflow: visible;
+  }
+
+  /* The readouts: what one position and one velocity say about the orbit. */
+  .tele {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 14px 0 0;
+    border-top: 1px solid var(--hair);
+  }
+  .tele div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px 0;
+  }
+  .tele dd {
+    order: -1;
+  }
+  .tele div:first-child {
+    padding-left: 0;
+  }
+  .tele div + div {
+    border-left: 1px solid var(--hair);
+  }
+  .tele dt {
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--ink-3);
+  }
+  .tele dd {
+    font-size: 21px;
+    line-height: 1.15;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .tele b {
+    font-weight: 400;
+    font-size: 15px;
+    color: var(--ink-3);
+  }
+  .tele i,
+  .plate :global(.eq) {
+    font-family: var(--math);
+    font-style: italic;
+    letter-spacing: 0;
+  }
+  .tele i {
+    font-size: 14.5px;
+    color: var(--ink-2);
+  }
+  .tele sub {
+    font-size: 0.75em;
+  }
+  /* While the orbit is closed there is no excess speed to show. */
+  .tele [data-vinf]:has([data-v]:empty) b {
+    display: none;
+  }
+  .tele [data-vinf]:has([data-v]:empty)::before {
+    content: "none";
+    color: var(--ink-3);
+  }
+
+  @media (max-width: 980px) {
+    .nf {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 36px;
+      align-content: center;
+    }
+    .plate {
+      justify-self: start;
+    }
+  }
+  @media (max-width: 560px) {
+    /* The plot is half the size on a phone: the marks that carry the story are drawn larger, the second-rank labels are let go. */
+    .lo .minor { display: none; }
+    .lo .body { r: 7px; stroke-width: 2.4; }
+    .lo .ghost { r: 6.4px; stroke-width: 2; }
+    .lo [data-flown] { stroke-width: 2.8; }
+    .lo .marks { stroke-width: 1.6; }
+    .lo .orbit { stroke-width: 1.6; stroke-dasharray: 3 6; }
+    .lo .asym { stroke-width: 1.6; }
+    .lo text { stroke-width: 5px; }
+    .tele {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .tele div:nth-child(odd) {
+      padding-left: 0;
+      border-left: 0;
+    }
+    .tele div:nth-child(n + 3) {
+      margin-top: 12px;
+      border-top: 1px solid var(--hair);
+    }
+    .tele dd {
+      font-size: 19px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lo .free,
+    .lo .live,
+    .lo .ghost {
+      transition: none;
+    }
   }
 </style>

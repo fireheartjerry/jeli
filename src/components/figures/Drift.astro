@@ -8,6 +8,10 @@
 // Under 560px the browser and the side window are re-laid out with CSS
 // transforms (from --m) so the chat text stays legible: the side window
 // floats over the chat, which is how it covers the page while you wait.
+//
+// What is drawn here is the finished state: the answer in, the side window
+// gone, focus back on the chat. Everything marked opacity="0" is a part the
+// script (scripts/figures/drift.ts) brings on and takes off again.
 import Figure from "../Figure.astro";
 
 const W = 640, H = 372;
@@ -115,23 +119,14 @@ const caption = (tone: string) =>
     aria-label="A Chrome window with a chat. I ask for the derivative of x to the x and the model starts thinking. Drift's popup under its toolbar icon asks: scroll while you wait? Yes opens a focused side window with a feed. The answer streams in: write x to the x as e to the x ln x and use the chain rule, so the derivative is x to the x times ln x plus 1. A toast says the response is ready, the side window collapses, and focus returns to the chat."
   >
     <defs>
-      {/* The shimmer is an alpha mask, so the sweep carries opacity only and no colour. */}
-      <linearGradient id="dr-sweep" x1="0" x2="1" y1="0" y2="0">
-        <stop offset="0" stop-opacity="0" />
-        <stop offset="0.5" stop-opacity="1" />
-        <stop offset="1" stop-opacity="0" />
-      </linearGradient>
-      <mask id="dr-shim" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
-        <rect class="shim" x={CL - 70} y="120" width="64" height="30" fill="url(#dr-sweep)" />
-      </mask>
       <clipPath id="dr-type"><rect class="type-clip" x={CL + 14} y="314" width="0" height="32" /></clipPath>
       <clipPath id="dr-feed"><rect class="feed-clip" x={SW.x + 1} y={SW.y + SW.bar + 0.5} width={SW.w - 2} height={SW.h - SW.bar - 1.5} /></clipPath>
     </defs>
 
     <!-- ===== browser ===== -->
     <g class="blk browser" style={`--m:${mt.browser}`}>
-      <rect class="ring dsk" x="0.75" y="0.75" width={B.w + 6.5} height={B.h + 6.5} rx="13" />
-      <rect class="ring mob" x="0.75" y="0.75" width={B.wm + 6.5} height={B.h + 6.5} rx="13" />
+      <rect class="ring dsk" x="0.75" y="0.75" width={B.w + 6.5} height={B.h + 6.5} rx="13" pathLength="1" />
+      <rect class="ring mob" x="0.75" y="0.75" width={B.wm + 6.5} height={B.h + 6.5} rx="13" pathLength="1" />
       <rect class="win dsk" x={B.x} y={B.y} width={B.w} height={B.h} rx="10" />
       <rect class="win mob" x={B.x} y={B.y} width={B.wm} height={B.h} rx="10" />
       <path class="strip dsk" d={frame(B.w).strip} />
@@ -184,10 +179,8 @@ const caption = (tone: string) =>
           <text class="chat" x={CR - 182} y="100.5">What's the derivative of <tspan class="mi">x</tspan><tspan class="mi sup" dy="-5">x</tspan><tspan dy="5">?</tspan></text>
         </g>
         <circle class="mark" cx={CL - 12} cy="137.5" r="3.5" />
-        <g class="thinking" opacity="0">
-          <text class="chat think-base" x={CL} y="141.5">Thinking</text>
-          <text class="chat think-hi" x={CL} y="141.5" mask="url(#dr-shim)">Thinking</text>
-        </g>
+        {/* A wave of weight runs through the word while the model thinks: each letter has its own opacity. */}
+        <text class="chat thinking" x={CL} y="141.5" opacity="0">{[..."Thinking"].map((ch) => <tspan class="tg">{ch}</tspan>)}</text>
         {rendered.map((l) => (
           <text class={`chat ans${l.eq ? " eq" : ""}`} x={l.x} y={l.y}>
             {l.toks.map((t) => (
@@ -237,17 +230,22 @@ const caption = (tone: string) =>
             <text class="btn-yt" x={YES.x + YES.w / 2} y={YES.y + 13} text-anchor="middle">Yes</text>
           </g>
         </g>
-        <path class="cursor" opacity="0" data-to={`${YES.x + YES.w / 2 + 2} ${YES.y + YES.h / 2 + 2}`} d="M0 0L0 14.5L3.7 11L6.3 16.6L8.6 15.6L6 10.1L10.9 10.1Z" />
+        <path class="cursor" opacity="0" data-to={`${YES.x + YES.w / 2 + 2} ${YES.y + YES.h / 2 + 2}`} data-rest={`${SW.x + 58} ${SW.y + 150}`} d="M0 0L0 14.5L3.7 11L6.3 16.6L8.6 15.6L6 10.1L10.9 10.1Z" />
       </g>
+      {/* Where the pointer has the story, when it is scrubbing it: a mark on the window's lower edge. */}
+      <line class="scrub" x1="0" x2="0" y1={B.y + B.h - 5} y2={B.y + B.h + 5} data-x0={B.x} data-w={B.w} data-wm={B.wm} opacity="0" />
     </g>
 
     <!-- ===== focused side window ===== -->
     <g class="blk" style={`--m:${mt.side}`}>
       <g class="side" opacity="0">
-        <rect class="sw" x={SW.x} y={SW.y} width={SW.w} height={SW.h} rx="10" />
-        {[0, 8, 16].map((d) => <circle class="wdot" cx={SW.x + 13 + d} cy={SW.y + SW.bar / 2} r="2.4" />)}
-        <text class="sw-t" x={SW.x + SW.w / 2 + 12} y={SW.y + 15} text-anchor="middle">feed.example</text>
-        <line class="hair" x1={SW.x} x2={SW.x + SW.w} y1={SW.y + SW.bar} y2={SW.y + SW.bar} />
+        <rect class="sw-fill" x={SW.x} y={SW.y} width={SW.w} height={SW.h} rx="10" />
+        <rect class="sw" x={SW.x} y={SW.y} width={SW.w} height={SW.h} rx="10" pathLength="1" />
+        <g class="sw-bar">
+          {[0, 8, 16].map((d) => <circle class="wdot" cx={SW.x + 13 + d} cy={SW.y + SW.bar / 2} r="2.4" />)}
+          <text class="sw-t" x={SW.x + SW.w / 2 + 12} y={SW.y + 15} text-anchor="middle">feed.example</text>
+          <line class="hair" x1={SW.x} x2={SW.x + SW.w} y1={SW.y + SW.bar} y2={SW.y + SW.bar} />
+        </g>
         <g clip-path="url(#dr-feed)">
           <g class="feed">
             {feed.map((c) => (
@@ -273,6 +271,8 @@ const caption = (tone: string) =>
 </Figure>
 
 <style is:global>
+  /* Once the figure is live, a finger drawn across the plate scrubs the story; up and down still scrolls the page. */
+  .fig[data-live] svg.dr { touch-action: pan-y pinch-zoom; }
   .fig svg.dr text { font-size: 11px; fill: var(--ink-3); }
   .fig svg.dr text.cm, .fig svg.dr text.m { font-size: 12px; }
   .fig svg.dr .mi { font-family: var(--math); font-style: italic; font-size: 14.5px; letter-spacing: 0; }
@@ -284,7 +284,7 @@ const caption = (tone: string) =>
 
   .fig svg.dr .win { fill: var(--panel); stroke: var(--ink); stroke-width: 1.25; transition: stroke 0.3s; }
   .fig svg.dr .blur .win { stroke: var(--ink-4); }
-  .fig svg.dr .ring { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .fig svg.dr .ring { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 1; stroke-linecap: round; }
   .fig svg.dr .strip { fill: var(--panel-2); }
   .fig svg.dr .tab { fill: var(--panel); stroke: var(--hair); }
   .fig svg.dr .fav { fill: none; stroke: var(--ink-3); stroke-width: 1.1; }
@@ -301,8 +301,8 @@ const caption = (tone: string) =>
   .fig svg.dr .omni { fill: var(--panel-2); }
   .fig svg.dr text.url { font-size: 11px; fill: var(--ink-3); }
   .fig svg.dr .url .u1 { fill: var(--ink); }
-  .fig svg.dr .dicon-bg { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; }
-  .fig svg.dr .dicon-g { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; }
+  .fig svg.dr .dicon-bg { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; transition: fill 0.25s, stroke 0.25s; }
+  .fig svg.dr .dicon-g { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; transition: stroke 0.25s; }
   .fig svg.dr .dicon-bg.on, .fig svg.dr .dicon.on .dicon-bg { fill: var(--accent); stroke: var(--accent); }
   .fig svg.dr .dicon-g.on, .fig svg.dr .dicon.on .dicon-g { stroke: var(--panel); }
   .fig svg.dr .badge { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
@@ -310,15 +310,13 @@ const caption = (tone: string) =>
   .fig svg.dr text.chat { font-size: 12.5px; fill: var(--ink); }
   .fig svg.dr .bub { fill: var(--panel-2); stroke: var(--hair); }
   .fig svg.dr .mark { fill: var(--ink); }
-  .fig svg.dr text.think-base { fill: var(--ink-4); }
-  .fig svg.dr text.think-hi { fill: var(--ink); }
   .fig svg.dr text.ans { white-space: pre; }
   .fig svg.dr .caret { fill: var(--ink); }
   .fig svg.dr .input { fill: var(--panel); stroke: var(--ink-4); }
   .fig svg.dr text.ph { font-size: 12px; fill: var(--ink-3); }
   .fig svg.dr .send { fill: var(--ink); }
-  .fig svg.dr .send-a { fill: none; stroke: var(--panel); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-  .fig svg.dr .send-s { fill: var(--panel); }
+  .fig svg.dr .send-a { fill: none; stroke: var(--panel); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: opacity 0.2s; }
+  .fig svg.dr .send-s { fill: var(--panel); transition: opacity 0.2s; }
 
   .fig svg.dr .pop { fill: var(--panel); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
   .fig svg.dr text.pop-n { font-size: 11px; fill: var(--ink); font-weight: 500; }
@@ -330,8 +328,10 @@ const caption = (tone: string) =>
   .fig svg.dr text.btn-yt { font-size: 11px; fill: var(--panel); font-weight: 500; }
   .fig svg.dr .cursor { fill: var(--panel); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
 
-  .fig svg.dr .sw { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1.25; }
+  .fig svg.dr .sw-fill { fill: var(--panel); }
+  .fig svg.dr .sw { fill: none; stroke: var(--ink-4); stroke-width: 1.25; stroke-dasharray: 1; transition: stroke 0.3s; }
   .fig svg.dr .side.focus .sw { stroke: var(--ink); }
+  .fig svg.dr .scrub { stroke: var(--accent); stroke-width: 1.75; stroke-linecap: round; pointer-events: none; }
   .fig svg.dr .wdot { fill: var(--hair); }
   .fig svg.dr text.sw-t { font-size: 11px; fill: var(--ink-3); }
   .fig svg.dr .av { fill: rgb(var(--ink-rgb) / 0.08); }

@@ -69,7 +69,7 @@ const chips = [
 const payload = JSON.stringify({
   L, R, T, B, max, BAR, TK,
   m: months.map((m) => [label(m.m), m.n, m.c]),
-  acc,
+  acc, pk: peakI, c100,
 });
 ---
 
@@ -77,7 +77,7 @@ const payload = JSON.stringify({
   <svg class="sb" viewBox={`0 0 ${W} ${H}`} role="img" data-g={payload} aria-label={`Cumulative TopsOJ submissions from July 2023 to January 2026, reaching ${fmt(total)}, with monthly counts peaking at ${fmt(peakN)} in ${label(months[peakI].m)} and a tick for each contest. ${accPct}% of all answers are judged correct.`}>
     <g class="strip">
       <text class="sb-k" x={L} y={SY + 4}>answers</text>
-      <line class="sb-track" x1="70" x2={BOX.x0 - 6} y1={SY} y2={SY} />
+      <line class="sb-track sb-in" x1="70" x2={BOX.x0 - 6} y1={SY} y2={SY} />
       <g class="toks">
         {tokens.map((tx) => <rect class="tok" x="-5" y="-5" width="10" height="10" rx="2" transform={`translate(${tx} ${SY})`} />)}
       </g>
@@ -85,7 +85,7 @@ const payload = JSON.stringify({
       <text class="sb-box" x={(BOX.x0 + BOX.x1) / 2} y={SY + 1} text-anchor="middle">judge</text>
       <line class="sb-prog" x1={BOX.x0 + 10} x2={BOX.x1 - 10} y1={SY + 8} y2={SY + 8} />
       <clipPath id="sb-lane"><rect x={LANE.x0} y={SY - 16} width={LANE.x1 - LANE.x0} height="32" /></clipPath>
-      <line class="sb-track" x1={LANE.x0 + 8} x2={LANE.x1} y1={SY} y2={SY} />
+      <line class="sb-track sb-out" x1={LANE.x0 + 8} x2={LANE.x1} y1={SY} y2={SY} />
       <line class="sb-end" x1={LANE.x1 + 0.5} x2={LANE.x1 + 0.5} y1={SY - 7} y2={SY + 7} />
       <g class="chips" clip-path="url(#sb-lane)">
         {chips.map((c) => (
@@ -97,7 +97,7 @@ const payload = JSON.stringify({
       </g>
       <text class="sb-rate" x={W - 8} y={SY + 4} text-anchor="end"><tspan class="cm-n">{accPct}%</tspan><tspan class="sb-wide"> accepted</tspan></text>
     </g>
-    <line class="hair" x1={L} x2={W - 8} y1="50" y2="50" />
+    <line class="hair sb-sep" x1={L} x2={W - 8} y1="50" y2="50" />
 
     <g class="grid">
       {[25_000, 50_000, 75_000, 100_000, 125_000].map((v) => (
@@ -114,7 +114,7 @@ const payload = JSON.stringify({
       <line class="lead" x1={f(bars[peakI].x + 4)} x2={f(bars[peakI].x + 9)} y1={f(B - BAR + 3)} y2={f(B - BAR + 3)} />
       <text class="cm sm" x={f(bars[peakI].x + 12)} y={f(B - BAR + 7)}>{fmt(peakN)} in {label(months[peakI].m)}</text>
     </g>
-    <line class="faint" x1={L} x2={R} y1={B} y2={B} />
+    <line class="faint sb-axis" x1={L} x2={R} y1={B} y2={B} />
     <g class="ticks">
       {ticks.map((t) => <line class="tick" x1={f(t.x)} x2={f(t.x)} y1={TK} y2={f(TK + t.h)} />)}
     </g>
@@ -147,7 +147,7 @@ const payload = JSON.stringify({
 </Figure>
 
 <style>
-  .sb .bar { fill: var(--ink); opacity: 0.13; }
+  .sb .bar { fill: var(--ink); opacity: 0.13; transition: fill 0.18s ease, opacity 0.18s ease; }
   .sb .bar.peak { opacity: 0.22; }
   .sb .bar.on { fill: var(--accent); opacity: 0.55; }
   .sb .tick { stroke: var(--ink); stroke-opacity: 0.42; stroke-width: 1; }
@@ -169,6 +169,10 @@ const payload = JSON.stringify({
   .sb :global(.chip.ac .chip-t) { fill: var(--s-green); }
   .sb :global(.chip.wa .chip-t) { fill: var(--s-red); }
   .sb .sb-end { stroke: var(--ink-4); stroke-width: 1; }
+  /* Drawn by the script: the verdict on the box's edge, a contest ruled up to the line as the pen passes it, and the rings where the pen lands. */
+  .sb :global(.box-v) { fill: none; stroke-width: 1.25; }
+  .sb :global(.glow) { fill: none; stroke: var(--ink); stroke-width: 1; }
+  .sb :global(.ringp) { fill: none; stroke: var(--accent); stroke-width: 1; }
   .sb .sb-rate { font-size: 12.5px; fill: var(--ink-3); }
   .sb .cm-n { font-family: var(--cm); font-size: 13.5px; fill: var(--s-green); }
   .sb text.cm.ax, .sb text.cm.yr { font-size: 12.5px; }

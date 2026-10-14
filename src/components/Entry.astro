@@ -13,7 +13,10 @@ const { title, href, role, period, tags, feature = false } = Astro.props;
 const external = !!href && /^https?:/.test(href);
 ---
 
-<article class:list={["entry", { feature }]}>
+<article class:list={["entry", { feature }]} data-reveal="entry">
+  {/* The rule above the entry, and the pen that draws it across as the entry arrives (scripts/reveal.ts). */}
+  <span class="rule" aria-hidden="true"></span>
+  <span class="rule-pen" aria-hidden="true"></span>
   <div class="text">
     <header>
       <h3>
@@ -37,7 +40,6 @@ const external = !!href && /^https?:/.test(href);
     column-gap: clamp(32px, 6vw, 96px);
     align-items: start;
     padding-block: clamp(40px, 5.5vw, 80px);
-    border-top: 1px solid var(--hair);
   }
   .entry.no-fig {
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
@@ -56,14 +58,24 @@ const external = !!href && /^https?:/.test(href);
   .entry {
     position: relative;
   }
-  .entry::before {
-    content: "";
+  .rule {
     position: absolute;
-    inset: -1px 0 auto;
+    inset: 0 0 auto;
     height: 1px;
     background: var(--ink-4);
-    transform: scaleX(var(--rule, 1));
     transform-origin: left;
+  }
+  /* A short bright stroke that runs at the head of the rule while it is drawn; --k is how far along it is. */
+  .rule-pen {
+    --k: 0;
+    position: absolute;
+    top: -0.5px;
+    left: calc(var(--k) * (100% - 26px));
+    width: 26px;
+    height: 1.5px;
+    border-radius: 1px;
+    background: var(--accent);
+    opacity: 0;
   }
   h3 {
     font-size: 21px;

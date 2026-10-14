@@ -124,24 +124,44 @@ const APPROACH: P = [-70, 44]; // where the pinch starts, relative to the contac
 const PULLED: P = [CONTACT[0] + DRAG_DIR[0] * DRAG, CONTACT[1] + DRAG_DIR[1] * DRAG];
 const S_MAX = 1.2;
 
-/** Beats, in scroll progress. */
-export const BEATS = { grab: [0.04, 0.3], sculpt: [0.34, 0.6], scale: [0.66, 0.88] } as const;
+/**
+ * Beats, in scroll progress. The webcam finds the hand first (its inset is at
+ * the top of the plate, so it is the first thing in view), the hand comes in
+ * closing to a pinch, and the three gestures follow. Nothing after 0.93: with
+ * the plate in the middle of the window the hand is at rest.
+ */
+export const BEATS = {
+  find: [0, 0.1], // the tracker picks the hand up, a landmark at a time
+  reach: [0.05, 0.36], // it comes in to the surface
+  close: [0.1, 0.36], // closing to a pinch as it comes
+  sculpt: [0.43, 0.61], // the pinch drags, and the clay follows
+  scale: [0.68, 0.85], // thumb and index spread, and the mesh grows
+  relax: [0.85, 0.93], // then the hand lets go and rests open
+} as const;
+/** When the pinch closes on the surface. */
+export const TAKE = BEATS.reach[1];
+/**
+ * When each gesture hands over to the next: as soon as the one before is done,
+ * so the tool is picked while the hand is still, before it moves again.
+ */
+const CUTS = [TAKE + 0.01, BEATS.sculpt[1] + 0.01];
 export const TOOLS = ["add", "move", "scale", "sculpt"] as const;
+/** The tool each gesture uses, in the order the gestures come. */
+export const USES = ["move", "sculpt", "scale"] as const;
 export const GESTURES = ["pinch to grab", "drag to sculpt", "spread to scale"] as const;
-/** How visible each gesture's caption is at t: they crossfade at the beat changes. */
-export const captionOpacity = (i: number, t: number) => {
-  const cuts = [0.32, 0.63];
-  const inn = i === 0 ? 1 : smooth(cuts[i - 1] - 0.015, cuts[i - 1] + 0.025, t);
-  const out = i === 2 ? 0 : smooth(cuts[i] - 0.025, cuts[i] + 0.015, t);
-  return Math.round(inn * (1 - out) * 100) / 100;
-};
+/** Which gesture the story is in at t: 0, 1 or 2. */
+export const beatAt = (t: number) => (t < CUTS[0] ? 0 : t < CUTS[1] ? 1 : 2);
+/** How visible gesture i's caption is while the story is in gesture `at` (fractional while one hands over to the next). */
+export const captionOpacity = (i: number, at: number) => Math.round(Math.max(0, 1 - Math.abs(at - i)) * 100) / 100;
+const linear = (a: number, b: number, x: number) => Math.min(Math.max((x - a) / (b - a), 0), 1);
 
 export function gesture(t: number) {
-  const close = smooth(0.06, 0.3, t); // open hand -> pinch
-  const reachIn = smooth(0.02, 0.3, t); // how far it has come in
+  const find = linear(BEATS.find[0], BEATS.find[1], t); // how much of the hand the tracker has
+  const close = smooth(BEATS.close[0], BEATS.close[1], t); // open hand -> pinch
+  const reachIn = smooth(BEATS.reach[0], BEATS.reach[1], t); // how far it has come in
   const pull = smooth(BEATS.sculpt[0], BEATS.sculpt[1], t); // how far it has dragged since grabbing
-  const spread = smooth(BEATS.scale[0] + 0.02, BEATS.scale[1], t); // pinch -> spread
-  const relax = smooth(0.88, 1, t); // then the hand lets go and rests open
+  const spread = smooth(BEATS.scale[0], BEATS.scale[1], t); // pinch -> spread
+  const relax = smooth(BEATS.relax[0], BEATS.relax[1], t); // then the hand lets go and rests open
   const S = 1 + (S_MAX - 1) * spread;
 
   // The pinch point: in to the surface, out along the drag, then riding the
@@ -153,16 +173,21 @@ export function gesture(t: number) {
   const m = tipMid(place(pose, [0, 0]));
   const lm = place(pose, [target[0] - m[0], target[1] - m[1]]);
 
-  const grabbed = t >= 0.3;
+  const grabbed = t >= TAKE;
   // The clay keeps its shape once the pinch lets go.
   const clayAt: P | null = grabbed ? (t < BEATS.sculpt[1] ? tipMid(lm) : PULLED) : null;
-  const beat = t < 0.32 ? 0 : t < 0.63 ? 1 : 2;
-  const prog = [smooth(0.02, 0.3, t), smooth(0.34, 0.6, t), smooth(0.66, 0.88, t)][beat];
-  const tool = (["move", "sculpt", "scale"] as const)[beat];
+  const beat = beatAt(t);
+  const tool = USES[beat];
   // The view holds still while the hand works on the surface.
-  const engage = smooth(0, 0.12, t) * (1 - smooth(0.6, 0.7, t));
-  return { lm, close, pull, spread, relax, S, sculpt: 1 + 0.08 * pull, grabbed, clayAt, pinch: pinchOf(lm), beat, prog, tool, engage };
+  const engage = smooth(0, BEATS.reach[0] + 0.1, t) * (1 - smooth(BEATS.sculpt[1], BEATS.sculpt[1] + 0.1, t));
+  return { lm, find, close, pull, spread, relax, S, sculpt: 1 + 0.08 * pull, grabbed, clayAt, pinch: pinchOf(lm), beat, tool, engage };
 }
+
+/**
+ * How much of landmark i the tracker has found: MediaPipe reports all 21 at
+ * once, but they are counted in here in its own order, wrist to little finger.
+ */
+export const seen = (i: number, find: number) => Math.round(linear(i / 26, i / 26 + 0.2, find) * 100) / 100;
 
 // ---------------------------------------------------------------- the camera
 
@@ -198,13 +223,16 @@ const PCT = Array.from({ length: 101 }, (_, i) => `${i}%`);
  * light and `tint` how much of the accent the pulled clay takes, both as
  * percentages to mix by; `hot` faces get an accent edge.
  */
-export type Face = { d: string; shade: string; tint: string; hot: boolean; z: number };
+export type Face = { d: string; shade: string; tint: string; edge: string; z: number };
 
 /**
  * The deformed, lit, sorted mesh. The pinch point (screen, at home view) pulls
  * the vertices facing it: each moves toward it by a smooth falloff of the
  * angle between its normal and the pull direction, so it stretches like clay.
  * The lump lives in world space, so it orbits with the mesh.
+ * (`shade` is how far a face turns from the light and `tint` how much of the
+ * accent the pulled clay takes, both as percentages to mix by; `edge` is how
+ * far its outline has gone over to the accent.)
  */
 export function mesh(cam: Cam, S: number, clayAt: P | null, sculpt = 1) {
   const { view, project } = viewer(cam);
@@ -223,8 +251,9 @@ export function mesh(cam: Cam, S: number, clayAt: P | null, sculpt = 1) {
   const cs = V.map((n) => n[0] * g[0] + n[1] * g[1] + n[2] * g[2]);
   const raw = cs.map((c) => Math.exp(-((Math.acos(Math.min(1, c)) / 0.56) ** 4)));
   const top = Math.max(...raw);
-  const w = raw.map((k) => (reach > 0 ? k / top : 0));
+  const w = raw.map((k) => (clayAt ? k / top : 0));
   const ramp = Math.min(reach / 0.3, 1);
+  const taking = smooth(0.01, 0.16, reach);
   const pv: V3[] = V.map((n, i) => {
     const c = cs[i], k = w[i];
     // Pull along g: the cap facing the pinch moves out whole, a rounded knob
@@ -251,7 +280,8 @@ export function mesh(cam: Cam, S: number, clayAt: P | null, sculpt = 1) {
     const lit = 0.16 + 0.84 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
     // Whole percent: 5 facing the light, 47 turned fully away.
     const shade = Math.round((0.05 + 0.5 * (1 - lit)) * 100);
-    const fw = reach > 0.02 ? (w[a] + w[b] + w[c]) / 3 : 0;
+    // The colour comes into the clay as it is pulled, not all at once when it is touched.
+    const fw = ((w[a] + w[b] + w[c]) / 3) * taking;
     const tint = Math.round(Math.min(1, fw * 1.25) * 0.5 * 100) / 100;
     // The clay takes more of the accent where the light catches it.
     const taken = tint * (0.35 + 0.65 * lit) * 100;
@@ -259,7 +289,7 @@ export function mesh(cam: Cam, S: number, clayAt: P | null, sculpt = 1) {
       d: `M${r1(pts[a][0])} ${r1(pts[a][1])}L${r1(pts[b][0])} ${r1(pts[b][1])}L${r1(pts[c][0])} ${r1(pts[c][1])}Z`,
       shade: PCT[shade],
       tint: taken > 0 ? `${Math.round(taken * 1000) / 1000}%` : PCT[0],
-      hot: tint > 0.2,
+      edge: PCT[Math.round(smooth(0.1, 0.3, tint) * 100)],
       z: m[2],
     });
   }
@@ -326,10 +356,29 @@ export function dimension(lm: P[], gapScale = 1) {
   };
 }
 
+/**
+ * Where the numbers of the two landmarks the tools read (thumb tip 4, index
+ * tip 8) are written: just past each tip, along its own finger.
+ */
+export function tipLabels(lm: P[], gap = 1): P[] {
+  return ([[4, 3], [8, 7]] as const).map(([tip, joint]) => {
+    const dx = lm[tip][0] - lm[joint][0], dy = lm[tip][1] - lm[joint][1], l = Math.hypot(dx, dy) || 1;
+    return [r1(lm[tip][0] + (dx / l) * 11 * gap), r1(lm[tip][1] + (dy / l) * 11 * gap)] as P;
+  });
+}
+
 export const bonesPath = (lm: P[]) =>
   BONES.map((c) => c.map((i, j) => `${j ? "L" : "M"}${r1(lm[i][0])} ${r1(lm[i][1])}`).join("")).join("");
 
 export const fmt = (v: number) => v.toFixed(2);
-export const readout = (pinch: number, S: number) => `pinch ${fmt(pinch)}  scale ${S.toFixed(2)}×`;
-/** Slow orbit while the hand is away. */
-export const sway = (s: number) => 0.5 * Math.sin(0.21 * s);
+/** (No pinch to report until the tracker has both tips.) */
+export const readout = (pinch: number | null, S: number) => `${pinch === null ? "" : `pinch ${fmt(pinch)}  `}scale ${S.toFixed(2)}×`;
+/**
+ * Slow orbit while the hand is away, as the yaw and tilt added to the home
+ * view after `s` seconds of it. Two periods that never line up; both start
+ * from nothing, so the view leaves home without a step.
+ */
+export const sway = (s: number) => ({
+  yaw: 0.5 * Math.sin(0.21 * s) + 0.06 * Math.sin(0.057 * s),
+  tilt: 0.05 * (Math.sin(0.13 * s + 0.6) - Math.sin(0.6)),
+});

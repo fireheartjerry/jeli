@@ -123,6 +123,15 @@ const HC = BR.y + BR.h + 26;
 const H2 = Math.max(HB, HC);
 
 const readout = `${fmt(ga.totals.activeUsers)} users`;
+// What the script needs to animate and read panel (c): the same numbers the markup is drawn from.
+const segOf = (name: string) => Math.max(0, MAJOR.indexOf(name) === -1 ? 3 : MAJOR.indexOf(name));
+const payloadC = JSON.stringify({
+  x0: C.x0, x1: C.x1, bar: C.bar, bh: C.bh, total: totalSessions,
+  segs: segs.map((s) => [s.name === "Other" ? "Unassigned, social and AI" : s.name, s.sessions]),
+  l0: L2.x0, l1: L2.x1, lmax: L2.max, top: L2.top, row: L2.row,
+  ch: chans.map((c) => [c.name, c.sessions, c.avgEngagementSec, segOf(c.name)]),
+  br: brSegs.map((b) => [b.name, b.users]), bry: BR.y, brh: BR.h, brx0: BR.x0, brx1: BR.x1, brTotal: browserUsers,
+});
 ---
 
 <Figure name="topsojga" n={5} size="stage" screen title="TopsOJ in Google Analytics" label="TopsOJ analytics: monthly users, time spent by page, and how visitors arrive" readout={readout}>
@@ -148,15 +157,15 @@ const readout = `${fmt(ga.totals.activeUsers)} users`;
           <g class="grid">
             {a.grid.map((g) => (
               <>
-                <line class="hair" x1={a.L} x2={a.R} y1={f(g.y)} y2={f(g.y)} />
-                <text class:list={["cm", "tk", "tk-a", { minor: g.minor }]} x={a.L - 8} y={f(g.y + 4)} text-anchor="end">{g.t}</text>
+                <line class="hair gy" x1={a.L} x2={a.R} y1={f(g.y)} y2={f(g.y)} />
+                <text class:list={["cm", "tk", "tk-a", "gyl", { minor: g.minor }]} x={a.L - 8} y={f(g.y + 4)} text-anchor="end">{g.t}</text>
               </>
             ))}
-            <line class="faint" x1={a.L} x2={a.R} y1={a.B} y2={a.B} />
+            <line class="faint base" x1={a.L} x2={a.R} y1={a.B} y2={a.B} />
             {a.xs.map((l) => (
               <>
-                <line class="faint" x1={f(l.x)} x2={f(l.x)} y1={a.B} y2={a.B + 5} />
-                <text class="cm tk tk-a" x={f(l.x)} y={a.B + 24} text-anchor={l.a}>{l.t}</text>
+                <line class="faint xt" x1={f(l.x)} x2={f(l.x)} y1={a.B} y2={a.B + 5} />
+                <text class="cm tk tk-a xtl" x={f(l.x)} y={a.B + 24} text-anchor={l.a}>{l.t}</text>
               </>
             ))}
           </g>
@@ -206,57 +215,58 @@ const readout = `${fmt(ga.totals.activeUsers)} users`;
             <span><i class="sw sw-dot"></i>average engagement</span>
           </span>
         </header>
-        <svg class="gd-svg gd-bsvg" viewBox={`0 0 600 ${H2}`} role="img"
+        <svg class="gd-svg gd-bsvg" viewBox={`0 0 600 ${H2}`} role="img" data-g={JSON.stringify({ ...B, n: pages.length, max: maxViews })}
           aria-label={`Views and average engagement time for the twelve most viewed TopsOJ pages. Problems has the most views, ${fmt(maxViews)}. The ${standout.label} holds readers longest, ${dur(standout.avgEngagementSec)} on average. ${contestNote}.`}>
           <text class="colh" x={B.x0} y="14">Views</text>
           <text class="colh" x={B.e0} y="14">Engagement time</text>
           {[0, 300, 600, 900].map((s) => (
             <>
-              <line class="hair" x1={f(ex(s))} x2={f(ex(s))} y1={B.top - 4} y2={B.top + pages.length * B.row + 2} />
-              <text class="cm tk" x={f(ex(s))} y={B.top + pages.length * B.row + 18} text-anchor="middle">{s ? `${s / 60}m` : "0"}</text>
+              <line class="hair gv" x1={f(ex(s))} x2={f(ex(s))} y1={B.top - 4} y2={B.top + pages.length * B.row + 2} />
+              <text class="cm tk gvl" x={f(ex(s))} y={B.top + pages.length * B.row + 18} text-anchor="middle">{s ? `${s / 60}m` : "0"}</text>
             </>
           ))}
           {pages.map((p) => (
-            <g class:list={["pg", p.kind]}>
+            <g class:list={["pg", p.kind]} data-v={p.views} data-s={p.avgEngagementSec} data-l={p.label}>
               <text class="rl" x={B.lab} y={f(p.y + 4)} text-anchor="end">{p.label}</text>
               <rect class="bar" x={B.x0} y={f(p.y - 6)} width={f(p.w)} height="12" rx="1.5" data-w={f(p.w)} />
               <text class="cm val vv" x={f(B.x0 + p.w + 6)} y={f(p.y + 4)}>{fmt(p.views)}</text>
               <line class="stem" x1={B.e0} x2={f(p.ex)} y1={f(p.y)} y2={f(p.y)} />
               <circle class="lol" cx={f(p.ex)} cy={f(p.y)} r={p.kind === "star" ? 4 : 3} />
               {p.kind === "star"
-                ? <text class="acc star-t" x={f(p.ex - 10)} y={f(p.y - 8)} text-anchor="end">{p.label}: {dur(p.avgEngagementSec)} average</text>
+                ? <text class="acc star-t" x={f(p.ex - 10)} y={f(p.y - 8)} text-anchor="end"><tspan class="star-l">{p.label}: </tspan>{dur(p.avgEngagementSec)}<tspan class="star-l"> average</tspan></text>
                 : <text class:list={["cm", "val", "ev", { "ev-above": p.above }]} x={f(p.ex + 8)} y={f(p.y + 4)}>{dur(p.avgEngagementSec)}</text>}
             </g>
           ))}
           <text class="note con-note" x={B.x0} y={H2 - 6}>{contestNote}</text>
+          <rect class="hit" x="0" y={B.top - 2} width="600" height={pages.length * B.row + 4} />
         </svg>
       </section>
 
       <section class="gd-p gd-c">
         <header class="gd-h">
           <span class="gd-k">How people arrive</span>
-          <span class="gd-lg"><span class="gd-note">{fmt(totalSessions)} sessions</span></span>
+          <span class="gd-lg"><span class="gd-note gd-total">{fmt(totalSessions)} sessions</span></span>
         </header>
-        <svg class="gd-svg gd-csvg" viewBox={`0 0 600 ${H2}`} role="img"
+        <svg class="gd-svg gd-csvg" viewBox={`0 0 600 ${H2}`} role="img" data-g={payloadC}
           aria-label={`Sessions by acquisition channel: Direct ${pct(segs[0].sessions, totalSessions)}, Organic Search ${pct(segs[1].sessions, totalSessions)}, Referral ${pct(segs[2].sessions, totalSessions)}. Average engagement per session is ${chans.map((c) => `${c.name} ${dur(c.avgEngagementSec)}`).join(", ")}. By browser, Chrome accounts for ${pct(ga.browsers[0].users, browserUsers)} of users.`}>
           <text class="colh" x={C.x0} y="14">Sessions by channel</text>
           <g class="stack">
             {segs.map((s) => <rect class:list={["seg", s.tone]} x={f(s.x)} y={C.bar} width={f(Math.max(0.8, s.w - 1.5))} height={C.bh} data-w={f(Math.max(0.8, s.w - 1.5))} data-x={f(s.x)} />)}
           </g>
-          <text class="rl strong seg-l" x={C.x0} y={C.bar + C.bh + 22}>Direct {fmt(segs[0].sessions)}</text>
-          <text class="cm val seg-l seg-minor" x={C.x0} y={C.bar + C.bh + 42}>{pct(segs[0].sessions, totalSessions)} of sessions</text>
+          <text class="rl strong seg-l seg-d" x={C.x0} y={C.bar + C.bh + 22}>Direct {fmt(segs[0].sessions)}</text>
+          <text class="cm val seg-l seg-minor seg-p" x={C.x0} y={C.bar + C.bh + 42}>{pct(segs[0].sessions, totalSessions)} of sessions</text>
           {segLabels.map((s) => (
-            <g class="seg-l seg-minor">
+            <g class="seg-l seg-minor seg-o" data-cx={f(s.cx)}>
               <line class="lead" x1={f(s.cx)} x2={f(s.cx)} y1={C.bar + C.bh + 2} y2={f(s.ly - 4)} />
               <text class:list={["rl", s.tone]} x={f(s.cx - 6)} y={f(s.ly)} text-anchor="end">{s.text}</text>
             </g>
           ))}
 
-          <text class="colh" x={C.x0} y={L2.top - 12}>Average engagement per session</text>
+          <text class="colh colh2" x={C.x0} y={L2.top - 12}>Average engagement per session</text>
           {[0, 120, 240, 360].map((s) => (
             <>
-              <line class="hair" x1={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} x2={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} y1={L2.top - 2} y2={chanAxisY - 4} />
-              <text class="cm tk" x={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} y={chanAxisY + 12} text-anchor="middle">{s ? `${s / 60}m` : "0"}</text>
+              <line class="hair gv" x1={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} x2={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} y1={L2.top - 2} y2={chanAxisY - 4} />
+              <text class="cm tk gvl" x={f(L2.x0 + (s / L2.max) * (L2.x1 - L2.x0))} y={chanAxisY + 12} text-anchor="middle">{s ? `${s / 60}m` : "0"}</text>
             </>
           ))}
           {chans.map((c) => (
@@ -274,6 +284,7 @@ const readout = `${fmt(ga.totals.activeUsers)} users`;
           </g>
           <text class="cm val br-l" x={BR.x0} y={BR.y + BR.h + 18}>Chrome {pct(brSegs[0].users, browserUsers)}</text>
           <text class="cm val br-l br-minor" x={BR.x1} y={BR.y + BR.h + 18} text-anchor="end">Edge {pct(brSegs[1].users, browserUsers)}, Safari {pct(brSegs[2].users, browserUsers)}</text>
+          <rect class="hit" x="0" y={C.bar - 8} width="600" height={BR.y + BR.h + 8 - (C.bar - 8)} />
         </svg>
       </section>
     </div>
@@ -325,6 +336,21 @@ const readout = `${fmt(ga.totals.activeUsers)} users`;
   .gd-svg .xh-v { font-family: var(--cm); font-size: 13px; fill: var(--ink-2); letter-spacing: 0; }
   .gd-svg .hit { fill: transparent; pointer-events: none; }
   .gd-svg[data-live] .hit { pointer-events: all; cursor: crosshair; touch-action: pan-y; }
+  .gd-bsvg[data-live] .hit, .gd-csvg[data-live] .hit { cursor: default; }
+  /* A row or a segment under the pointer stands; the rest step back. */
+  .gd-svg .pg, .gd-svg .ch, .gd-svg .seg, .gd-svg .brseg { transition: opacity 0.2s ease; }
+  .gd-svg.pick .pg, .gd-svg.pick .ch, .gd-svg.pick .seg, .gd-svg.pick .brseg { opacity: 0.36; }
+  .gd-svg.pick .on { opacity: 1; }
+  /* Drawn by the script: the pen's hairline, one visit running along a row, the ring where it ends, a session landing on the bar. */
+  .gd-svg :global(.pen-l) { stroke: var(--accent); stroke-width: 1; }
+  .gd-svg :global(.rp) { fill: var(--accent); }
+  .gd-svg :global(.rp.tone-grn) { fill: var(--s-green); }
+  .gd-svg :global(.rp-w) { stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
+  .gd-svg :global(.rp-w.tone-grn) { stroke: var(--s-green); }
+  .gd-svg :global(.ringp) { fill: none; stroke: var(--accent); stroke-width: 1; }
+  .gd-svg :global(.ringp.tone-grn) { stroke: var(--s-green); }
+  .gd-svg :global(.drop) { stroke: var(--ink-2); stroke-width: 1.25; stroke-linecap: round; }
+  .gd-svg :global(.ride) { font-family: var(--cm); font-size: 12.5px; fill: var(--accent); letter-spacing: 0; }
   .gd-svg.reading .peak-ann { opacity: 0.2; }
   .gd-svg .peak-ann { transition: opacity 0.25s ease; }
 
@@ -368,7 +394,10 @@ const readout = `${fmt(ga.totals.activeUsers)} users`;
     .gd-note { font-size: 12px; }
     .gd-svg .colh, .gd-svg .vv, .gd-svg .ev-above, .gd-svg .note, .gd-svg .seg-minor, .gd-svg .br-minor,
     .gd-svg .tk:not(.tk-a), .gd-svg .tk-a.minor, .gd-svg .pk2 { display: none; }
-    .gd-svg text, .gd-svg .tk, .gd-svg .pk, .gd-svg text.cm.val, .gd-svg .star-t, .gd-svg .xh-m, .gd-svg .xh-v { font-size: 23px; }
+    /* Here the lane is narrow: the callout is the time alone, as on every other row, or it would run over the mark of the row above. */
+    .gd-svg .star-l { display: none; }
+    .gd-svg text, .gd-svg .tk, .gd-svg .pk, .gd-svg text.cm.val, .gd-svg .star-t, .gd-svg .xh-m, .gd-svg .xh-v, .gd-svg :global(.ride) { font-size: 23px; }
+    .gd-svg :global(.rp) { r: 3px; }
     .gd-svg .rl { font-size: 22px; }
     .gd-svg .l-users { stroke-width: 2.25; }
   }

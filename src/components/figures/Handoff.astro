@@ -11,8 +11,11 @@
 // boundary: what leaves the effect unresolved is the interval crossing zero.
 // Two layouts; a container query shows one. The script reveals the drawing.
 // Every mark that encodes a measurement or a count (the seven nodes, the cost
-// bars, the estimate, its interval, the bracket) appears whole; only the
-// trees' edges are drawn on. The script never prints a number of its own.
+// bars, the estimate, its interval, the bracket) appears whole, at its
+// measured length and place: the script may open it across its own scale (a
+// bar's thickness, a dot's radius, the height of an end cap) and never along
+// it. Structure is drawn on: the trees' edges, the axes, the leaders. The
+// script never prints a number of its own.
 import Figure from "../Figure.astro";
 
 interface Props { n?: number }
@@ -60,10 +63,8 @@ const writers = (n: number) => `${n} ${n === 1 ? "writer" : "writers"}`;
 const STORY = {
   trees: "same tree in both arms",
   writers: `B: ${writers(WRITERS.B)} · C: ${writers(WRITERS.C)}`,
-  costA: `${ARM_A.id}, one agent: ${usd(ARM_A.cost)} per attempt`,
   costs: ARMS.map((a) => `${a.id} ${usd(a.cost)}`).join(" · "),
   power: `80% power at ±${PRIMARY.floor} pp`,
-  est: `C − B: ${sg(PRIMARY.v)} pp`,
   ci: `C − B: ${sg(PRIMARY.v)} pp [${sg(PRIMARY.lo)}, ${sg(PRIMARY.hi)}]`,
 };
 
@@ -111,7 +112,7 @@ function view(wide: boolean) {
       // two areas meet halfway between the trees.
       hit: id === "B"
         ? { x: labelX - (wide ? 12 : 14), y: T.vy - 12, w: split - 0.5 - (labelX - (wide ? 12 : 14)), h: 0 }
-        : { x: split + 0.5, y: T.vy - 12, w: (wide ? 338 : 399) - split - 0.5, h: 0 },
+        : { x: split + 0.5, y: T.vy - 12, w: (wide ? 339.5 : 399) - split - 0.5, h: 0 },
     };
   };
   const trees = [tree("B", T.bx), tree("C", T.cx)];
@@ -146,17 +147,37 @@ function view(wide: boolean) {
   const cap = wide ? 5 : 7;
   const lift = wide ? 13 : 16; // value above the whisker, p below it
 
+  // The two scales, as the script draws them: a baseline, then a tick as the pen passes it ([x, length]).
+  const kTicks = [0, 0.25, 0.5, 0.75, 1].map((c) => [kx(c), (c * 4) % 2 ? 2.5 : 5]);
+  const pTicks = [-20, -15, -10, -5, 0, 5, 10, 15, 20].map((p) => [px(p), p % 10 ? 2.5 : 5]);
+  const ticksD = (ticks: number[][], y: number) => ticks.map(([x, l]) => `M${x} ${y}v${l}`).join("");
+
   const G = {
-    beats: wide
-      ? { t: [0, 0.44], k: [0.3, 0.66], p: [0.56, 1] }
-      : { t: [0.08, 0.4], k: [0.36, 0.72], p: [0.68, 0.98] },
+    H,
+    // Heights in the drawing the script times its story by: a part is drawn
+    // once the plate has let that much of its sheet out.
+    ys: {
+      vf: T.vy, leaf: T.top + 2 * T.dy + T.r, arm: armY, ret: retY, foot: footY,
+      rows: cRows.map((r) => r.y), dim: dY, kAxis: kAxisY,
+      brk: brkY, wh: whY, pAxis: pAxisY,
+    },
     trees: trees.map((t) => ({
       id: t.id,
-      edges: t.edges.map((e) => ({ len: e.len, lv: e.lv, a: e.a, b: e.b })),
+      nodes: t.nodes.map((n) => [n.x, n.y, n.r]),
+      // Each edge names its child and its parent among the nodes: root 0, mids 1 and 2, leaves 3 to 6.
+      edges: t.edges.map((e, i) => ({ len: e.len, lv: e.lv, a: e.a, b: e.b, c: 1 + i, p: i < 2 ? 0 : 1 + ((i - 2) >> 1) })),
       stub: { len: t.stub.len, a: t.stub.a, b: t.stub.b },
+      vf: [t.x - 8, T.vy - 6, 16, 12],
+      halo: T.rr + 3.5,
     })),
     side: wide ? 5 : 6.5, // patch glyph, a square
     dot: wide ? 2.4 : 3.1, // finding glyph, a dot
+    cost: { y: kAxisY, x0: K.bar, x1: kx(CMAX), ticks: kTicks },
+    con: { y: pAxisY, x0: px(-PMAX), x1: px(PMAX), ticks: pTicks },
+    // The difference in cost: a drop from the end of bar B and of bar C to one line.
+    dim: { xb: cRows[1].x1, yb: cRows[1].y + K.h / 2 + 2, xc: cRows[2].x1, yc: cRows[2].y + K.h / 2 + 2, y: dY },
+    brk: { x1: px(-PRIMARY.floor), x2: px(PRIMARY.floor), y: brkY, drop: 5 },
+    iv: { lo: px(PRIMARY.lo), hi: px(PRIMARY.hi), y: whY, cap },
     say: SAID,
     story: STORY,
   };
@@ -164,6 +185,9 @@ function view(wide: boolean) {
   return {
     wide, W, H, T, trees, armY, retY, footY, K, cRows, kx, dY, kAxisY, dim, right,
     P, px, brkL, brkY, whY, pAxisY, cap, lift, G, hug: wide ? 11 : 13,
+    kTicksD: ticksD(kTicks, kAxisY), pTicksD: ticksD(pTicks, pAxisY),
+    // Where the right-hand column's hit areas begin: side by side, at the rule between the columns.
+    hx: wide ? 340.5 : -4,
   };
 }
 
@@ -198,7 +222,7 @@ const PLOT = "Plot. Tab through its parts for exact values.";
       <svg class:list={["ho", v.wide ? "ho-w" : "ho-n"]} viewBox={`0 0 ${v.W} ${v.H}`} role="group" data-g={JSON.stringify(v.G)} aria-label={PLOT} aria-describedby={`ho-${v.wide ? "w" : "n"}-desc`}>
         <desc id={`ho-${v.wide ? "w" : "n"}-desc`}>{aria}</desc>
         <g aria-hidden="true">
-          {v.wide && <path class="hair" d={`M340 0V${v.H}`} />}
+          {v.wide && <path class="hair sep" d={`M340 0V${v.H}`} />}
 
           {/* ===== the trees ===== */}
           <text class="head" x="0" y="9" dominant-baseline="central"><tspan class="k">Same tree, seven nodes</tspan>{!v.wide && <tspan class="sub" dx="9">only the handoff changes</tspan>}</text>
@@ -241,10 +265,14 @@ const PLOT = "Plot. Tab through its parts for exact values.";
           {/* ===== cost per attempt ===== */}
           <g class="cost">
             <text class="head" x={v.K.x0} y={v.K.y0 + 9} dominant-baseline="central"><tspan class="k">Cost per attempt</tspan></text>
-            <path class="faint axis" d={`M${v.K.bar} ${v.kAxisY}H${v.kx(CMAX)}` + [0, 0.25, 0.5, 0.75, 1].map((c) => `M${v.kx(c)} ${v.kAxisY}v${(c * 4) % 2 ? 2.5 : 5}`).join("")} />
-            {[0, 0.5, 1].map((c) => (
-              <text class="cm tk" x={v.kx(c)} y={v.kAxisY + 8} text-anchor="middle" dominant-baseline="hanging">{c ? usd(c) : "$0"}</text>
-            ))}
+            {/* The scale is two strokes, so the script can rule the baseline and then set each tick as the pen passes it. */}
+            <g class="scale">
+              <path class="faint axis ax-b" d={`M${v.K.bar} ${v.kAxisY}H${v.kx(CMAX)}`} />
+              <path class="faint axis ax-t" d={v.kTicksD} />
+              {[0, 0.5, 1].map((c) => (
+                <text class="cm tk" data-x={v.kx(c)} x={v.kx(c)} y={v.kAxisY + 8} text-anchor="middle" dominant-baseline="hanging">{c ? usd(c) : "$0"}</text>
+              ))}
+            </g>
             {v.cRows.map((r) => (
               <g class="crow" data-k={r.id}>
                 <text class="al" x={v.K.x0} y={r.y} dominant-baseline="central"><tspan class="cmn strong">{r.id}</tspan><tspan dx="6">{r.name}</tspan></text>
@@ -264,11 +292,14 @@ const PLOT = "Plot. Tab through its parts for exact values.";
             <text class="head" x={v.K.x0} y={v.P.y0 + 9} dominant-baseline="central"><tspan class="k">Verified success, C − B</tspan></text>
             <text class="verdict" x={v.right} y={v.P.y0 + 9} text-anchor="end" dominant-baseline="central">no resolved effect</text>
             <rect class="band" x={v.px(-PRIMARY.floor)} y={v.brkY} width={f(v.px(PRIMARY.floor) - v.px(-PRIMARY.floor))} height={v.pAxisY - v.brkY} />
-            <path class="faint axis" d={`M${v.px(-PMAX)} ${v.pAxisY}H${v.px(PMAX)}` + [-20, -15, -10, -5, 0, 5, 10, 15, 20].map((p) => `M${v.px(p)} ${v.pAxisY}v${p % 10 ? 2.5 : 5}`).join("")} />
-            {[-20, -10, 0, 10].map((p) => (
-              <text class="cm tk" x={v.px(p)} y={v.pAxisY + 8} text-anchor="middle" dominant-baseline="hanging">{p ? sg(p, 0) : "0"}</text>
-            ))}
-            <text class="cm tk" x={v.right} y={v.pAxisY + 8} text-anchor="end" dominant-baseline="hanging">+20 pp</text>
+            <g class="scale">
+              <path class="faint axis ax-b" d={`M${v.px(-PMAX)} ${v.pAxisY}H${v.px(PMAX)}`} />
+              <path class="faint axis ax-t" d={v.pTicksD} />
+              {[-20, -10, 0, 10].map((p) => (
+                <text class="cm tk" data-x={v.px(p)} x={v.px(p)} y={v.pAxisY + 8} text-anchor="middle" dominant-baseline="hanging">{p ? sg(p, 0) : "0"}</text>
+              ))}
+              <text class="cm tk" data-x={v.px(PMAX)} x={v.right} y={v.pAxisY + 8} text-anchor="end" dominant-baseline="hanging">+20 pp</text>
+            </g>
             <line class="zero" x1={v.px(0)} x2={v.px(0)} y1={v.brkY + 6} y2={v.pAxisY} />
             <g class="floor">
               <path class="brk" d={`M${v.px(-PRIMARY.floor)} ${v.brkY + 5}V${v.brkY}H${v.px(PRIMARY.floor)}V${v.brkY + 5}`} />
@@ -304,15 +335,17 @@ const PLOT = "Plot. Tab through its parts for exact values.";
           {v.cRows.map((r) => (
             <>
               <rect class="hit" data-k={r.id} tabindex="0" role="img" aria-label={spoken.row(r)}
-                x={v.K.x0 - 4} y={r.y - v.K.pitch / 2} width={v.right - v.K.x0 + 6} height={v.K.pitch}><title>{SAID[r.id]}</title></rect>
+                x={v.hx} y={r.y - v.K.pitch / 2} width={v.right + 2 - v.hx} height={v.K.pitch}><title>{SAID[r.id]}</title></rect>
               <rect class="ring" x={v.K.x0 - 4} y={r.y - v.hug} width={v.right - v.K.x0 + 6} height={v.hug * 2} rx="4" />
             </>
           ))}
+          {/* The difference answers from its own line down to the foot of the cost scale, and the contrast from
+              its heading down, so a pointer crossing the column is never over nothing. */}
           <rect class="hit" data-k="D" tabindex="0" role="img" aria-label={spoken.D}
-            x={v.K.x0 - 4} y={v.dY - v.K.pitch / 2} width={v.right - v.K.x0 + 6} height={v.K.pitch}><title>{SAID.D}</title></rect>
+            x={v.hx} y={v.dY - v.K.pitch / 2} width={v.right + 2 - v.hx} height={v.P.y0 - 2 - (v.dY - v.K.pitch / 2)}><title>{SAID.D}</title></rect>
           <rect class="ring" x={v.K.bar - (v.wide ? 100 : 22)} y={v.dY - v.hug + 2} width={f(v.cRows[2].x1 + 10 - (v.K.bar - (v.wide ? 100 : 22)))} height={v.hug * 2 - 4} rx="4" />
           <rect class="hit" data-k="P" tabindex="0" role="img" aria-label={spoken.P}
-            x={v.K.x0 - 4} y={v.P.y0 + 19} width={v.right - v.K.x0 + 6} height={v.H - v.P.y0 - 20}><title>{SAID.P}</title></rect>
+            x={v.hx} y={v.P.y0 - 2} width={v.right + 2 - v.hx} height={v.H - v.P.y0 + 1}><title>{SAID.P}</title></rect>
           <rect class="ring" x={v.K.x0 - 4} y={v.P.y0 + 19} width={v.right - v.K.x0 + 6} height={v.H - v.P.y0 - 20} rx="5" />
         </g>
       </svg>
@@ -327,24 +360,24 @@ const PLOT = "Plot. Tab through its parts for exact values.";
 <style is:global>
   /* Layout follows the plate's own width (see Overlap.astro for the rationale). */
   .fig .ho-box { container-type: inline-size; }
-  .fig svg.ho-w { --u: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
-  .fig .plot svg.ho-n { --u: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
+  .fig svg.ho-w { --tu: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
+  .fig .plot svg.ho-n { --tu: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
   @container (max-width: 539.98px) {
     .fig .plot svg.ho-w { display: none; }
     .fig .plot svg.ho-n { display: block; }
   }
 
-  .fig svg.ho text { font-size: calc(11 * var(--u)); }
-  .fig svg.ho text.cm, .fig svg.ho tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--u)); letter-spacing: 0; }
+  .fig svg.ho text { font-size: calc(11 * var(--tu)); }
+  .fig svg.ho text.cm, .fig svg.ho tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); letter-spacing: 0; }
   .fig svg.ho tspan.k { fill: var(--ink); font-weight: 500; }
   .fig svg.ho tspan.strong { fill: var(--ink); }
   .fig svg.ho tspan.acc, .fig svg.ho text.acc { fill: var(--accent); }
   .fig svg.ho text.al, .fig svg.ho text.dl, .fig svg.ho text.brl, .fig svg.ho text.ct, .fig svg.ho .ret text { fill: var(--ink-2); }
   .fig svg.ho text.nlo, .fig svg.ho text.nhi, .fig svg.ho text.np { fill: var(--ink-2); }
-  .fig svg.ho text.nv { font-size: calc(12.5 * var(--u)); }
+  .fig svg.ho text.nv { font-size: calc(12.5 * var(--tu)); }
   .fig svg.ho text.ct.acc { fill: var(--accent); }
   .fig svg.ho text.verdict { fill: var(--ink); font-weight: 500; }
-  .fig svg.ho text.cv { font-size: calc(12 * var(--u)); }
+  .fig svg.ho text.cv { font-size: calc(12 * var(--tu)); }
 
   /* trees */
   .fig svg.ho .edge, .fig svg.ho .stub { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linecap: round; }
@@ -386,6 +419,11 @@ const PLOT = "Plot. Tab through its parts for exact values.";
   .fig svg.ho .hit:focus { outline: none; }
   .fig svg.ho .ring { fill: none; stroke: none; pointer-events: none; }
   .fig svg.ho .hit:focus-visible + .ring { stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
-  .fig svg.ho .tree, .fig svg.ho .crow, .fig svg.ho .dcost, .fig svg.ho .con, .fig svg.ho .foot { transition: opacity 0.2s ease; }
-  .fig svg.ho.focus .tree:not(.on), .fig svg.ho.focus .crow:not(.on), .fig svg.ho.focus .dcost:not(.on), .fig svg.ho.focus .con:not(.on) { opacity: 0.36; }
+  /* (What is not being read steps back. The script sets that, on the page's own clock and curve.) */
+
+  /* Moving parts, made by the script. A ring opens round a node as it writes, round the verifier as a
+     patch reaches it, and round the estimate as that attempt is graded. */
+  .fig svg.ho .wr { fill: none; stroke: var(--ink); stroke-width: 1; }
+  .fig svg.ho .vf-p { fill: none; stroke: var(--ink-2); stroke-width: 1; }
+  .fig svg.ho .pt-p { fill: none; stroke: var(--accent); stroke-width: 1.25; }
 </style>

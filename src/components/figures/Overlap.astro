@@ -10,7 +10,11 @@
 // container query shows one. Geometry is computed here; the script reveals it.
 // Every mark that encodes a measurement (a bar and its split, a dot, an
 // interval, the clearance to zero, the grid of 165 cells) appears whole, at its
-// measured extent or count, and the script never prints a number of its own.
+// measured extent or count: the script may open it across its own scale (a
+// bar's thickness, a dot's radius, the height of an end cap, the size of a
+// cell) and never along it, and all 165 cells are on the plot from the first
+// frame any of them is. Structure is drawn on: the frames, the scales, the
+// leader. The script never prints a number of its own.
 import Figure from "../Figure.astro";
 
 interface Props { n?: number }
@@ -41,7 +45,6 @@ const STORY = {
   idle: "compute, files, lines",
   a: "tokens beyond one agent",
   aDone: `${COMPUTE[0].lost}% and ${COMPUTE[1].lost}% unapplied`,
-  bOne: `${sg(FILES[0].v)} pp over the null`,
   bBoth: `${sg(FILES[0].v)} and ${sg(FILES[1].v)} pp over the null`,
   cDone: `${HIT} / ${N} collide`,
 };
@@ -89,6 +92,7 @@ function view(wide: boolean) {
   const cells = Array.from({ length: N }, (_, i) => {
     const r = Math.floor(i / COLS), c = i % COLS;
     return {
+      i,
       x: C.x0 + c * C.pitch,
       y: C.top + r * C.pitch,
       // Cells fill in reading order, so the 16 disjoint patches are the last 16.
@@ -109,15 +113,29 @@ function view(wide: boolean) {
     { k: "c", name: "Lines", sub: "165 refused patches, replayed", x: wide ? C.x0 : 0, y: C.y0 + 9 },
   ];
 
+  // The two scales, as the script rules them: a baseline, then a tick as the pen passes it ([x, length]).
+  const aTicks = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => [f(A.x0 + (aw * k) / 10), k % 5 ? 2.5 : 5]);
+  const bTicks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20].map((k) => [bx(k), k % 10 ? 2.5 : 5]);
+  const ticksD = (ticks: number[][], y: number) => ticks.map(([x, l]) => `M${x} ${y}v${l}`).join("");
+
   const G = {
-    // Scroll windows for each panel. Stacked panels play as they scroll in.
-    // Each panel finishes far enough ahead of the next one's first number for
-    // its own result to hold the plate readout for a moment.
-    beats: wide
-      ? { a: [0, 0.3], b: [0.28, 0.62], c: [0.4, 1] }
-      : { a: [0.06, 0.3], b: [0.3, 0.58], c: [0.52, 0.98] },
-    lead: oLen, // the orchestration leader, the one stroke in the plot that is drawn on
-    c: { hit: HIT, cell: C.cell, x0: C.x0, top: C.top, pitch: C.pitch, cols: COLS, rows: ROWS },
+    H,
+    lead: oLen, // the orchestration leader
+    // Heights in the drawing the script times its story by: a part is drawn
+    // once the plate has let that much of its sheet out.
+    a: {
+      axis: wide ? { y: aAxisY, x0: A.x0, x1: A.x1, ticks: aTicks } : null,
+      rows: aRows.map((r) => ({ ly: r.ly, y0: r.y0, h: r.h })), oY, leg: aLegY,
+    },
+    b: {
+      axis: { y: bAxisY, x0: B.zero, x1: B.x1, ticks: bTicks }, top: bTop, note: bNoteY,
+      rows: bRows.map((r) => ({ ly: r.ly, y: r.y, ciY: r.ciY, lo: r.xlo, hi: r.xhi })), cap: wide ? 4 : 6,
+    },
+    c: {
+      hit: HIT, n: N, cell: C.cell, x0: C.x0, top: C.top, pitch: C.pitch, cols: COLS, rows: ROWS,
+      // The colliding cells in the order the server listed them in their path.
+      order: swept.map((s) => s.i), bottom: cBottom, stat: cStatY, leg: cLegY, head: C.y0 + 9,
+    },
     story: STORY,
   };
 
@@ -126,6 +144,7 @@ function view(wide: boolean) {
     A, aw, aRows, aAxisY, aLegY, oY, oX, oLead, oLen,
     B, bx, bRows, bTop, bAxisY, bNoteY, cap: wide ? 4 : 6,
     C, cRight, cBottom, cStatY, cLegY,
+    aTicksD: ticksD(aTicks, aAxisY), bTicksD: ticksD(bTicks, bAxisY),
     bg: cells.map(cellD).join(""),
     off: cells.filter((c) => !c.hit).map(cellD).join(""),
     on: swept.map(cellD).join(""),
@@ -174,17 +193,19 @@ const saidC = [`${HIT} of ${N} collide at line level (${PCT}%)`, `${N - HIT} of 
               {v.wide && <text class="sub" x={h.x} y={h.y + 18} dominant-baseline="central">{h.sub}</text>}
             </>
           ))}
-          {v.wide && <path class="hair" d={`M219 0V${v.H}M422 0V${v.H}`} />}
+          {v.wide && <path class="hair sep" d={`M219 0V${v.H}M422 0V${v.H}`} />}
 
           {/* ===== (a) compute ===== */}
           <g class="pa">
+            {/* The scale is two strokes, so the script can rule the baseline and then set each tick as the pen passes it. */}
             {v.wide && (
-              <>
-                <path class="faint" d={`M${v.A.x0} ${v.aAxisY}H${v.A.x1}` + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => `M${f(v.A.x0 + (v.aw * k) / 10)} ${v.aAxisY}v${k % 5 ? 2.5 : 5}`).join("")} />
-                <text class="cm tk" x={v.A.x0} y={v.aAxisY + 8} dominant-baseline="hanging">0</text>
-                <text class="cm tk" x={f(v.A.x0 + v.aw / 2)} y={v.aAxisY + 8} text-anchor="middle" dominant-baseline="hanging">50</text>
-                <text class="cm tk" x={v.A.x1} y={v.aAxisY + 8} text-anchor="end" dominant-baseline="hanging">100%</text>
-              </>
+              <g class="scale">
+                <path class="faint ax-b" d={`M${v.A.x0} ${v.aAxisY}H${v.A.x1}`} />
+                <path class="faint ax-t" d={v.aTicksD} />
+                <text class="cm tk" data-x={v.A.x0} x={v.A.x0} y={v.aAxisY + 8} dominant-baseline="hanging">0</text>
+                <text class="cm tk" data-x={f(v.A.x0 + v.aw / 2)} x={f(v.A.x0 + v.aw / 2)} y={v.aAxisY + 8} text-anchor="middle" dominant-baseline="hanging">50</text>
+                <text class="cm tk" data-x={v.A.x1} x={v.A.x1} y={v.aAxisY + 8} text-anchor="end" dominant-baseline="hanging">100%</text>
+              </g>
             )}
             {v.aRows.map((r, i) => (
               <g class="arow row" data-p="a" data-i={i}>
@@ -214,11 +235,16 @@ const saidC = [`${HIT} of ${N} collide at line level (${PCT}%)`, `${N - HIT} of 
 
           {/* ===== (b) files ===== */}
           <g class="pb">
-            <path class="hair" d={`M${v.bx(10)} ${v.bTop}V${v.bAxisY}M${v.bx(20)} ${v.bTop}V${v.bAxisY}`} />
-            <path class="faint" d={`M${v.B.zero} ${v.bTop}V${v.bAxisY}H${v.B.x1}` + [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20].map((k) => `M${v.bx(k)} ${v.bAxisY}v${k % 10 ? 2.5 : 5}`).join("")} />
-            <text class="cm tk" x={v.B.zero} y={v.bAxisY + 8} dominant-baseline="hanging">0</text>
-            <text class="cm tk" x={v.bx(10)} y={v.bAxisY + 8} text-anchor="middle" dominant-baseline="hanging">+10</text>
-            <text class="cm tk" x={v.B.right} y={v.bAxisY + 8} text-anchor="end" dominant-baseline="hanging">+20 pp</text>
+            <path class="hair bgrid" d={`M${v.bx(10)} ${v.bTop}V${v.bAxisY}M${v.bx(20)} ${v.bTop}V${v.bAxisY}`} />
+            {/* Zero, the null every estimate is measured from; then the scale along the foot. */}
+            <path class="faint ax-z" d={`M${v.B.zero} ${v.bTop}V${v.bAxisY}`} />
+            <g class="scale">
+              <path class="faint ax-b" d={`M${v.B.zero} ${v.bAxisY}H${v.B.x1}`} />
+              <path class="faint ax-t" d={v.bTicksD} />
+              <text class="cm tk" data-x={v.B.zero} x={v.B.zero} y={v.bAxisY + 8} dominant-baseline="hanging">0</text>
+              <text class="cm tk" data-x={v.bx(10)} x={v.bx(10)} y={v.bAxisY + 8} text-anchor="middle" dominant-baseline="hanging">+10</text>
+              <text class="cm tk" data-x={v.bx(20)} x={v.B.right} y={v.bAxisY + 8} text-anchor="end" dominant-baseline="hanging">+20 pp</text>
+            </g>
             {v.bRows.map((r, i) => (
               <g class="brow row" data-p="b" data-i={i}>
                 <text class="rk" x={v.B.zero + 7} y={r.ly} dominant-baseline="central">{r.k}</text>
@@ -245,9 +271,8 @@ const saidC = [`${HIT} of ${N} collide at line level (${PCT}%)`, `${N - HIT} of 
             <g class="cells">
               <path class="cells-bg" d={v.bg} />
               <g class="grp-off"><path class="cells-off" d={v.off} /></g>
-              <path class="cells-on" d={v.on} />
+              <g class="grp-on"><path class="cells-on" d={v.on} /></g>
             </g>
-            <path class="cells-glint" d="M0 0" />
             {v.wide && <text class="cstat" x={v.C.x0} y={v.cStatY} dominant-baseline="central"><tspan class="cmn strong">{PCT}%</tspan> collide at line level</text>}
             <g class="cleg">
               <g class="lg-hit">
@@ -273,18 +298,18 @@ const saidC = [`${HIT} of ${N} collide at line level (${PCT}%)`, `${N - HIT} of 
           {v.aRows.map((r, i) => (
             <>
               <rect class="hit" data-p="a" data-i={i} data-say={saidA(r)} tabindex="0" role="img" aria-label={spokenA(r)}
-                x={v.A.x0 - 4} y={r.ly - 10} width={v.aw + 14} height={r.y0 + r.h + (v.wide ? 6 : 8) - (r.ly - 10)}><title>{saidA(r)}</title></rect>
+                x={v.A.x0 - 4} y={r.ly - 10} width={v.wide ? 222.5 : v.aw + 14} height={v.wide ? 64 : 56}><title>{saidA(r)}</title></rect>
               <rect class="ring" x={v.A.x0 - 4} y={r.ly - 10} width={v.aw + 14} height={r.y0 + r.h + 6 - (r.ly - 10)} rx="4" />
             </>
           ))}
           {v.bRows.map((r, i) => (
             <>
               <rect class="hit" data-p="b" data-i={i} data-say={saidB(r)} tabindex="0" role="img" aria-label={spokenB(r)}
-                x={v.B.x0 - 2} y={r.ly - 10} width={v.B.right - v.B.x0 + 6} height={r.ciY + 9 - (r.ly - 10)}><title>{saidB(r)}</title></rect>
+                x={v.wide ? 219.5 : v.B.x0 - 2} y={r.ly - 10} width={v.wide ? 202 : v.B.right - v.B.x0 + 6} height={v.wide ? 64 : 62}><title>{saidB(r)}</title></rect>
               <rect class="ring" x={v.B.x0 - 2} y={r.ly - 10} width={v.B.right - v.B.x0 + 6} height={r.ciY + 9 - (r.ly - 10)} rx="4" />
             </>
           ))}
-          <rect class="hit grid" aria-hidden="true" x={v.C.x0 - 3} y={v.C.top - 3} width={v.cRight - v.C.x0 + 6} height={v.cBottom - v.C.top + 6} />
+          <rect class="hit grid" aria-hidden="true" x={v.wide ? 422.5 : v.C.x0 - 3} y={v.C.top - 3} width={v.wide ? v.W - 422.5 : v.cRight - v.C.x0 + 6} height={v.cBottom - v.C.top + 6} />
           {[0, 1].map((i) => {
             // The legend entries are small, so each gets a padded hit area.
             const x = v.C.x0 + (i ? (v.wide ? 91 : 118) : -4), w = i ? (v.wide ? 96 : 112) : (v.wide ? 93 : 116);
@@ -309,25 +334,27 @@ const saidC = [`${HIT} of ${N} collide at line level (${PCT}%)`, `${N - HIT} of 
 
 <style is:global>
   /* The plate picks its layout from its own width, not the viewport's, so the
-     figure reads the same in a narrow column as on a phone. --u is one user
-     unit of text: it grows as the plate shrinks, keeping labels near 10.5px. */
+     figure reads the same in a narrow column as on a phone. --tu is one user
+     unit of text: it grows as the plate shrinks, keeping labels near 10.5px.
+     (Not --u: the page's stylesheet registers that name as a number, for its
+     hover lines, and a length written to it would be thrown away.) */
   .fig .ov-box { container-type: inline-size; }
-  .fig svg.ov-w { --u: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
-  .fig .plot svg.ov-n { --u: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
+  .fig svg.ov-w { --tu: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
+  .fig .plot svg.ov-n { --tu: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
   @container (max-width: 539.98px) {
     .fig .plot svg.ov-w { display: none; }
     .fig .plot svg.ov-n { display: block; }
   }
 
-  .fig svg.ov text { font-size: calc(11 * var(--u)); }
-  .fig svg.ov text.cm, .fig svg.ov tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--u)); letter-spacing: 0; }
-  .fig svg.ov tspan.pl { font-family: var(--cm); font-size: calc(11.5 * var(--u)); fill: var(--ink); letter-spacing: 0; }
+  .fig svg.ov text { font-size: calc(11 * var(--tu)); }
+  .fig svg.ov text.cm, .fig svg.ov tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); letter-spacing: 0; }
+  .fig svg.ov tspan.pl { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); fill: var(--ink); letter-spacing: 0; }
   .fig svg.ov tspan.k { fill: var(--ink); font-weight: 500; }
   .fig svg.ov tspan.strong { fill: var(--ink); }
   .fig svg.ov tspan.acc { fill: var(--accent); }
   .fig svg.ov text.rk, .fig svg.ov text.ol, .fig svg.ov text.bnote, .fig svg.ov text.cstat { fill: var(--ink-2); }
-  .fig svg.ov text.count { font-size: calc(12.5 * var(--u)); }
-  .fig svg.ov text.cpct { font-size: calc(12.5 * var(--u)); }
+  .fig svg.ov text.count { font-size: calc(12.5 * var(--tu)); }
+  .fig svg.ov text.cpct { font-size: calc(12.5 * var(--tu)); }
 
   /* (a) */
   .fig svg.ov .frame { fill: none; stroke: var(--hair); stroke-width: 1; }
@@ -349,7 +376,12 @@ const saidC = [`${HIT} of ${N} collide at line level (${PCT}%)`, `${N - HIT} of 
   .fig svg.ov .cells-bg { fill: none; stroke: var(--ink); stroke-opacity: 0.16; stroke-width: 1; stroke-linejoin: round; }
   .fig svg.ov .cells-off { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1; stroke-linejoin: round; }
   .fig svg.ov .cells-on { fill: var(--accent); fill-opacity: 0.8; stroke: var(--accent); stroke-opacity: 0.8; stroke-width: 1; stroke-linejoin: round; }
-  .fig svg.ov .cells-glint { fill: var(--accent); stroke: var(--accent); stroke-width: 1; stroke-linejoin: round; }
+  /* The replay's light, made by the script: over a colliding cell it brings the fill up to full
+     strength, over a disjoint one it inks the outline. Neither changes which kind a cell is. */
+  .fig svg.ov .rp { fill: var(--accent); stroke: var(--accent); stroke-width: 1; stroke-linejoin: round; pointer-events: none; }
+  .fig svg.ov .rp.off { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+  /* The line an estimate drops to the scale while its row is being read (made by the script). */
+  .fig svg.ov .drop { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 3; pointer-events: none; }
   .fig svg.ov .sw.on { fill: var(--accent); fill-opacity: 0.8; stroke: var(--accent); stroke-opacity: 0.8; stroke-width: 1; }
   .fig svg.ov .sw.off { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1; }
 
@@ -359,10 +391,5 @@ const saidC = [`${HIT} of ${N} collide at line level (${PCT}%)`, `${N - HIT} of 
   .fig svg.ov .hit:focus { outline: none; }
   .fig svg.ov .ring { fill: none; stroke: none; pointer-events: none; }
   .fig svg.ov .hit:focus-visible + .ring { stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
-  .fig svg.ov .row, .fig svg.ov .cells-on, .fig svg.ov .grp-off, .fig svg.ov .lg-hit, .fig svg.ov .lg-off, .fig svg.ov .ocall {
-    transition: opacity 0.2s ease;
-  }
-  .fig svg.ov.focus .row:not(.on), .fig svg.ov.focus .ocall:not(.on) { opacity: 0.38; }
-  .fig svg.ov.g-hit .grp-off, .fig svg.ov.g-hit .lg-off { opacity: 0.3; }
-  .fig svg.ov.g-off .cells-on, .fig svg.ov.g-off .lg-hit { opacity: 0.28; }
+  /* (What is not being read steps back. The script sets that, on the page's own clock and curve.) */
 </style>

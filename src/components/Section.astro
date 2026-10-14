@@ -7,8 +7,8 @@ interface Props {
 const { id, title, lede } = Astro.props;
 ---
 
-<section id={id} aria-labelledby={`${id}-h`} class="wrap" data-section={title}>
-  <header class="sec-h">
+<section id={id} aria-labelledby={`${id}-h`} class="wrap" data-section={title} data-ground>
+  <header class="sec-h" data-reveal="title">
     <h2 id={`${id}-h`}>{title}</h2>
     {lede && <p>{lede}</p>}
   </header>

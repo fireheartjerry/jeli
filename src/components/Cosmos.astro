@@ -1,0 +1,186 @@
+---
+/**
+ * The scene behind the page: one WebGL canvas, fixed to the window, that the
+ * whole page scrolls over. On the home page the take starts at the sphere (the
+ * cover), leaves for deep space while the page is read, and comes home for the
+ * footer. A page with no cover opens already under way.
+ *
+ * Render it once, first in <body>. It is only shown once its script has a
+ * running scene (html[data-voyage]); without JavaScript, without WebGL or
+ * under reduced motion the page keeps its plain ground and its still images.
+ */
+interface Props {
+  /** The page opens on the cover, so the take starts at the sphere. */
+  cover?: boolean;
+}
+const { cover = false } = Astro.props;
+---
+
+<div class="cosmos" data-cosmos data-night data-from={cover ? undefined : "far"} aria-hidden="true">
+  <canvas class="cosmos-canvas" data-cosmos-canvas></canvas>
+  {/* What holds the scene down so type can be read over it: on the cover, far out, and home again. */}
+  <div class="veil cover" data-veil="cover"></div>
+  <div class="veil end" data-veil="end"></div>
+  <div class="veil deep" data-veil="deep"></div>
+  {/* Names for a few bodies, pinned to them by the script. */}
+  <div class="cosmos-tags" data-cosmos-tags>
+    {cover && (
+      <>
+        <span data-tag="swarm">Dyson swarm, 1 AU</span>
+        <span data-tag="jupiter">Jupiter</span>
+        <span data-tag="psyche">16 Psyche, quarry</span>
+        <span data-tag="beam" class="hot">3.83 × 10²⁶ W, outbound</span>
+      </>
+    )}
+  </div>
+</div>
+
+<script>
+  import "../scripts/voyage";
+</script>
+
+<style is:global>
+  .cosmos {
+    position: fixed;
+    inset: 0 0 auto 0;
+    /* The tallest the window gets, so a phone's toolbar sliding away never resizes the scene. */
+    height: 100lvh;
+    z-index: -1;
+    display: none;
+    pointer-events: none;
+    overflow: clip;
+    background: #06080d;
+    contain: strict;
+  }
+  html[data-voyage] .cosmos {
+    display: block;
+  }
+  /* The page lets the scene through. By day only the cover and the footer do: the rest is paper. */
+  html[data-voyage] {
+    background: #06080d;
+  }
+  html[data-voyage] body {
+    background: transparent;
+  }
+  html[data-voyage][data-theme="light"] [data-ground] {
+    background: var(--paper);
+    /* The ground runs to both edges of the window, whatever the measure of the column on it. */
+    box-shadow: 0 0 0 100vmax var(--paper);
+    clip-path: inset(0 -100vmax);
+  }
+  /* The canvas and the names live in the fixed layer while the scene runs. For
+     a still frame (reduced motion) the script puts both inside the cover instead. */
+  .cosmos-canvas,
+  .cosmos .veil,
+  .cosmos-tags {
+    position: absolute;
+    inset: 0;
+  }
+  .cosmos-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    /* The scene's own opening: it comes up out of the dark over the time the name takes to rise and settle. */
+    transition: opacity 1.4s var(--ease-io);
+  }
+  .cosmos-canvas[data-on] {
+    opacity: 1;
+  }
+  [data-hero] > .cosmos-canvas,
+  [data-hero] > .cosmos-tags {
+    z-index: -1;
+  }
+  @media (max-width: 880px) {
+    [data-hero] > .cosmos-canvas,
+    [data-hero] > .cosmos-tags {
+      height: calc(var(--bar) + var(--sky-h, 62vw) + 56px);
+    }
+    [data-hero] > .cosmos-canvas {
+      -webkit-mask-image: linear-gradient(#000 78%, transparent);
+      mask-image: linear-gradient(#000 78%, transparent);
+    }
+  }
+
+  /* Each veil is faded by the script as the camera moves between the three places. */
+  .cosmos .veil {
+    opacity: var(--k, 0);
+  }
+  /* On the cover: the left is held down for the name, the foot for the ledger, the head for the bar. */
+  .cosmos .veil.cover,
+  .cosmos .veil.end {
+    background:
+      linear-gradient(90deg, rgb(6 8 13 / 0.94), rgb(6 8 13 / 0.86) 26%, rgb(6 8 13 / 0.42) 46%, transparent 62%),
+      linear-gradient(0deg, rgb(6 8 13 / 0.92), rgb(6 8 13 / 0.6) 14%, transparent 30%),
+      linear-gradient(180deg, rgb(6 8 13 / 0.88), rgb(6 8 13 / 0.62) 7%, transparent 17%);
+  }
+  .cosmos .veil.cover {
+    --k: 1;
+  }
+  /* Far out the whole sky is taken down evenly: it is behind everything that is read. */
+  .cosmos .veil.deep {
+    background: rgb(6 8 13 / 0.46);
+  }
+  @media (max-width: 880px) {
+    /* On a narrow screen the type sits under the scene, so the scene is a band and all below it is ground. */
+    /* (The ground under the cover's type belongs to the cover and leaves with it: see Hero.astro.) */
+    .cosmos .veil.cover {
+      background: linear-gradient(180deg, rgb(6 8 13 / 0.9), rgb(6 8 13 / 0.6) 5%, transparent 12%);
+    }
+    /* Home again the band sits lower, between the caption and the address. */
+    .cosmos .veil.end {
+      background:
+        linear-gradient(180deg, rgb(6 8 13 / 0.94), rgb(6 8 13 / 0.7) 9%, transparent 22%),
+        linear-gradient(180deg, transparent calc(var(--end-y, 44lvh) + var(--sky-h, 62vw) * 0.34), #06080d calc(var(--end-y, 44lvh) + var(--sky-h, 62vw) * 0.62));
+    }
+    .cosmos .veil.deep {
+      background: rgb(6 8 13 / 0.52);
+    }
+  }
+
+  /* Small names riding on a few bodies. */
+  .cosmos-tags {
+    pointer-events: none;
+    overflow: clip;
+  }
+  .cosmos-tags span {
+    position: absolute;
+    left: 0;
+    top: 0;
+    padding-left: 15px;
+    font-size: 12.5px;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    color: var(--ink-3);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity var(--t-state) var(--ease-io);
+    will-change: transform;
+  }
+  .cosmos-tags span::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    width: 9px;
+    height: 1px;
+    background: var(--ink-4);
+  }
+  .cosmos-tags span[data-on] {
+    opacity: 1;
+  }
+  .cosmos-tags .hot {
+    color: var(--accent);
+  }
+
+  /* Poster mode (?poster=0..1), used by tools/cover.mjs: only the scene. */
+  html[data-poster] .cosmos-tags {
+    visibility: hidden;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cosmos-canvas,
+    .cosmos-tags span {
+      transition: none;
+    }
+  }
+</style>

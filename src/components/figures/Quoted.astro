@@ -9,6 +9,11 @@
 // Layout: four blocks of 304 units (scrape, table, request+queue, printer)
 // in a 2 x 2 grid plus a full-width timeline band. Under 560px each block is
 // re-stacked at 1.85x (CSS transforms from --m) so its text stays legible.
+//
+// What is drawn here is the finished figure. Everything marked opacity="0"
+// is a moving part that only the script (scripts/figures/quoted.ts) shows:
+// the selectors, the prices in flight, the packet, the cursors on the bars,
+// the scan line over the barcode.
 import Figure from "../Figure.astro";
 
 // ---------- Code 128 (subset B) ----------
@@ -59,7 +64,15 @@ PATTERNS.forEach((p, i) => {
   if (total !== (i === STOP ? 13 : 11) || barSum % 2 !== 0) throw new Error(`Code 128 pattern ${i}`);
 });
 
-const SKU = "QT-2025-0718";
+// Labels are numbered in sequence, and so are CUPS jobs: the first label the
+// figure prints is QT-2025-0718, as job 412.
+const SEQ = 718, JOB = 412;
+const skuOf = (n: number) => `QT-2025-${String(SEQ + n).padStart(4, "0")}`;
+const SKU = skuOf(0);
+// The still is one moment of a working queue: four requests have been answered, the first label is on the
+// tear bar, and the request line shows the last one asked for.
+const QUEUED = 4;
+const LAST = skuOf(QUEUED - 1);
 const code = code128B(SKU);
 const f = (v: number) => +v.toFixed(2);
 
@@ -103,10 +116,12 @@ const plots = [
 // 3. Request and CUPS queue.
 const RQ = { y: 286, h: 30 };
 const QU = { y: 330, h: 112, rows: 356, row: 21 };
+const STATES = ["pending", "processing", "completed"];
 
 // 4. Printer and the 4 x 2 in label (60 units per inch).
+const INCH = 60;
 const PR = { x: 346, y: 294, w: 284, h: 62, slot: 324 };
-const LB = { x: 368, y: PR.slot + 4, w: 240, h: 120 };
+const LB = { x: 368, y: PR.slot + 4, w: 4 * INCH, h: 2 * INCH };
 const MOD = 1.2;
 const bx0 = (LB.w - code.modules * MOD) / 2;
 const BAR = { y: 70, h: 30 };
@@ -157,7 +172,16 @@ for (const b of blocks) {
 const bandY = f(my - 480);
 const HM = Math.ceil(my + 164);
 mt["b-time"] = `translate(0px, ${bandY}px)`;
-const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, gap: C.gap };
+// What the script needs to keep the picture true once it moves: the layout of
+// the bars, and enough of Code 128 to encode the next label in the sequence.
+const geo = {
+  S, W, bw: BW, gap: C.gap,
+  mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w),
+  seq: SEQ, job: JOB, inch: INCH,
+  lab: { h: LB.h, off: LB.y - PR.slot },
+  pat: PATTERNS.join(""),
+  bar: { x0: f(bx0), mod: MOD, y: BAR.y, h: BAR.h },
+};
 ---
 
 <Figure name="quoted" n={8} title="Pricing and labels" label="Quoted Tech Computers: Playwright scrapers turn competitor catalogs into pricing data, and a Node.js and Express service prints Code 128 labels through CUPS, cutting manual processing time by 70%" readout="−70% time">
@@ -174,6 +198,8 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
       <clipPath id="qt-slot"><rect x={PR.x - 10} y={PR.slot + 1} width={PR.w + 20} height="200" /></clipPath>
       <clipPath id="qt-q"><rect x="0" y={QU.rows} width={BW} height={QU.row * 4} /></clipPath>
       <clipPath id="qt-rq"><rect class="rq-clip" x="0" y={RQ.y} width={BW} height={RQ.h} /></clipPath>
+      {/* The slit a digit of the request's SKU rolls through when the next label is asked for. */}
+      <clipPath id="qt-roll"><rect x="0" y={RQ.y + 8.5} width={BW} height="14.5" /></clipPath>
     </defs>
 
     <!-- ===== 1. scrape ===== -->
@@ -186,6 +212,7 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
           <rect class="url" x="34" y={winY(wi) + 3.5} width={BW - 42} height="10" rx="5" />
           <text class="url-t" x="42" y={winY(wi) + 11.4}>{w.url}</text>
           <line class="hair" x1="0.5" x2={BW - 0.5} y1={winY(wi) + 17} y2={winY(wi) + 17} />
+          <line class="load" x1="1" x2={BW - 1} y1={winY(wi) + 17} y2={winY(wi) + 17} pathLength="1" opacity="0" />
         </g>
       ))}
       {cards.map((c, i) => (
@@ -207,14 +234,16 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
           <text class="cm price" x={c.x + 38} y={c.y + 30.5}>{c.price}</text>
         </g>
       ))}
-      <!-- the Playwright selector highlight; the script hops it across price fields -->
-      <g class="sel" opacity="0">
-        <rect class="sel-r" x="0" y="0" width="1" height="1" vector-effect="non-scaling-stroke" />
-        <g class="sel-tg">
-          <rect class="sel-tag" x="0" y="-16" width="42" height="14" rx="2" />
-          <text class="sel-t" x="5" y="-5.5">.price</text>
+      <!-- one Playwright selector per catalog page; the script moves each across its price fields -->
+      {windows.map((_, wi) => (
+        <g class="sel" data-w={wi} opacity="0">
+          <rect class="sel-r" x="0" y="0" width="1" height="1" vector-effect="non-scaling-stroke" />
+          <g class="sel-tg">
+            <rect class="sel-tag" x="0" y="-16" width="42" height="14" rx="2" />
+            <text class="sel-t" x="5" y="-5.5">.price</text>
+          </g>
         </g>
-      </g>
+      ))}
     </g>
 
     <!-- ===== 2. pricing table + dot plot ===== -->
@@ -228,6 +257,7 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
       {cards.map((c, i) => (
         <g class="row" data-i={i}>
           <rect class="row-bg" x={BX + 1} y={rowY(i) + 0.5} width={BW - 2} height={TB.row} />
+          <rect class="row-fl" x={BX + 1} y={rowY(i) + 0.5} width={BW - 2} height={TB.row} opacity="0" />
           <text class="cm td sku" x={BX + 12} y={rowY(i) + 12.5}>{c.sku}</text>
           <text class="td nm" x={BX + 76} y={rowY(i) + 12.5}>{c.name}</text>
           <text class="cm td pr" x={BX + BW - 12} y={rowY(i) + 12.5} text-anchor="end">{c.price}</text>
@@ -245,11 +275,12 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
             <line class="hair ptrack" x1={DP.x0} x2={DP.x1} y1={r.y} y2={r.y} />
             {r.ticks.map((t, k) => (
               <>
-                <line class="faint ptick" x1={r.sx(t)} x2={r.sx(t)} y1={r.y + 3} y2={r.y + 6} />
-                <text class="cm tk" x={r.sx(t)} y={r.y + 16} text-anchor="middle">{k === 0 ? "$" : ""}{t.toLocaleString("en-US")}</text>
+                <line class="faint ptick" data-k={k} x1={r.sx(t)} x2={r.sx(t)} y1={r.y + 3} y2={r.y + 6} />
+                <text class="cm tk" data-k={k} x={r.sx(t)} y={r.y + 16} text-anchor="middle">{k === 0 ? "$" : ""}{t.toLocaleString("en-US")}</text>
               </>
             ))}
             <line class="range" x1={r.lo_x} x2={r.hi_x} y1={r.y} y2={r.y} />
+            <circle class="ping" cx="0" cy={r.y} r="2.9" opacity="0" />
             {r.dots.map((d) => <circle class="pdot" data-i={d.i} cx={d.x} cy={r.y} r="2.9" />)}
             <g class="qtm" data-x={r.qx}>
               <line class="accent" x1={r.qx} x2={r.qx} y1={r.y - 6} y2={r.y + 6} />
@@ -257,6 +288,9 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
             </g>
           </g>
         ))}
+        <!-- a price on its way down from its row to its place on the axis, when a scraper reads it again -->
+        <circle class="drop" cx="0" cy="0" r="2.6" opacity="0" />
+        <circle class="halo" cx="0" cy="0" r="6.5" opacity="0" />
       </g>
     </g>
 
@@ -265,34 +299,44 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
       <text class="hd" x="0" y="275"><tspan class="k">Label</tspan><tspan dx="8">Node.js and Express, then CUPS</tspan></text>
       <rect class="inset" x="0.5" y={RQ.y + 0.5} width={BW - 1} height={RQ.h} rx="6" />
       <g clip-path="url(#qt-rq)">
-        <text class="req" x="10" y={RQ.y + 19.5}><tspan class="k">POST</tspan><tspan dx="6">/labels</tspan><tspan dx="7" class="jb">{`{"sku":"`}<tspan class="rq-sku">{SKU}</tspan>{`"}`}</tspan></text>
+        <text class="req" x="10" y={RQ.y + 19.5}><tspan class="k">POST</tspan><tspan dx="6">/labels</tspan><tspan dx="7" class="jb">{`{"sku":"`}<tspan class="rq-sku">{LAST.slice(0, -4)}{[...LAST.slice(-4)].map((d) => <tspan class="dg">{d}</tspan>)}</tspan>{`"}`}</tspan></text>
       </g>
+      <g clip-path="url(#qt-roll)">
+        {[0, 1, 2, 3].map((d) => (
+          <>
+            <text class="req roll" data-d={d} data-r="a" x="0" y={RQ.y + 19.5} opacity="0"></text>
+            <text class="req roll" data-d={d} data-r="b" x="0" y={RQ.y + 19.5} opacity="0"></text>
+          </>
+        ))}
+      </g>
+      <rect class="rq-caret" x="0" y={RQ.y + 9.5} width="1.25" height="12.5" opacity="0" />
       <g class="status">
+        <circle class="ok-ping" cx={BW - 44} cy={RQ.y + 15.5} r="2.6" opacity="0" />
         <circle class="f-green" cx={BW - 44} cy={RQ.y + 15.5} r="2.6" />
         <text class="cm ok" x={BW - 10} y={RQ.y + 19.5} text-anchor="end">200</text>
       </g>
       <path class="hair" d={`M22 ${RQ.y + RQ.h + 1}V${QU.y}`} />
-      <path class="flow" d={`M22 ${RQ.y + RQ.h + 1}V${QU.y}`} />
-      <g class="pk-layer"></g>
+      <circle class="pk dot-accent" cx="22" cy={RQ.y + RQ.h + 1} r="2.2" data-y0={RQ.y + RQ.h + 1} data-y1={QU.y} opacity="0" />
       <rect class="inset" x="0.5" y={QU.y + 0.5} width={BW - 1} height={QU.h} rx="6" />
       <text class="qh" x="12" y={QU.y + 17}><tspan class="k">CUPS queue</tspan></text>
       <text class="cm qp" x={BW - 12} y={QU.y + 17} text-anchor="end">label-4x2</text>
       <line class="hair" x1="0.5" x2={BW - 0.5} y1={QU.rows - 2} y2={QU.rows - 2} />
       <g clip-path="url(#qt-q)">
-        {[0, 1, 2, 3, 4].map((k) => {
+        {Array.from({ length: QUEUED + 1 }, (_, k) => k).map((k) => {
           const y0 = QU.rows + k * QU.row;
-          const done = k === 0, proc = k === 1;
+          const st = k === 0 ? 2 : k === 1 ? 1 : 0;
           return (
-            <g class="job" data-k={k} transform={`translate(0 ${y0})`} opacity={k < 4 ? 1 : 0}>
-              <circle class={`st-pend${done || proc ? " off" : ""}`} cx="18" cy="10.5" r="3.4" />
-              <g class={`st-proc${proc ? "" : " off"}`}>
+            <g class="job" data-k={k} transform={`translate(0 ${y0})`} opacity={k < QUEUED ? 1 : 0}>
+              <circle class="st-pend" cx="18" cy="10.5" r="3.4" opacity={st === 0 ? 1 : 0} />
+              <g class="st-proc" opacity={st === 1 ? 1 : 0}>
                 <circle class="ring" cx="18" cy="10.5" r="3.4" />
                 <path class="arc" d="M18 7.1A3.4 3.4 0 0 1 21.4 10.5" />
               </g>
-              <path class={`st-done${done ? "" : " off"}`} d="M14.8 10.8l2.2 2.2 4.2-4.6" />
-              <text class="cm jid" x="32" y="14.5">{412 + k}</text>
-              <text class="jf" x="64" y="14.5">QT-2025-{String(718 + k).padStart(4, "0")}.pdf</text>
-              <text class={`js${proc ? " acc" : ""}`} x={BW - 12} y="14.5" text-anchor="end">{done ? "completed" : proc ? "processing" : "pending"}</text>
+              <path class="st-done" d="M14.8 10.8l2.2 2.2 4.2-4.6" pathLength="1" opacity={st === 2 ? 1 : 0} />
+              <text class="cm jid" x="32" y="14.5">{JOB + k}</text>
+              <text class="jf" x="64" y="14.5">{skuOf(k)}.pdf</text>
+              <text class={`js${st === 1 ? " acc" : ""}`} x={BW - 12} y="14.5" text-anchor="end">{STATES[st]}</text>
+              <text class="js js2" x={BW - 12} y="14.5" text-anchor="end" opacity="0"></text>
             </g>
           );
         })}
@@ -308,12 +352,13 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
       <path class="hair" d={`M${PR.x + 10} ${PR.y + 13}H${PR.x + PR.w - 10}`} />
       <rect class="btn" x={PR.x + PR.w - 38} y={PR.y + 19} width="14" height="7" rx="2" />
       <circle class="led" cx={PR.x + PR.w - 14} cy={PR.y + 22.5} r="2.6" />
+      <circle class="led-on" cx={PR.x + PR.w - 14} cy={PR.y + 22.5} r="2.6" opacity="0" />
       <line class="slot" x1={PR.x + 12} x2={PR.x + PR.w - 12} y1={PR.slot} y2={PR.slot} />
       <g clip-path="url(#qt-slot)">
         <g class="paper-g" data-feed={LB.h + 10}>
           <rect class="liner" x={LB.x - 6} y={PR.slot - 10} width={LB.w + 12} height={LB.h + 20} />
           {/* The label is printed, so it keeps the day tokens at night; the liner and the printer follow the theme. */}
-          <g data-day transform={`translate(${LB.x} ${LB.y})`}>
+          <g class="lab" data-day transform={`translate(${LB.x} ${LB.y})`}>
             <rect class="label" x="0" y="0" width={LB.w} height={LB.h} rx="4" />
             <rect class="mono" x="10" y="9" width="23" height="21" rx="2.5" />
             <text class="mono-t" x="21.5" y="23.3" text-anchor="middle">QT</text>
@@ -321,22 +366,31 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
             <text class="lname" x="10" y="47">{GPU}</text>
             <text class="lsub" x="10" y="62">Graphics card</text>
             <text class="cm lprice" x={LB.w - 10} y="59" text-anchor="end">$1,069.99</text>
+            <rect class="scan-band" x="0" y={BAR.y - 3} width={11 * MOD} height={BAR.h + 6} rx="1.5" opacity="0" />
             <path class="bars" d={barPath} />
-            <text class="cm hri" x={LB.w / 2} y={BAR.y + BAR.h + 11} text-anchor="middle">{SKU}</text>
+            <path class="scan-bars" d="" opacity="0" />
+            <line class="scan" x1="0" x2="0" y1={BAR.y - 6} y2={BAR.y + BAR.h + 2.5} opacity="0" />
+            <text class="cm hri" x={LB.w / 2} y={BAR.y + BAR.h + 11} text-anchor="middle">{[...SKU].map((ch) => <tspan>{ch}</tspan>)}</text>
           </g>
         </g>
       </g>
       <path class="tear" d={tear} />
       <g class="dims">
-        <path class="faint" d={`M${LB.x} ${LB.y + LB.h + 8}v6M${LB.x + LB.w} ${LB.y + LB.h + 8}v6M${LB.x} ${LB.y + LB.h + 11}H${LB.x + LB.w}`} />
+        <path class="faint dim-l" pathLength="1" d={`M${LB.x} ${LB.y + LB.h + 8}v6M${LB.x} ${LB.y + LB.h + 11}H${LB.x + LB.w}M${LB.x + LB.w} ${LB.y + LB.h + 8}v6`} />
         <rect class="paper" x={LB.x + LB.w / 2 - 14} y={LB.y + LB.h + 5} width="28" height="12" />
         <text class="cm dim" x={LB.x + LB.w / 2} y={LB.y + LB.h + 15} text-anchor="middle">4 in</text>
       </g>
     </g>
 
-    <!-- flying extraction pills live outside the blocks -->
+    <!-- prices in flight, and the line that shows where a price came from, live outside the blocks -->
     <g class="fly-layer">
-      {cards.map((_, i) => <rect class="fly" data-i={i} x="-29" y="-7.5" width="58" height="15" rx="2" opacity="0" />)}
+      <path class="trace" d="" pathLength="1" opacity="0" />
+      {cards.map((c, i) => (
+        <g class="fly" data-i={i} opacity="0">
+          <rect class="fly-r" x="-29" y="-8.5" width="58" height="17" rx="2" />
+          <text class="cm fly-t" x="0" y="4" text-anchor="middle">{c.price}</text>
+        </g>
+      ))}
     </g>
 
     <!-- ===== 5. manual vs automated ===== -->
@@ -353,6 +407,8 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
           <text class="seg-t" x={mSeg[i].cx} y={C.y1 + 20} text-anchor="middle">{s.k}</text>
         </>
       ))}
+      {manual.map((_, i) => <line class="seg-e" x1={mSeg[i].x0} x2={mSeg[i].x0} y1={C.y1 + 20} y2={C.y1 + 20} opacity="0" />)}
+      <rect class="cur cur-m" x="-0.6" y={C.y1 + 7} width="1.25" height="26" style={`--cy:${C.y1 + 1}`} opacity="0" />
       </g>
       <g class="r2">
       <text class="bl strong" x="0" y={C.y2}>Automated</text>
@@ -369,6 +425,8 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
         <line class="dash sv" x1={aEnd + 40} x2={W - 4} y1={C.y2 + 20} y2={C.y2 + 20} />
         <path class="faint" d={`M${W - 0.5} ${C.y2 + 12}v16`} />
       </g>
+      {auto.map((_, i) => <line class="seg-v" x1={aSeg[i].x0} x2={aSeg[i].x0} y1={C.y2 + 20} y2={C.y2 + 20} opacity="0" />)}
+      <rect class="cur cur-a" x="-0.6" y={C.y2 + 7} width="1.25" height="26" style={`--cy:${C.y2 + 1}`} opacity="0" />
       </g>
     </g>
   </svg>
@@ -376,6 +434,8 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
 </Figure>
 
 <style is:global>
+  /* Once the figure is live, a finger drawn across the label reads the barcode; up and down still scrolls the page. */
+  .fig[data-live] svg.qt { touch-action: pan-y pinch-zoom; }
   .fig svg.qt text { font-size: 11px; }
   .fig svg.qt text.cm { font-size: 11.5px; }
   .fig svg.qt tspan.k { fill: var(--ink); font-weight: 500; }
@@ -383,23 +443,28 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
   .fig svg.qt .wdot { fill: var(--hair); }
   .fig svg.qt .url { fill: var(--panel); stroke: var(--hair); }
   .fig svg.qt .url-t { font-size: 11px; fill: var(--ink-3); letter-spacing: 0.01em; }
+  .fig svg.qt .load { stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 1; fill: none; }
   .fig svg.qt .card-r { fill: var(--panel); stroke: var(--hair); transition: stroke 0.2s; }
   .fig svg.qt .card.hl .card-r { stroke: var(--accent); stroke-width: 1.25; }
+  .fig svg.qt .card.hl .price { fill: var(--accent); }
   .fig svg.qt .thumb { fill: rgb(var(--ink-rgb) / 0.045); }
   .fig svg.qt .glyph { fill: none; stroke: var(--ink-4); stroke-width: 1; }
   .fig svg.qt text.cname { font-size: 11px; fill: var(--ink-2); }
-  .fig svg.qt text.price { font-size: 11.5px; fill: var(--ink); }
+  .fig svg.qt text.price { font-size: 11.5px; fill: var(--ink); transition: fill 0.2s; }
   .fig svg.qt .sel-r { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.25; }
   .fig svg.qt .sel-tag { fill: var(--accent); }
   .fig svg.qt text.sel-t { font-size: 11px; fill: var(--panel); font-weight: 500; }
-  .fig svg.qt .fly { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+  .fig svg.qt .fly-r { fill: var(--panel); stroke: var(--accent); stroke-width: 1; }
+  .fig svg.qt text.fly-t { font-size: 11.5px; fill: var(--accent); }
+  .fig svg.qt .trace { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 1; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 
   .fig svg.qt .th { font-size: 11px; fill: var(--ink-3); }
-  .fig svg.qt .td { fill: var(--ink-2); }
+  .fig svg.qt .td { fill: var(--ink-2); transition: fill 0.18s; }
   .fig svg.qt text.cm.td { font-size: 11.5px; }
   .fig svg.qt text.td.nm { fill: var(--ink); }
-  .fig svg.qt .row-bg { fill: transparent; pointer-events: all; }
-  .fig svg.qt .row { cursor: default; }
+  .fig svg.qt .row-bg { fill: transparent; pointer-events: all; transition: fill 0.18s; }
+  .fig svg.qt .row-fl { fill: var(--accent-soft); pointer-events: none; }
+  .fig svg.qt .row, .fig svg.qt .card, .fig svg.qt .pdot[data-i] { cursor: default; }
   .fig svg.qt .row.hl .row-bg { fill: var(--accent-soft); }
   .fig svg.qt .row.hl text { fill: var(--accent); }
   .fig svg.qt .pl { fill: var(--ink-2); }
@@ -407,34 +472,37 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
   .fig svg.qt text.lg.acc { fill: var(--accent); font-weight: 500; }
   .fig svg.qt text.tk { font-size: 11px; fill: var(--ink-3); }
   .fig svg.qt .range { stroke: rgb(var(--ink-rgb) / 0.16); stroke-width: 5; stroke-linecap: round; }
-  .fig svg.qt .pdot { fill: var(--ink); stroke: var(--panel); stroke-width: 1.25; }
-  .fig svg.qt .pdot.hl { fill: var(--accent); }
+  .fig svg.qt .pdot { fill: var(--ink); stroke: var(--panel); stroke-width: 1.25; transition: fill 0.3s; }
+  .fig svg.qt .pdot.hl, .fig svg.qt .pdot.fresh { fill: var(--accent); }
+  .fig svg.qt .drop { fill: var(--accent); }
+  .fig svg.qt .ping, .fig svg.qt .halo { fill: none; stroke: var(--accent); stroke-width: 1.25; pointer-events: none; }
   .fig svg.qt text.qtl { font-size: 11px; font-weight: 500; }
 
-  .fig svg.qt .req { font-size: 11px; fill: var(--ink-2); }
-  .fig svg.qt .req .jb { fill: var(--ink-3); }
+  .fig svg.qt .req { font-size: 11px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .fig svg.qt .req .jb, .fig svg.qt .req.roll { fill: var(--ink-3); }
+  .fig svg.qt .rq-caret { fill: var(--accent); }
   .fig svg.qt text.ok { font-size: 12px; fill: var(--s-green); }
-  .fig svg.qt .flow { stroke: none; fill: none; }
+  .fig svg.qt .ok-ping { fill: none; stroke: var(--s-green); stroke-width: 1.25; }
   .fig svg.qt .qh { fill: var(--ink-3); }
   .fig svg.qt text.qp { font-size: 11px; }
   .fig svg.qt .jid { fill: var(--ink-3); }
-  .fig svg.qt .jf { fill: var(--ink-2); font-size: 11px; }
+  .fig svg.qt .jf { fill: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
   .fig svg.qt .js { fill: var(--ink-3); font-size: 11px; }
   .fig svg.qt .js.acc { fill: var(--accent); }
   .fig svg.qt .st-pend { fill: none; stroke: var(--ink-4); stroke-width: 1.1; }
   .fig svg.qt .st-proc .ring { fill: none; stroke: var(--accent-soft); stroke-width: 1.6; }
   .fig svg.qt .st-proc .arc { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; }
-  .fig svg.qt .st-done { fill: none; stroke: var(--s-green); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-  .fig svg.qt .off { display: none; }
+  .fig svg.qt .st-done { fill: none; stroke: var(--s-green); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }
 
   .fig svg.qt .body { fill: var(--panel); stroke: var(--ink); stroke-width: 1.25; }
   .fig svg.qt .lid { fill: var(--panel-2); stroke: var(--ink); stroke-width: 1.25; stroke-linejoin: round; }
   .fig svg.qt .btn { fill: none; stroke: var(--ink-4); }
   .fig svg.qt .led { fill: var(--ink-4); }
-  .fig svg.qt .led.on { fill: var(--accent); }
+  .fig svg.qt .led-on { fill: var(--accent); }
   .fig svg.qt .slot { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
   .fig svg.qt .tear { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
   .fig svg.qt .liner { fill: var(--panel-2); stroke: var(--hair); }
+  .fig[data-live] svg.qt .lab { cursor: crosshair; }
   .fig svg.qt .label { fill: var(--panel); stroke: var(--ink-4); }
   .fig svg.qt .mono { fill: none; stroke: var(--ink); stroke-width: 1.25; }
   .fig svg.qt text.mono-t { font-size: 11px; font-weight: 600; fill: var(--ink); letter-spacing: 0.02em; }
@@ -443,17 +511,27 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
   .fig svg.qt text.lsub { font-size: 11px; fill: var(--ink-3); }
   .fig svg.qt text.lprice { font-size: 20px; fill: var(--ink); }
   .fig svg.qt .bars { fill: var(--ink); shape-rendering: crispEdges; }
+  .fig svg.qt .scan-bars { fill: var(--accent); shape-rendering: crispEdges; pointer-events: none; }
+  .fig svg.qt .scan-band { fill: var(--accent-soft); pointer-events: none; }
+  .fig svg.qt .scan { stroke: var(--accent); stroke-width: 1; pointer-events: none; }
   .fig svg.qt text.hri { font-size: 11px; fill: var(--ink); letter-spacing: 0.1em; }
+  .fig svg.qt text.hri tspan.on { fill: var(--accent); }
   .fig svg.qt text.dim { font-size: 11px; }
+  .fig svg.qt .dim-l { stroke-dasharray: 1; }
 
   .fig svg.qt .bl { fill: var(--ink); }
   .fig svg.qt text.bl-r { font-size: 12px; }
   .fig svg.qt .seg-m { stroke: rgb(var(--ink-rgb) / 0.1); stroke-width: 18; }
   .fig svg.qt .seg-a { stroke: var(--accent); stroke-width: 18; }
   .fig svg.qt .seg-g { stroke: rgb(var(--ink-rgb) / 0.035); stroke-width: 18; }
+  .fig svg.qt .seg-e { stroke: rgb(var(--ink-rgb) / 0.13); stroke-width: 18; pointer-events: none; }
+  .fig svg.qt .seg-v { stroke: rgb(var(--ink-rgb) / 0.2); stroke-width: 18; pointer-events: none; }
   .fig svg.qt .seg-t { font-size: 11px; fill: var(--ink-2); dominant-baseline: central; }
   .fig svg.qt .a-name, .fig svg.qt .aseg .m-name { fill: var(--panel); font-weight: 500; }
   .fig svg.qt text.pct { font-size: 12px; fill: var(--accent); }
+  .fig svg.qt .cur { pointer-events: none; }
+  .fig svg.qt .cur-m { fill: var(--ink); }
+  .fig svg.qt .cur-a { fill: var(--ink); }
 
   @media (max-width: 560px) {
     .fig svg.qt { aspect-ratio: 640 / var(--hm); }
@@ -465,10 +543,11 @@ const geo = { S, mSeg: manual.map((s) => s.w), aSeg: auto.map((s) => s.w), W, ga
     .fig svg.qt .band .r2g { transform: translateY(34px); }
     .fig svg.qt .band .seg-g:not(.r2g) { transform: translateY(4px); }
     .fig svg.qt .band .bl, .fig svg.qt .band .bl-r { transform: translateY(-6px); }
-    .fig svg.qt .seg-m, .fig svg.qt .seg-a, .fig svg.qt .seg-g { stroke-width: 30; }
+    .fig svg.qt .seg-m, .fig svg.qt .seg-a, .fig svg.qt .seg-g, .fig svg.qt .seg-e, .fig svg.qt .seg-v { stroke-width: 30; }
     .fig svg.qt .band .a-name { display: none; }
     .fig svg.qt .band text.pct { transform: translateY(2px); }
     .fig svg.qt .band .r1 { transform: translateY(4px); }
     .fig svg.qt .band .r2 { transform: translateY(34px); }
+    .fig svg.qt .cur { y: calc(var(--cy) * 1px); height: 38px; width: 2px; x: -1px; }
   }
 </style>

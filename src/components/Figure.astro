@@ -22,15 +22,29 @@ interface Props {
 const { name, n, title, label, readout = "", class: cls, size = "default", screen = false } = Astro.props;
 ---
 
-<figure class:list={["fig", cls, { stage: size === "stage" }]} data-fig={name} aria-label={label}>
-  <header class="plate-h">
-    <span class="led" aria-hidden="true"></span>
-    <span class="n num">Fig. {n}</span>
-    <span class="t">{title}</span>
-    <span class="readout num" data-readout aria-hidden="true">{readout}</span>
-  </header>
-  <div class:list={["plot", { screen }]}><slot /></div>
-  {Astro.slots.has("caption") && <figcaption><slot name="caption" /></figcaption>}
+<figure class:list={["fig", cls, { stage: size === "stage" }]} data-fig={name} data-reveal="plate" aria-label={label}>
+  {/* The sheet: everything that is on the plate. It is one box so that it can be let out from the top as the plate is plotted. */}
+  <div class="sheet">
+    <header class="plate-h">
+      <span class="led" aria-hidden="true"></span>
+      <span class="n num">Fig. {n}</span>
+      <span class="t">{title}</span>
+      <span class="readout num" data-readout aria-hidden="true">{readout}</span>
+    </header>
+    <div class:list={["plot", { screen }]}><slot /></div>
+    {Astro.slots.has("caption") && <figcaption><slot name="caption" /></figcaption>}
+  </div>
+  {/*
+    The plate's edge as lines that can be drawn (scripts/reveal.ts); unseen
+    without it. Two lines, each with a pen at its head: one runs clockwise from
+    the status light, the other the opposite way down the left side. Last in
+    the plate, so a figure's own "svg" is still the first one in it.
+  */}
+  <svg class="edge" aria-hidden="true">
+    <rect class="line" data-edge="a" pathLength="1" /><rect class="line" data-edge="b" pathLength="1" />
+    <rect class="pen" data-pen="a" pathLength="1" /><rect class="pen" data-pen="b" pathLength="1" />
+    <line class="bar" data-bar x1="0" x2="100%" y1="0" y2="0" />
+  </svg>
 </figure>
 
 <style>
@@ -42,7 +56,60 @@ const { name, n, title, label, readout = "", class: cls, size = "default", scree
     background: var(--panel);
     border: 1px solid var(--hair);
     border-radius: 14px;
+    box-shadow: var(--plate-shadow);
+  }
+  .sheet {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
     padding: 18px 22px 20px;
+    border-radius: inherit;
+  }
+  /* Plotted in: the border is the pair of lines in .edge, and the sheet is let out between them. */
+  .edge {
+    display: none;
+    position: absolute;
+    inset: -1px;
+    width: calc(100% + 2px);
+    height: calc(100% + 2px);
+    overflow: visible;
+    pointer-events: none;
+    fill: none;
+  }
+  .edge rect {
+    x: 0.5px;
+    y: 0.5px;
+    width: calc(100% - 1px);
+    height: calc(100% - 1px);
+    rx: 14px;
+    stroke: var(--hair);
+    stroke-width: 1px;
+    stroke-dasharray: 0 1;
+  }
+  /* The bar the two pens ride on: a hairline across the plate at the height they have reached. */
+  .edge .bar {
+    stroke: var(--accent);
+    stroke-width: 1px;
+    opacity: 0;
+  }
+  /* A pen: a short bright stroke at the head of the line it is drawing. */
+  .edge .pen {
+    stroke: var(--accent);
+    stroke-width: 1.5px;
+    stroke-linecap: round;
+    opacity: 0;
+  }
+  .fig[data-plate] {
+    border-color: transparent;
+    background: none;
+    box-shadow: none;
+  }
+  .fig[data-plate] .edge {
+    display: block;
+  }
+  .fig[data-plate] .sheet {
+    background: var(--panel);
     box-shadow: var(--plate-shadow);
   }
   .plot {
@@ -60,22 +127,17 @@ const { name, n, title, label, readout = "", class: cls, size = "default", scree
     color: var(--ink);
     font-weight: 500;
   }
-  /* Status light: dim at rest, a slow accent pulse while the figure is on stage. */
+  /* Status light: dim at rest, lit while the figure is on stage. */
   .led {
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: var(--ink-4);
     align-self: center;
-    transition: background-color 0.4s ease, box-shadow 0.4s ease;
+    transition: background-color var(--t-state) var(--ease-io);
   }
   .fig[data-running] .led {
     background: var(--accent);
-    animation: led 2.4s ease-in-out infinite;
-  }
-  @keyframes led {
-    0%, 100% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / 0.35); }
-    50% { box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / 0); }
   }
   /* Inset "screen": the plot sits on a faint dot grid with corner registration marks. */
   .plot.screen {
@@ -99,9 +161,6 @@ const { name, n, title, label, readout = "", class: cls, size = "default", scree
   }
   .plot.screen::before { top: 6px; left: 6px; border-top-width: 1px; border-left-width: 1px; }
   .plot.screen::after { bottom: 6px; right: 6px; border-bottom-width: 1px; border-right-width: 1px; }
-  @media (prefers-reduced-motion: reduce) {
-    .fig[data-running] .led { animation: none; }
-  }
   .readout {
     margin-left: auto;
     font-family: var(--sans);
@@ -162,7 +221,9 @@ const { name, n, title, label, readout = "", class: cls, size = "default", scree
   .fig :global(text.acc) { fill: var(--accent); }
   /* Plots are authored 640 wide; on phones they shrink ~2x, so labels grow to stay legible. */
   @media (max-width: 560px) {
-    .fig { padding: 14px 14px 16px; border-radius: 12px; }
+    .fig { border-radius: 12px; }
+    .sheet { padding: 14px 14px 16px; }
+    .edge rect { rx: 12px; }
     /* Phones: the live readout drops to its own line so the title never wraps. */
     .plate-h { flex-wrap: wrap; row-gap: 2px; }
     /* min-width lets the line shrink to the plate: without it one long readout widens the whole page. */

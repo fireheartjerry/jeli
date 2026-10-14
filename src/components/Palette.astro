@@ -56,6 +56,7 @@ interface Command {
 // Other names a reader might type for each section of the home page.
 const also: Record<string, string> = {
   top: "top home start beginning intro",
+  about: "about me bio interests who",
   work: "experience jobs employment",
   research: "papers publications science astrophysics",
   projects: "hackathons builds side projects",
@@ -130,7 +131,7 @@ const rows = groups.map((g) => ({ ...g, items: g.items.map((c) => ({ ...c, id: `
       <button class="esc" type="button" tabindex="-1" data-palette-close aria-label="Close the command palette"><kbd>esc</kbd></button>
     </div>
 
-    <div class="list" id="palette-list" data-palette-list role="listbox" aria-label="Sections and commands">
+    <div class="list" id="palette-list" data-palette-list data-lenis-prevent role="listbox" aria-label="Sections and commands">
       {rows.map((g) => (
         <div class="grp" role="group" aria-label={g.name}>
           <div class="lab" aria-hidden="true">{g.name}</div>
@@ -373,9 +374,14 @@ const rows = groups.map((g) => ({ ...g, items: g.items.map((c) => ({ ...c, id: `
       const follow = !!target && (!back || back === landed);
       hide(!follow);
       if (follow) land(target!);
-      const behavior = calm() ? "instant" : "smooth";
-      if (target) target.scrollIntoView({ behavior, block: "start" });
-      else if (!id || id === "top") scrollTo({ top: 0, behavior });
+      // The page has its own way of getting somewhere (scripts/scroll.ts) and
+      // answers this event with it. With nothing listening, scroll plainly.
+      const place = target ?? (!id || id === "top" ? 0 : null);
+      if (place !== null && document.dispatchEvent(new CustomEvent("page:go", { detail: { target: place }, cancelable: true }))) {
+        const behavior = calm() ? "instant" : "smooth";
+        if (target) target.scrollIntoView({ behavior, block: "start" });
+        else scrollTo({ top: 0, behavior });
+      }
       // The address follows, as it would for the link itself.
       if (to.hash !== location.hash) history.pushState(history.state, "", to.hash || to.pathname + to.search);
     }
@@ -400,6 +406,8 @@ const rows = groups.map((g) => ({ ...g, items: g.items.map((c) => ({ ...c, id: `
         }
         return;
       }
+      // The address going out is sent up the beam of the scene behind the page, as it is from the footer.
+      if (el.href.startsWith("mailto:")) document.dispatchEvent(new CustomEvent("cosmos:pulse"));
       if (!isOpen) return;
       const hint = el.querySelector<HTMLElement>("[data-palette-hint]")!;
       const was = hint.textContent;

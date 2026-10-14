@@ -7,16 +7,18 @@
 // feed: it has no wire to the rest and none of the accent.
 //
 // Everything that moves is decided by draw() in the figure's script, a pure
-// function of story time. Here it runs once, at the end of the story, into a
-// sink that collects attributes, so the page ships the finished state and the
-// script only has to replay it. The question, the tool name (create_video),
+// function of its clocks. Here it runs once, at the moment the scroll story
+// ends on, into a sink that collects attributes, so the page ships the
+// finished state and the script only has to replay it. Everything that does
+// not move is simply drawn: the plate lets its sheet out from the top as it
+// arrives, and the stage is on it. The question, the tool name (create_video),
 // the job ids, the file name and the frame counts are examples; nothing is
 // measured. tools/call is the real MCP method.
 //
 // Two drawings are rendered and a container query shows one: 640 across on a
 // twelve-column grid, or 400 across and stacked for a phone.
 import Figure from "../Figure.astro";
-import { LAYOUTS, OURS, SAY, T_END, draw, transform, type Sink } from "../../scripts/figures/export";
+import { LAYOUTS, OURS, SAY, draw, still, transform, type Sink } from "../../scripts/figures/export";
 
 interface Props { n?: number }
 const { n = 2 } = Astro.props;
@@ -34,11 +36,14 @@ class Still implements Sink {
   m(k: string, x: number, y: number, rot = 0, sc = 1) { this.of(k).transform = transform(x, y, rot, sc); }
   o(k: string, v: number) { this.n(k, "opacity", Math.min(1, Math.max(0, v)), 2); }
   fresh() { return true; }
+  // Nothing follows, dips or rolls on the server: each value is simply taken.
+  dip(_k: string, set: () => void) { set(); }
+  roll(k: string, _k2: string, v: string) { this.t(k, v); }
 }
 
 const views = LAYOUTS.map((L) => {
   const s = new Still();
-  draw(L, { tau: T_END, p: 1, late: Infinity, now: 0, w1: 0, w2: 0 }, s);
+  draw(L, still(), s);
   return { L, A: (k: string) => s.a[k] ?? {}, T: (k: string) => s.x[k] ?? "", C: (k: string) => [...(s.k[k] ?? [])] };
 });
 
@@ -91,15 +96,15 @@ const aria =
 
           <g aria-hidden="true">
             {/* ============ surfaces ============ */}
-            <g class="st" data-st="chat"><path class="inset draw" pathLength="1" data-k="chat.f" d={L.d.chat} {...A("chat.f")} /></g>
-            <g class="st" data-st="oauth"><path class="inset draw" pathLength="1" data-k="strip.f" d={L.d.strip} {...A("strip.f")} /></g>
-            <g class="st" data-st="app"><path class="inset draw" pathLength="1" data-k="app.f" d={L.d.app} {...A("app.f")} /></g>
-            <g class="st" data-st="queue"><path class="inset draw" pathLength="1" data-k="queue.f" d={L.d.queue} {...A("queue.f")} /></g>
-            <g class="st" data-st="chat"><path class="inset draw" pathLength="1" data-k="reply.f" d={L.d.reply} {...A("reply.f")} /></g>
-            <g class="st" data-st="mail"><path class="inset draw" pathLength="1" data-k="mail.f" d={L.d.mail} {...A("mail.f")} /></g>
+            <g class="st" data-st="chat"><path class="inset" d={L.d.chat} /></g>
+            <g class="st" data-st="oauth"><path class="inset" d={L.d.strip} /></g>
+            <g class="st" data-st="app"><path class="inset" d={L.d.app} /></g>
+            <g class="st" data-st="queue"><path class="inset" d={L.d.queue} /></g>
+            <g class="st" data-st="chat"><path class="inset" d={L.d.reply} /></g>
+            <g class="st" data-st="mail"><path class="inset" d={L.d.mail} /></g>
 
             {/* ============ wires, the route our job has taken, and notes on both ============ */}
-            <g data-k="w1" {...A("w1")}>
+            <g>
               <path class="w" d={L.d.w1} />
               <circle class="jn" cx={L.sx} cy={L.jy} r="1.9" />
               <path class="tr draw" pathLength="1" data-k="tr.call" d={L.seg.call} {...A("tr.call")} />
@@ -108,20 +113,20 @@ const aria =
               <text x={L.notes.tok[0]} y={L.notes.tok[1]}>token</text>
               <text x={L.notes.job[0]} y={L.notes.job[1]} text-anchor="end">job</text>
             </g>
-            <g data-k="w2" {...A("w2")}>
+            <g>
               <path class="w" d={L.d.w2} />
-              <path class="tr draw" pathLength="1" data-k="tr.disp" d={L.seg.disp0} {...A("tr.disp")} />
-              <path class="tr draw" pathLength="1" data-k="tr.out" d={L.seg.out0} {...A("tr.out")} />
-              <text x={L.notes.down[0]} y={L.notes.down[1]} text-anchor="end">file stored</text>
-            </g>
-            <g data-k="w3" {...A("w3")}>
               <path class="w" d={L.d.w3} />
-              <path class="tr draw" pathLength="1" data-k="tr.res" d={L.seg.res} {...A("tr.res")} />
+              <text x={L.notes.down[0]} y={L.notes.down[1]} text-anchor="end">file stored</text>
+              {/* where our job has been since it left the queue */}
+              <g class="wd">
+                <path class="tr draw" pathLength="1" data-k="tr.disp" d={L.seg.disp0} {...A("tr.disp")} />
+                <path class="tr draw" pathLength="1" data-k="tr.out" d={L.seg.out0} {...A("tr.out")} />
+                <path class="tr draw" pathLength="1" data-k="tr.res" d={L.seg.res} {...A("tr.res")} />
+              </g>
             </g>
 
             {/* ============ 1. the request ============ */}
             <g class="st" data-st="chat">
-              <g data-k="chat.c" {...A("chat.c")}>
                 <path class="dots" d={`M${chat.x + 10} ${chat.y + chat.bar / 2}h14.2`} />
                 <text x={chat.x + 34} y={chat.y + chat.bar / 2}><tspan class="k">ChatGPT or Claude</tspan></text>
                 <text x={chat.x + chat.w - 10} y={chat.y + chat.bar / 2} text-anchor="end">Mathos over MCP</text>
@@ -140,16 +145,16 @@ const aria =
                 </g>
                 <g data-k="chip" {...A("chip")}>
                   <rect class="chip" x={chip.x} y={chip.y} width={chip.w} height={chip.h} rx="5.5" />
-                  <path class="spin" data-k="chip.spin" d={SPIN} {...A("chip.spin")} />
-                  <path class="tick" data-k="chip.tick" d={TICK} transform={at(chip.gx, chip.gy)} {...A("chip.tick")} />
+                  <g class="wd">
+                    <path class="spin" data-k="chip.spin" d={SPIN} {...A("chip.spin")} />
+                    <path class="tick draw" pathLength="1" data-k="chip.tick" d={TICK} transform={at(chip.gx, chip.gy)} {...A("chip.tick")} />
+                  </g>
                   <text class="mono" x={chip.tx} y={chip.gy}>tools/call <tspan class="strong">create_video</tspan></text>
                   <path class="key" data-k="chip.key" d={KEY} transform={at(chip.kx, chip.gy)} {...A("chip.key")} />
                 </g>
-              </g>
             </g>
 
             <g class="st" data-st="oauth">
-              <g data-k="strip.c" {...A("strip.c")}>
                 <circle class="ping acc" data-k="gate.ping" cx={gate.x} cy={gate.y} {...A("gate.ping")} />
                 <rect class="lock-b" x={gate.x - 4.5} y={gate.y - 1.5} width="9" height="7.5" rx="1.6" />
                 <path class="lock-s" data-k="gate.sh" d={SHACKLE} {...A("gate.sh")} />
@@ -163,11 +168,9 @@ const aria =
                   </g>
                 </g>
                 <path class="cursor" data-k="cur.allow" d={CURSOR} {...A("cur.allow")} />
-              </g>
             </g>
 
             <g class="st" data-st="app">
-              <g data-k="app.c" {...A("app.c")}>
                 <path class="dots" d={`M${app.x + 10} ${app.y + app.bar / 2}h14.2`} />
                 <text x={app.x + 34} y={app.y + app.bar / 2}><tspan class="k">Mathos app</tspan></text>
                 <path class="hair" d={bar(app)} />
@@ -187,16 +190,14 @@ const aria =
                 <text class="strong" x={abtn.x + 28} y={abtn.y + abtn.h / 2}>Export MP4</text>
                 <path class="gbtn" d={[8, 8 + abtn.h + 8].map((dx) => `M${abtn.x + abtn.w + dx + 5} ${abtn.y + 0.5}h${abtn.h - 11}a5 5 0 0 1 5 5v${abtn.h - 11}a5 5 0 0 1-5 5h${-(abtn.h - 11)}a5 5 0 0 1-5-5v${-(abtn.h - 11)}a5 5 0 0 1 5-5z`).join("")} />
                 <path class="cursor" data-k="cur.app" d={CURSOR} {...A("cur.app")} />
-              </g>
             </g>
 
             {/* ============ 2. the render ============ */}
             <g class="st" data-st="queue">
-              <g data-k="queue.c" {...A("queue.c")}>
                 <text x={Q.x + 11} y={Q.y + Q.bar / 2 + 0.5}><tspan class="k">Celery queue</tspan></text>
                 {!L.wide && <text x={Q.x + Q.w - 11} y={Q.y + Q.bar / 2 + 0.5} text-anchor="end">one job per export</text>}
                 <path class="hair" d={bar(Q)} />
-                <g clip-path={`url(#ex-q-${id})`}>
+                <g class="wd" clip-path={`url(#ex-q-${id})`}>
                   <rect class="our-bg" data-k="q.our" x={Q.x + 4} width={Q.w - 8} height={Q.pitch - 2} rx="4" {...A("q.our")} />
                   {Array.from({ length: Q.rows + 1 }, (_, i) => (
                     <g data-k={`q${i}`} class:list={["row", C(`q${i}`)]} {...A(`q${i}`)}>
@@ -204,21 +205,23 @@ const aria =
                       <text class="mono id" data-k={`q${i}i`} x={Q.x + Q.ix} y={Q.pitch / 2}>{T(`q${i}i`)}</text>
                       {Q.src && <text class="src" data-k={`q${i}f`} x={Q.x + Q.fx} y={Q.pitch / 2}>{T(`q${i}f`)}</text>}
                       <text class="state" data-k={`q${i}s`} x={Q.x + Q.w - 11} y={Q.pitch / 2} text-anchor="end">{T(`q${i}s`)}</text>
+                      {/* its twin, which carries the old word out as the state changes */}
+                      <text class="state" data-k={`q${i}r`} x={Q.x + Q.w - 11} y={Q.pitch / 2} text-anchor="end" opacity="0" />
                     </g>
                   ))}
                 </g>
-              </g>
             </g>
 
             <g class="st" data-st="box">
-              <g data-k="box.c" {...A("box.c")}>
+              {/* where a sandbox goes: these stay when everything in them is cut away */}
+              {L.boxes.map((G, s) => <rect class="gh" x={G.x + 0.5} y={G.y + 0.5} width={G.w - 1} height={G.h - 1} rx={s ? 6 : 8} />)}
+              <g class="wd">
               <g data-k="b0e" {...A("b0e")}>
                 <text x={L.boxes[0].x + L.boxes[0].w / 2} y={L.boxes[0].y + L.boxes[0].h / 2 - 8} text-anchor="middle"><tspan class="k">empty</tspan></text>
                 <text x={L.boxes[0].x + L.boxes[0].w / 2} y={L.boxes[0].y + L.boxes[0].h / 2 + 9} text-anchor="middle">the next render gets its own sandbox</text>
               </g>
               {L.boxes.map((G, s) => (
                 <g data-k={`b${s}`} class:list={["bx", C(`b${s}`)]}>
-                  <rect class="gh" x={G.x + 0.5} y={G.y + 0.5} width={G.w - 1} height={G.h - 1} rx={s ? 6 : 8} />
                   <g data-k={`b${s}c`} {...A(`b${s}c`)}>
                     <rect class="bg" x={G.x + 0.5} y={G.y + 0.5} width={G.w - 1} height={G.h - 1} rx={s ? 6 : 8} />
                     <circle class="ping" data-k={`b${s}g`} cx={G.lx} cy={G.ly} {...A(`b${s}g`)} />
@@ -231,10 +234,11 @@ const aria =
                         <path class="hair" d={`M${G.x + 1} ${G.y + G.bar + 0.5}H${G.x + G.w - 1}`} />
 
                         {/* the frame being drawn */}
+                        <g data-k="pv" {...A("pv")}>
                         <rect class="card" x={pv.x} y={pv.y} width={pv.w} height={pv.h} rx="3" />
                         <g clip-path={`url(#ex-pv-${id})`}>
                           <path class="ax" data-k="pv.axes" {...A("pv.axes")} />
-                          <path class="curve" data-k="pv.curve" {...A("pv.curve")} />
+                          <path class="curve draw" pathLength="1" data-k="pv.curve" {...A("pv.curve")} />
                           <line class="tri" data-k="pv.run" {...A("pv.run")} />
                           <line class="tri" data-k="pv.rise" {...A("pv.rise")} />
                           <line class="tan" data-k="pv.tan" {...A("pv.tan")} />
@@ -242,8 +246,10 @@ const aria =
                         </g>
                         <text class="mi halo" data-k="pv.lab" {...A("pv.lab")}><tspan data-k="pv.l0">{T("pv.l0")}</tspan><tspan class="fn" data-k="pv.l1">{T("pv.l1")}</tspan><tspan class="sup" dy={-L.sup} data-k="pv.l2">{T("pv.l2")}</tspan><tspan dy={L.sup} data-k="pv.l3">{T("pv.l3")}</tspan></text>
                         <text class="halo" x={pv.x + pv.w - 7} y={pv.y + pv.h - (L.wide ? 9 : 10)} text-anchor="end">slope <tspan class="cmn strong" data-k="pv.m">{T("pv.m")}</tspan></text>
+                        </g>
 
                         {/* Remotion's timeline */}
+                        <g data-k="tl" {...A("tl")}>
                         <text x={tl.tx} y={tl.ty}><tspan class="k">Remotion</tspan></text>
                         {L.wide ? (
                           <text x={tl.cx} y={tl.cy} text-anchor="end">frame<tspan class="cmn big" dx="5" data-k="tl.f">{T("tl.f")}</tspan><tspan class="cmn" data-k="tl.N">{T("tl.N")}</tspan></text>
@@ -265,8 +271,10 @@ const aria =
                         <text class="cm" x={tl.x0} y={tl.ly}>0</text>
                         <text class="cm" data-k="tl.end" x={tl.x1} y={tl.ly} text-anchor="end">{T("tl.end")}</text>
                         <path class="ph" data-k="tl.ph" d={L.d.playhead} {...A("tl.ph")} />
+                        </g>
 
-                        {/* every frame it has drawn */}
+                        {/* every frame it has drawn, and a needle for the one the reader points back at */}
+                        <g data-k="fs" {...A("fs")}>
                         <rect class="film" x={fs.x} y={fs.y} width={fs.w} height={fs.h} rx="3" />
                         <path class="sprk" d={L.d.sprockets} style={`stroke-dasharray:3 ${(fs.pitch / 2 - 3).toFixed(2)}`} />
                         <path class="cell0" d={L.d.cells} />
@@ -277,6 +285,8 @@ const aria =
                         </g>
                         <rect class="cur" data-k="fs.cur" y={fs.cy} width={fs.cw} height={fs.ch} rx="1.5" {...A("fs.cur")} />
                         <path class="scan" data-k="fs.scan" d={`M0 ${fs.cy + 2}V${fs.cy + fs.ch - 2}`} {...A("fs.scan")} />
+                        <path class="needle" data-k="peek" d={L.d.needle} {...A("peek")} />
+                        </g>
                       </>
                     ) : (
                       <>
@@ -291,37 +301,36 @@ const aria =
                   <path class="o draw" pathLength="1" data-k={`b${s}o`} d={L.d.box[s]} {...A(`b${s}o`)} />
                 </g>
               ))}
+              {/* the bright point at the head of whichever outline is being drawn */}
+              <path class="pen" pathLength="1" data-k="pen" {...A("pen")} />
               </g>
             </g>
 
             {/* ============ 3. delivery ============ */}
             <g class="st" data-st="store">
-              <g data-k="store.c" {...A("store.c")}>
                 <path class="store" d={L.d.store} />
                 <text x={L.notes.store[0]} y={L.notes.store[1]} text-anchor={L.notes.store[2]}><tspan class="k">file store</tspan></text>
-              </g>
             </g>
 
             <g class="st" data-st="chat">
-              <g data-k="reply.c" {...A("reply.c")}>
                 <text x={rep.lx} y={rep.ly}>same chat</text>
-                <circle class="ava" data-k="rep.ava" cx={rep.ax} cy={rep.ay} r="5" {...A("rep.ava")} />
-                <g data-k="att" {...A("att")}>
-                  <rect class="att" x={att.x} y={att.y} width={att.w} height={att.h} rx="6" />
-                  <rect class="playb" x={att.x + 6} y={att.y + 6} width={att.h - 12} height={att.h - 12} rx="3.5" />
-                  <path class="playa" d={PLAY} transform={`${at(att.x + att.h / 2, att.y + att.h / 2)} scale(0.72)`} />
-                  <text class="strong" x={att.x + att.h + 2} y={att.y + att.h / 2}>{OURS.file}</text>
+                <g class="wd">
+                  <circle class="ava" data-k="rep.ava" cx={rep.ax} cy={rep.ay} r="5" {...A("rep.ava")} />
+                  <g data-k="att" {...A("att")}>
+                    <rect class="att" x={att.x} y={att.y} width={att.w} height={att.h} rx="6" />
+                    <rect class="playb" x={att.x + 6} y={att.y + 6} width={att.h - 12} height={att.h - 12} rx="3.5" />
+                    <path class="playa" d={PLAY} transform={`${at(att.x + att.h / 2, att.y + att.h / 2)} scale(0.72)`} />
+                    <text class="strong" x={att.x + att.h + 2} y={att.y + att.h / 2}>{OURS.file}</text>
+                  </g>
+                  <line class="sk" data-k="rep.sk" x1={rep.x0} y1={rep.sy} y2={rep.sy} {...A("rep.sk")} />
                 </g>
-                <line class="sk" data-k="rep.sk" x1={rep.x0} y1={rep.sy} y2={rep.sy} {...A("rep.sk")} />
                 <rect class="card" x={rep.comp.x} y={rep.comp.y} width={rep.comp.w} height={rep.comp.h} rx={rep.comp.h / 2} />
                 <path class="caret" data-k="rep.caret" d={`M${rep.comp.x + 12} ${rep.comp.y + 5}V${rep.comp.y + rep.comp.h - 5}`} {...A("rep.caret")} />
                 <text class="hint" x={rep.comp.x + 17} y={rep.comp.y + rep.comp.h / 2}>Reply</text>
-              </g>
             </g>
 
             {/* ============ beside it: lifecycle email, which the export does not feed ============ */}
             <g class="st" data-st="mail">
-              <g data-k="lane.c" {...A("lane.c")}>
                 <path class="hair" d={L.d.divide} />
                 <text x={mm.hx} y={mm.hy}><tspan class="k">Lifecycle email</tspan>{L.wide && <tspan dx="7">a separate pipeline</tspan>}</text>
                 {!L.wide && <text x={mm.hx} y={mm.hy + 16}>a separate pipeline</text>}
@@ -337,10 +346,8 @@ const aria =
                 <text class="strong" x={mid(ses).x} y={mid(ses).y} text-anchor="middle">SES</text>
                 <circle class="pk" data-k="pk.ev" r={L.pr} {...A("pk.ev")} />
                 <path class="env" data-k="pk.env" d={ENVELOPE} {...A("pk.env")} />
-              </g>
             </g>
             <g class="st" data-st="mail">
-              <g data-k="mail.c" {...A("mail.c")}>
                 <path class="ico" d={ENVELOPE} transform={at(mail.x + 16, mail.y + mail.bar / 2)} />
                 <text x={mail.x + 28} y={mail.y + mail.bar / 2 + 0.5}><tspan class="k">Inbox</tspan></text>
                 <path class="hair" d={bar(mail)} />
@@ -353,23 +360,20 @@ const aria =
                     </g>
                   ))}
                 </g>
-              </g>
             </g>
 
             {/* ============ what travels ============ */}
-            <g class="fx">
+            <g class="fx wd">
               <circle class="pk our" data-k="pk.call" cx={L.sx} r={L.pr} {...A("pk.call")} />
               <g class="tok" data-k="tok" {...A("tok")}><rect x="-10" y="-5.5" width="20" height="11" rx="5.5" /><path d={KEY} /></g>
               <circle class="pk" data-k="pk.app" r={L.pr} {...A("pk.app")} />
               {[0, 1, 2].map((s) => <circle data-k={`d${s}`} class:list={["pk", C(`d${s}`)]} r={L.pr} {...A(`d${s}`)} />)}
-              <g data-k="tiles" {...A("tiles")}>
-                {Array.from({ length: 8 }, (_, i) => (
-                  <g data-k={`t${i}`} class:list={["tile", C(`t${i}`)]} {...A(`t${i}`)}>
-                    <rect x={-tile.w / 2} y={-tile.h / 2} width={tile.w} height={tile.h} rx="3" />
-                    <text text-anchor="middle">.mp4</text>
-                  </g>
-                ))}
-              </g>
+              {Array.from({ length: 8 }, (_, i) => (
+                <g data-k={`t${i}`} class:list={["tile", C(`t${i}`)]} {...A(`t${i}`)}>
+                  <rect x={-tile.w / 2} y={-tile.h / 2} width={tile.w} height={tile.h} rx="3" />
+                  <text text-anchor="middle">.mp4</text>
+                </g>
+              ))}
               <g class="tile our" data-k="res" {...A("res")}>
                 <rect x={-tile.w / 2} y={-tile.h / 2} width={tile.w} height={tile.h} rx="3" />
                 <text text-anchor="middle">.mp4</text>
@@ -405,16 +409,18 @@ const aria =
     Celery queue. Each render gets its own locked-down Fargate sandbox, where Remotion draws the lesson frame by frame, and the
     video comes back in the chat. Lifecycle email, at the bottom, is a separate pipeline on EventBridge and SES. The question,
     the tool name, the jobs, the file name and the frame counts are examples.
-    <span class="ex-live">Point at a stage, or focus the figure and use the arrow keys, to read what it does.</span>
+    <span class="ex-live">Point at a stage, or focus the figure and use the arrow keys, to read what it does. Point along the large sandbox to look back through its frames.</span>
   </Fragment>
 </Figure>
 
 <style is:global>
-  /* The plate picks its drawing from its own width. --u is one user unit of
-     text: it grows as the plate shrinks, so labels stay near 10.7px on screen. */
+  /* The plate picks its drawing from its own width. --tu is one user unit of
+     text: it grows as the plate shrinks, so labels stay near 10.7px on screen.
+     (The page's stylesheet registers the name --u as a number, for its hover
+     lines, and a length written to that would be thrown away.) */
   .fig .ex-box { container-type: inline-size; }
-  .fig svg.ex-w { --u: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
-  .fig .plot svg.ex-n { --u: clamp(0.88px, calc(1.983px - 0.2362cqw), 1.28px); display: none; max-width: 440px; margin-inline: auto; }
+  .fig svg.ex-w { --tu: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
+  .fig .plot svg.ex-n { --tu: clamp(0.88px, calc(1.983px - 0.2362cqw), 1.28px); display: none; max-width: 440px; margin-inline: auto; }
   @container (max-width: 539.98px) {
     .fig .plot svg.ex-w { display: none; }
     .fig .plot svg.ex-n { display: block; }
@@ -426,10 +432,10 @@ const aria =
   .fig[data-fig="export"] .plate-h .readout { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
   /* Type. */
-  .fig svg.ex text { font-size: calc(11 * var(--u)); dominant-baseline: central; }
-  .fig svg.ex text.cm, .fig svg.ex tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--u)); letter-spacing: 0; }
-  .fig svg.ex .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: calc(10.4 * var(--u)); letter-spacing: 0; }
-  .fig svg.ex .mi { font-family: var(--math); font-style: italic; font-size: calc(12.5 * var(--u)); letter-spacing: 0; fill: var(--ink-2); }
+  .fig svg.ex text { font-size: calc(11 * var(--tu)); dominant-baseline: central; }
+  .fig svg.ex text.cm, .fig svg.ex tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); letter-spacing: 0; }
+  .fig svg.ex .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: calc(10.4 * var(--tu)); letter-spacing: 0; }
+  .fig svg.ex .mi { font-family: var(--math); font-style: italic; font-size: calc(12.5 * var(--tu)); letter-spacing: 0; fill: var(--ink-2); }
   .fig svg.ex .sup { font-size: 0.72em; }
   /* A function's name is set upright, as in print. */
   .fig svg.ex .fn { font-family: var(--cm); font-style: normal; }
@@ -438,8 +444,8 @@ const aria =
   .fig svg.ex text.msg { fill: var(--ink); }
   .fig svg.ex text.msg .mi { fill: var(--ink); }
   .fig svg.ex text.hint { fill: var(--ink-3); }
-  .fig svg.ex tspan.big { font-size: calc(15 * var(--u)); fill: var(--ink); }
-  .fig svg.ex text.huge { font-size: calc(24 * var(--u)); fill: var(--ink); }
+  .fig svg.ex tspan.big { font-size: calc(15 * var(--tu)); fill: var(--ink); }
+  .fig svg.ex text.huge { font-size: calc(24 * var(--tu)); fill: var(--ink); }
   .fig svg.ex .halo { paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
 
   /* Anything the script draws on: its length is 1, and it has no cap to leave a dot behind.
@@ -557,12 +563,31 @@ const aria =
   .fig svg.ex .tile.our text { fill: var(--accent); }
   .fig svg.ex .env { fill: var(--panel); stroke: var(--ink); stroke-width: 1.1; stroke-linejoin: round; }
 
+  /* A sandbox's outline while it is being drawn: a short bright stroke at the head of the line. */
+  .fig svg.ex .pen { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 0.024 1; }
+  .fig svg.ex .pen.our { stroke: var(--accent); }
+  /* The frame the reader is pointing back at, on the strip. */
+  .fig svg.ex .needle { fill: none; stroke: var(--ink); stroke-width: 1.1; }
+
+  /* A state is told in colour as well as in words, and a change of state is never a flash. */
+  .fig svg.ex .btn, .fig svg.ex .abtn { transition: fill 0.18s var(--ease-out), stroke 0.18s var(--ease-out); }
+  .fig svg.ex .pill { transition: stroke 0.32s var(--ease-out), stroke-width 0.32s var(--ease-out); }
+  .fig svg.ex .row .gl, .fig svg.ex .row text { transition: stroke 0.32s var(--ease-out), fill 0.32s var(--ease-out); }
+
   /* Pointer, touch and keyboard: a stage steps forward and the rest step back. */
   .fig svg.ex .hit { fill: transparent; stroke: none; pointer-events: all; }
-  .fig svg.ex[data-live] .hit { touch-action: pan-y; cursor: default; }
+  /* A finger may go across the drawing (along the big sandbox it steps through frames); up and down it scrolls the page as ever.
+     Set on the drawing itself: a browser does not take this from a shape inside an svg. */
+  .fig svg.ex[data-live] { touch-action: pan-y pinch-zoom; }
+  .fig svg.ex[data-live] .hit { cursor: default; }
   .fig svg.ex .hit:focus { outline: none; }
   .fig svg.ex .ring { fill: none; stroke: none; pointer-events: none; }
   .fig svg.ex .hit:focus-visible + .ring { stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
-  .fig svg.ex .st { transition: opacity 0.2s ease; }
-  .fig svg.ex.focus .st:not(.on) { opacity: 0.38; }
+  .fig svg.ex .st { transition: opacity 0.32s var(--ease-out); }
+  .fig svg.ex.focus .st:not(.on) { opacity: 0.42; }
+  /* Going back up the page into the story: what had been running by itself (the rows, what is in the sandboxes,
+     what is on the wires, and what our own job has left behind it) is cut away, and the story's own moment
+     comes up in its place. The stage stays. */
+  .fig svg.ex .wd { transition: opacity 0.26s var(--ease-out); }
+  .fig svg.ex.cut .wd { opacity: 0; transition: opacity 0.09s var(--ease-io); }
 </style>

@@ -14,8 +14,11 @@
 // Two layouts; a container query shows one. The script reveals the drawing.
 // Every mark that encodes a measurement or a count (a stem, whose length is the
 // difference from the constant; a marker; an interval; the tie bracket; the 39
-// picks) appears whole; only the constant, a vertical reference, is drawn on.
-// The script never prints a number of its own.
+// picks) appears whole, at its measured length and place: the script may open
+// it across its own scale (a marker's radius, the height of an end cap, the
+// size of a cell) and never along it. Structure is drawn on: the constant, a
+// vertical reference; each row's track; the scales. The script never prints a
+// number of its own.
 import Figure from "../Figure.astro";
 
 interface Props { n?: number }
@@ -147,24 +150,31 @@ function view(wide: boolean) {
     // Return footer: one cell per held-out task the ridge router routed.
     const cs = wide ? 5.4 : 7.5, cp = (cw - cs - 2) / (PICKS - 1);
     const cells = { pitch: f(cp), size: cs, x0, y: f(f2 - cs / 2), d: Array.from({ length: PICKS }, (_, j) => `M${f(x0 + j * cp)} ${f(f2 - cs / 2)}h${cs}v${cs}h-${cs}z`).join("") };
-    return { ...c, ci, F, x0, x, refV, refX, rows, axisY, f1, f2, tie, oracle, note, cells, right: F.x + cw, top: F.y + first - 7 };
+    // The scale, as the script rules it: a baseline, then a tick as the pen passes it ([x, length]).
+    const ticks = [0, 5, 10, 15, 20, 25, 30, 35, 40].map((t) => [x(t), t % 10 ? 2.5 : 5]);
+    const ticksD = ticks.map(([tx, l]) => `M${tx} ${axisY}v${l}`).join("");
+    return { ...c, ci, F, x0, x, refV, refX, rows, axisY, f1, f2, tie, oracle, note, cells, ticks, ticksD, right: F.x + cw, top: F.y + first - 7 };
   });
 
   const H = charts[1].f2 + (wide ? 12 : 18);
   // Policies are shown nearest the constant first, so the farthest comes last.
   const far = Math.max(...charts.flatMap((c) => c.rows.map((r) => Math.abs(r.v - c.refV))));
   const G = {
-    beats: wide ? { a: [0, 0.3], b: [0.22, 0.68], c: [0.62, 1] } : null,
-    // Stacked: each chart plays its three beats as it scrolls in.
-    stack: wide ? null : [{ a: [0.06, 0.2], b: [0.16, 0.36], c: [0.32, 0.52] }, { a: [0.5, 0.64], b: [0.6, 0.8], c: [0.78, 0.98] }],
+    w: wide ? 1 : 0, H, cap, r: rDot,
     charts: charts.map((c) => ({
       rows: c.rows.map((r) => ({
         // t: its distance from the constant as a share of the farthest policy's. It sets the order of arrival only.
         t: Math.round((Math.abs(r.v - c.refV) / far) * 1e4) / 1e4,
         oracle: !!r.oracle, tie: !!r.tie, ref: !!r.ref, diff: r.diff, excl: r.excl, say: said(c.id, r),
+        // Where the row sits: its label line, its marks, its marker, and the two ends of its interval.
+        ly: r.ly, y: r.y, x: r.x, lo: r.wlo, hi: r.whi,
       })),
       note: c.note ? c.note.i : null,
-      cells: { pitch: c.cells.pitch, x0: c.cells.x0 },
+      // Heights the script times its story by, and the scale it rules.
+      top: c.top, f1: c.f1, f2: c.f2, refX: c.refX,
+      axis: { y: c.axisY, x0: c.x0, x1: c.x(VMAX), ticks: c.ticks },
+      tie: c.tie ? { d: c.tie.d } : null,
+      cells: { pitch: c.cells.pitch, x0: c.cells.x0, y: c.cells.y, size: c.cells.size },
     })),
     picks: PICKS, picksSay: SAID_PICKS, story: STORY,
   };
@@ -204,7 +214,7 @@ const aria =
       <svg class:list={["ro", v.wide ? "ro-w" : "ro-n"]} viewBox={`0 0 ${v.W} ${v.H}`} role="group" data-g={JSON.stringify(v.G)} aria-label={PLOT} aria-describedby={`ro-${v.wide ? "w" : "n"}-desc`}>
         <desc id={`ro-${v.wide ? "w" : "n"}-desc`}>{aria}</desc>
         <g aria-hidden="true">
-          {v.wide && <path class="hair" d={`M313 0V${v.H}`} />}
+          {v.wide && <path class="hair sep" d={`M313 0V${v.H}`} />}
           {v.charts.map((c) => (
             <g class="chart" data-c={c.ci}>
               <text class="head" x={c.F.x} y={c.F.y + 9} dominant-baseline="central"><tspan class="k">{c.title}</tspan></text>
@@ -213,12 +223,18 @@ const aria =
               {/* what the numbers beside each depth row, and their whiskers, are */}
               {c.id === "depth" && <text class="colh" x={c.right} y={c.F.y + 27} text-anchor="end" dominant-baseline="central">vs constant, pp [95% CI]</text>}
 
-              {/* quiet layer: one track per row, the axis and its ticks */}
-              <path class="hair" d={c.rows.map((r) => `M${c.x0} ${r.y}H${c.x(VMAX)}`).join("")} />
-              <path class="faint" d={`M${c.x0} ${c.axisY}H${c.x(VMAX)}` + [0, 5, 10, 15, 20, 25, 30, 35, 40].map((t) => `M${c.x(t)} ${c.axisY}v${t % 10 ? 2.5 : 5}`).join("")} />
-              {[0, 10, 20, 30, 40].map((t) => (
-                <text class="cm tk" x={c.x(t)} y={c.axisY + 8} text-anchor={t ? "middle" : "start"} dominant-baseline="hanging">{t}{t === 40 ? "%" : ""}</text>
-              ))}
+              {/* quiet layer: one track per row (each its own stroke, so the script can rule it as its row
+                  comes clear), then the scale: a baseline and its ticks. */}
+              <g class="tracks">
+                {c.rows.map((r) => <line class="hair trk" x1={c.x0} x2={c.x(VMAX)} y1={r.y} y2={r.y} />)}
+              </g>
+              <g class="scale">
+                <path class="faint ax-b" d={`M${c.x0} ${c.axisY}H${c.x(VMAX)}`} />
+                <path class="faint ax-t" d={c.ticksD} />
+                {[0, 10, 20, 30, 40].map((t) => (
+                  <text class="cm tk" data-x={c.x(t)} x={c.x(t)} y={c.axisY + 8} text-anchor={t ? "middle" : "start"} dominant-baseline="hanging">{t}{t === 40 ? "%" : ""}</text>
+                ))}
+              </g>
 
               {/* the best constant: every stem and every whisker is measured from this line */}
               <line class="ref" x1={c.refX} x2={c.refX} y1={c.top} y2={c.axisY} />
@@ -301,7 +317,7 @@ const aria =
               {c.rows.map((r) => (
                 <>
                   <rect class="hit" data-c={c.ci} data-i={r.i} tabindex="0" role="img" aria-label={spoken(c.id, r)}
-                    x={c.F.x - 4} y={f(r.ly + v.drop / 2 - v.pitch / 2)} width={c.right - c.F.x + 8} height={v.pitch}><title>{said(c.id, r)}</title></rect>
+                    x={v.wide && c.ci ? 313 : c.F.x - 4} y={f(r.ly + v.drop / 2 - v.pitch / 2)} width={v.wide ? (c.ci ? v.W + 4 - 313 : 317) : c.right - c.F.x + 8} height={v.pitch}><title>{said(c.id, r)}</title></rect>
                   <rect class="ring" x={c.F.x - 4} y={f(Math.max(r.ly - 9, r.ly + v.drop / 2 - v.pitch / 2 + 0.5))} width={c.right - c.F.x + 8} height={Math.min(v.drop + 17, v.pitch - 1)} rx="4" />
                 </>
               ))}
@@ -331,15 +347,15 @@ const aria =
 <style is:global>
   /* Layout follows the plate's own width (see Overlap.astro for the rationale). */
   .fig .ro-box { container-type: inline-size; }
-  .fig svg.ro-w { --u: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
-  .fig .plot svg.ro-n { --u: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
+  .fig svg.ro-w { --tu: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
+  .fig .plot svg.ro-n { --tu: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
   @container (max-width: 539.98px) {
     .fig .plot svg.ro-w { display: none; }
     .fig .plot svg.ro-n { display: block; }
   }
 
-  .fig svg.ro text { font-size: calc(11 * var(--u)); }
-  .fig svg.ro text.cm, .fig svg.ro tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--u)); letter-spacing: 0; }
+  .fig svg.ro text { font-size: calc(11 * var(--tu)); }
+  .fig svg.ro text.cm, .fig svg.ro tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); letter-spacing: 0; }
   .fig svg.ro tspan.k { fill: var(--ink); font-weight: 500; }
   .fig svg.ro tspan.strong { fill: var(--ink); }
   .fig svg.ro text.rl, .fig svg.ro text.fl, .fig svg.ro text.fv, .fig svg.ro text.tn { fill: var(--ink-2); }
@@ -370,6 +386,13 @@ const aria =
   .fig svg.ro .cells-bg { fill: none; stroke: var(--ink); stroke-opacity: 0.2; stroke-width: 1; stroke-linejoin: round; }
   .fig svg.ro .cells-on { fill: var(--accent); fill-opacity: 0.8; stroke: var(--accent); stroke-opacity: 0.8; stroke-width: 1; stroke-linejoin: round; }
   .fig svg.ro .scan { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+  /* Moving parts, made by the script: the light under the cursor as the router is asked about a task,
+     the ring that opens round each tied marker when it has answered all 39, and the drop from a
+     marker to the scale while its row is being read. */
+  .fig svg.ro .lit { fill: var(--accent); stroke: var(--accent); stroke-width: 1; stroke-linejoin: round; pointer-events: none; }
+  .fig svg.ro .tied { fill: none; stroke: var(--accent); stroke-width: 1.25; }
+  .fig svg.ro .drop { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 3; pointer-events: none; }
+  .fig svg.ro .drop.acc { stroke: var(--accent); }
 
   /* Pointer or keyboard: a row or a footer reads out its exact numbers. */
   .fig svg.ro .hit { fill: transparent; stroke: none; pointer-events: all; }
@@ -377,6 +400,5 @@ const aria =
   .fig svg.ro .hit:focus { outline: none; }
   .fig svg.ro .ring { fill: none; stroke: none; pointer-events: none; }
   .fig svg.ro .hit:focus-visible + .ring { stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
-  .fig svg.ro .row, .fig svg.ro .foot, .fig svg.ro .otag, .fig svg.ro .tieb { transition: opacity 0.2s ease; }
-  .fig svg.ro.focus .row:not(.on), .fig svg.ro.focus .foot:not(.on), .fig svg.ro.focus .otag:not(.on), .fig svg.ro.focus .tieb:not(.on) { opacity: 0.36; }
+  /* (What is not being read steps back. The script sets that, on the page's own clock and curve.) */
 </style>

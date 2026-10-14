@@ -7,8 +7,10 @@
 // dots are never joined into a curve. The server render is the finished
 // figure; the script hides it and replays it against the scroll. Whatever
 // measures something (a bar, a wall-clock line, the refused share, a dot, an
-// interval) is drawn here at its measured size and the script never changes
-// that: those marks only ever fade in whole.
+// interval) is drawn here at its measured size, and the script never changes
+// that along its scale: such a mark arrives whole, and what the script opens
+// on it runs across the scale (a rise into its row, a dot's radius, the height
+// of an end cap).
 //
 // Two layouts are rendered and CSS shows one. "Wide" sets the three columns
 // side by side in one drawing. "Narrow" is three smaller drawings (tree and
@@ -143,26 +145,6 @@ const NC: CostL = {
 const ND: RetL = { H: 320, top: 47, bottom: 292, tick: 309, ry: [76, 130, 184, 238], D0: 76, DZ: 211, KP: 5.4, D1: 292, NX: 400 };
 const NF = { x: 0, x1: 400, rule: 0.5, y: 19, drop: 26 };
 
-// Scroll beats, as fractions of the scrubbed timeline. tw: the arm's tree and
-// cost (the tree has grown two thirds of the way through, then the bar
-// arrives whole and is fully there at 84%); rw: its dot and interval, which
-// begin as the bar settles, so each arm reads tree, cost, return while the
-// next arm's tree is already growing. "side": everything is on screen
-// together. "stack": the forest plot is further down the page, so its beats
-// come later.
-const SIDE = {
-  zero: [0.02, 0.1],
-  tw: [[0, 0.12], [0.12, 0.36], [0.34, 0.6], [0.56, 0.86]],
-  rw: [[0.09, 0.16], [0.31, 0.44], [0.55, 0.68], [0.8, 0.92]],
-  co: [0.92, 1],
-};
-const STACK = {
-  zero: [0.56, 0.66],
-  tw: [[0.08, 0.24], [0.16, 0.32], [0.24, 0.42], [0.32, 0.52]],
-  rw: [[0.6, 0.66], [0.64, 0.74], [0.7, 0.8], [0.76, 0.88]],
-  co: [0.48, 0.6],
-};
-
 function scene(wide: boolean) {
   const C = wide ? WC : NC;
   const D = wide ? WD : ND;
@@ -183,14 +165,20 @@ function scene(wide: boolean) {
       cap: wide ? 4.5 : 4,
     };
   });
+  const F = wide ? WF : NF;
   const g = {
     w: wide ? 1 : 0, kx: C.KX,
-    beats: wide ? { side: SIDE } : { side: SIDE, stack: STACK },
+    // Which drawing holds what (an index into this layout's drawings), each drawing's height, and
+    // the heights the script times its story by: a part is drawn once the plate has let that much
+    // of its sheet out.
+    in: wide ? { cost: 0, co: 0, ret: 0 } : { cost: 0, co: 1, ret: 2 },
+    hs: wide ? [C.H] : [C.H, 58, D.H],
+    ys: { top: D.top, bottom: D.bottom, co: F.y + F.drop, key: C.tick, sub: wide ? 78 : 46 },
     fix: `${FIX.one} to ${FIX.tree} per verified fix`,
     arms: arms.map((A) => ({
       n: A.a.nodes, d: A.a.depth, tok: A.a.tok, wall: A.a.wall, ref: A.a.ret ? A.a.ret.refused / 100 : 0,
       ring: A.tree.ring, lv: A.tree.lv, segs: A.tree.segs, el: A.tree.edges.map((e) => e.len),
-      wy: A.wallY, ry: A.ry, cap: A.cap,
+      R: A.R, wy: A.wallY, ry: A.ry, cap: A.cap,
       eff: A.a.eff ? [A.a.eff.d, A.a.eff.lo, A.a.eff.hi] : null,
       rd: readouts(A.a), who: `${A.a.nodes} ${agents(A.a)}`, tokS: mult(A.a.tok),
       say: describe(A.a), box: A.box, lane: A.lane,
@@ -446,21 +434,23 @@ const ARIA = `The four arms of the depth campaign on DeepSWE, as rows. One agent
     .fig .plot .dl-n .pb { grid-area: b; }
     .fig .plot .dl-n .pc { grid-area: c; align-self: end; }
   }
-  /* --u keeps labels near 11px on screen as the plate shrinks: text grows in
+  /* --tu keeps labels near 11px on screen as the plate shrinks: text grows in
      user units while the drawing scales down. Type sizes and the offsets of
-     second lines (.dy) are multiples of it. */
+     second lines (.dy) are multiples of it.
+     (Not --u: the page's stylesheet registers that name as a number, for its
+     hover lines, and a length written to it would be thrown away.) */
   .fig .dl-w {
-    --u: clamp(1px, calc(2.025px - 0.0799vw), 1.3px);
+    --tu: clamp(1px, calc(2.025px - 0.0799vw), 1.3px);
     --fs: 12.5; --fs-s: 11.5; --fs-n: 22; --fs-k: 19; --fs-c: 12.5; --fs-d: 19;
   }
   .fig .dl-n {
-    --u: clamp(0.82px, calc(2.237px - 0.253vw), 1.45px);
+    --tu: clamp(0.82px, calc(2.237px - 0.253vw), 1.45px);
     --fs: 11; --fs-s: 10; --fs-n: 15; --fs-k: 15; --fs-c: 10.5; --fs-d: 16;
   }
   @media (min-width: 720px) and (max-width: 919.98px) {
-    .fig .dl-n { --u: clamp(1.02px, calc(2.4px - 0.146vw), 1.35px); }
+    .fig .dl-n { --tu: clamp(1.02px, calc(2.4px - 0.146vw), 1.35px); }
   }
-  .fig div.dl .dy { transform: translateY(calc(var(--dy) * var(--u))); }
+  .fig div.dl .dy { transform: translateY(calc(var(--dy) * var(--tu))); }
 
   /* One control per arm, laid over its row by the script: a button for the
      row itself, and on phones a plain target over its lane in the forest
@@ -472,34 +462,34 @@ const ARIA = `The four arms of the depth campaign on DeepSWE, as rows. One agent
   .fig div.dl .row:focus-visible, .fig div.dl .lane.keys { outline: 1.5px solid var(--accent); outline-offset: -2px; }
 
   /* type */
-  .fig div.dl text { font-size: calc(var(--fs) * var(--u)); fill: var(--ink-3); }
-  .fig div.dl text.s { font-size: calc(var(--fs-s) * var(--u)); }
-  .fig div.dl text.cm { font-size: calc(var(--fs-c) * var(--u)); }
+  .fig div.dl text { font-size: calc(var(--fs) * var(--tu)); fill: var(--ink-3); }
+  .fig div.dl text.s { font-size: calc(var(--fs-s) * var(--tu)); }
+  .fig div.dl text.cm { font-size: calc(var(--fs-c) * var(--tu)); }
   .fig div.dl tspan.k { fill: var(--ink); font-weight: 500; }
   .fig div.dl tspan.c { font-family: var(--cm); font-size: 1.09em; letter-spacing: 0; fill: var(--ink-2); }
   .fig div.dl tspan.c.r, .fig div.dl text.zl.r { fill: var(--s-red); }
   .fig div.dl tspan.sep { fill: var(--ink-4); }
   .fig div.dl text.halo { paint-order: stroke; stroke: var(--panel); stroke-width: 6px; stroke-linejoin: round; }
   .fig div.dl text.l1 { fill: var(--ink-2); }
-  .fig div.dl tspan.n { font-family: var(--cm); font-size: calc(var(--fs-n) * var(--u)); fill: var(--ink); letter-spacing: 0; }
-  .fig div.dl .l2 { fill: var(--ink-3); font-size: calc(var(--fs-s) * var(--u)); }
-  .fig div.dl text.tok, .fig div.dl text.ev { font-size: calc(var(--fs-k) * var(--u)); fill: var(--ink); }
+  .fig div.dl tspan.n { font-family: var(--cm); font-size: calc(var(--fs-n) * var(--tu)); fill: var(--ink); letter-spacing: 0; }
+  .fig div.dl .l2 { fill: var(--ink-3); font-size: calc(var(--fs-s) * var(--tu)); }
+  .fig div.dl text.tok, .fig div.dl text.ev { font-size: calc(var(--fs-k) * var(--tu)); fill: var(--ink); }
   /* The reading line runs behind these numerals; a wider halo closes the gap a decimal point leaves at mid-height. */
   .fig div.dl text.tok, .fig div.dl text.ev { stroke-width: 10px; }
-  .fig div.dl tspan.w { font-family: var(--sans); font-size: calc(var(--fs-s) * var(--u)); fill: var(--ink-3); letter-spacing: 0.01em; }
-  .fig div.dl tspan.un { font-family: var(--sans); font-size: calc(var(--fs-s) * var(--u)); fill: var(--ink-3); }
+  .fig div.dl tspan.w { font-family: var(--sans); font-size: calc(var(--fs-s) * var(--tu)); fill: var(--ink-3); letter-spacing: 0.01em; }
+  .fig div.dl tspan.un { font-family: var(--sans); font-size: calc(var(--fs-s) * var(--tu)); fill: var(--ink-3); }
   .fig div.dl text.rf { fill: var(--ink-2); }
   .fig div.dl text.zl-k { fill: var(--ink); font-weight: 500; }
   .fig div.dl text.zl-g, .fig div.dl text.verdict { fill: var(--s-green); }
-  .fig div.dl tspan.d { font-size: calc(var(--fs-d) * var(--u)); fill: var(--ink); }
+  .fig div.dl tspan.d { font-size: calc(var(--fs-d) * var(--tu)); fill: var(--ink); }
   .fig div.dl tspan.d.acc { fill: var(--accent); }
-  .fig div.dl tspan.ar { font-size: calc(var(--fs-d) * 0.8 * var(--u)); fill: var(--ink-3); }
-  .fig div.dl text.co-t { font-size: calc(var(--fs-s) * var(--u)); }
+  .fig div.dl tspan.ar { font-size: calc(var(--fs-d) * 0.8 * var(--tu)); fill: var(--ink-3); }
+  .fig div.dl text.co-t { font-size: calc(var(--fs-s) * var(--tu)); }
 
   /* frame */
-  .fig div.dl .rl { stroke: var(--hair); stroke-width: 1; transition: stroke 0.3s ease; }
+  .fig div.dl .rl { stroke: var(--hair); stroke-width: 1; transition: stroke var(--t-state) var(--ease-io); }
   .fig div.dl .arm.cur .rl, .fig div.dl .arm.on .rl { stroke: var(--ink-4); }
-  .fig div.dl tspan.n { transition: fill 0.4s ease; }
+  .fig div.dl tspan.n { transition: fill var(--t-state) var(--ease-io); }
   .fig div.dl .arm.cur tspan.n { fill: var(--accent); }
   .fig div.dl .zero { stroke: var(--ink); stroke-width: 1.25; }
   .fig div.dl .gain { fill: var(--s-green-t); opacity: 0.7; }
@@ -529,18 +519,19 @@ const ARIA = `The four arms of the depth campaign on DeepSWE, as rows. One agent
   .fig div.dl .lg-task, .fig div.dl .lg-patch { fill: var(--accent); }
   .fig div.dl .lg-ref { fill: none; stroke: var(--s-red); stroke-width: 1.2; }
 
-  /* moving parts (made by the script) */
+  /* moving parts (made by the script): a task or a patch on an edge, a refused patch, the ring round
+     a node that is working, the wall-clock line as its root delivers, and the ring round an estimate
+     as that delivery is graded */
   .fig div.dl .pkt { fill: var(--accent); }
   .fig div.dl .pkt.no { fill: var(--panel); stroke: var(--s-red); stroke-width: 1.2; }
   .fig div.dl .ov { fill: none; stroke: var(--accent); stroke-width: 1.25; }
   .fig div.dl .wp { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+  .fig div.dl .er { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+  .fig div.dl .arm.res .er { stroke: var(--s-red); }
 
-  /* inspecting one arm */
-  .fig div.dl .arm, .fig div.dl .co { transition: opacity 0.25s ease; }
-  .fig div.dl.focus .arm:not(.on) { opacity: 0.28; }
-  .fig div.dl.focus:not(.focus-co) .co { opacity: 0.28; }
-  .fig div.dl .fx { opacity: 0; transition: opacity 0.2s ease; }
-  .fig div.dl .arm.on .fx { opacity: 1; }
+  /* inspecting one arm (what steps back, and by how much, is the script's: it runs on the page's own
+     clock and curve) */
+  .fig div.dl .fx { opacity: 0; }
   .fig div.dl .gd { stroke-width: 1; stroke-dasharray: 2 3; }
   .fig div.dl .gd-c { stroke: var(--accent); }
   .fig div.dl .gd-d { stroke: var(--ink-3); }

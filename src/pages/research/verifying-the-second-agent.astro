@@ -2,6 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import Header from "../../components/Header.astro";
 import Footer from "../../components/Footer.astro";
+import Cosmos from "../../components/Cosmos.astro";
 import Palette from "../../components/Palette.astro";
 import Delegation from "../../components/figures/Delegation.astro";
 import Overlap from "../../components/figures/Overlap.astro";
@@ -24,10 +25,11 @@ import { paper, bibtex } from "../../data/paper";
     },
   ]}
 >
+  <Cosmos />
   <Header crumb="Research" />
 
-  <main class="wrap" id="top">
-    <header class="head">
+  <main class="wrap" id="top" data-ground>
+    <header class="head" data-reveal="title">
       <p class="kicker"><a class="ln" href="/#research">Research</a></p>
       <h1>{paper.title}</h1>
       <p class="sub">{paper.subtitle}</p>
@@ -37,7 +39,7 @@ import { paper, bibtex } from "../../data/paper";
       </p>
     </header>
 
-    <div class="prose">
+    <div class="prose" data-reveal="prose">
       <h2 id="question">The question</h2>
       <p>
         A coding agent can do a task itself, or spawn other agents, hand them pieces, and merge what
@@ -60,7 +62,7 @@ import { paper, bibtex } from "../../data/paper";
 
     <div class="plate wide"><Delegation n={1} /></div>
 
-    <div class="prose">
+    <div class="prose" data-reveal="prose">
       <h2 id="cost">1. Trees cost more, with no resolved gain</h2>
       <p>
         Trees of 7 and 15 agents spent 5.98 and 12.50 times the tokens of one agent. Verified success
@@ -80,7 +82,7 @@ import { paper, bibtex } from "../../data/paper";
 
     <div class="plate"><Overlap n={2} /></div>
 
-    <div class="prose">
+    <div class="prose" data-reveal="prose">
       <p>
         If merging is the bottleneck, one writer should fix it. In the return campaign workers handed
         back written findings and only the root wrote code. That removed every shared write and moved
@@ -91,7 +93,7 @@ import { paper, bibtex } from "../../data/paper";
 
     <div class="plate"><Handoff n={3} /></div>
 
-    <div class="prose">
+    <div class="prose" data-reveal="prose">
       <h2 id="routers">3. No tested router resolved an advantage</h2>
       <p>
         Delegating only where it helps would rescue the average. Routers trained on 23 features known
@@ -103,7 +105,7 @@ import { paper, bibtex } from "../../data/paper";
 
     <div class="plate"><Routers n={4} /></div>
 
-    <div class="prose">
+    <div class="prose" data-reveal="prose">
       <h2 id="limits">Scope and limits</h2>
       <p>
         For this model, harness, benchmark and budget, one agent is the defensible default. The cost
@@ -141,6 +143,7 @@ import { paper, bibtex } from "../../data/paper";
   />
 
   <script>
+    import "../../scripts/page";
     import "../../scripts/figures";
 
     const btn = document.querySelector<HTMLButtonElement>("[data-copy-bib]");

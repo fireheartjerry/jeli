@@ -14,16 +14,16 @@ const ledger = [
 ];
 ---
 
+{/*
+  The cover is held at the top of the window while the swarm is built: it is
+  sticky inside this taller box, and the stretch of scroll the box adds below
+  it is the build (scripts/voyage.ts reads how far through it the page is).
+  Nothing is moved in the document to hold it, so nothing on it starts over.
+*/}
+<div class="hold" data-hold>
 <section class="hero" data-night data-hero data-seed={SEED} aria-labelledby="hero-h">
-  <canvas class="sky" data-sky aria-hidden="true"></canvas>
+  {/* The scene itself is Cosmos.astro, fixed behind the page; this is what stands in without it. */}
   <noscript><img class="sky still" src="/cover.webp" alt="" /></noscript>
-  {/* Names for a few bodies, pinned to them by the script. */}
-  <div class="tags" aria-hidden="true">
-    <span data-tag="swarm">Dyson swarm, 1 AU</span>
-    <span data-tag="jupiter">Jupiter</span>
-    <span data-tag="psyche">16 Psyche, quarry</span>
-    <span data-tag="beam" class="hot">3.83 × 10²⁶ W, outbound</span>
-  </div>
 
   <div class="frame wrap">
     <figure class="legend" aria-labelledby="hero-cap">
@@ -45,12 +45,16 @@ const ledger = [
         {/* The first line is only true while the scene is running; a still frame says so instead. */}
         <span class="hint" data-hint>Scroll to build it. Drag to look around.</span>
         <span class="held">Shown here as a still frame.</span>{" "}
-        Orbits are Keplerian. Distances to scale; sizes and gaps are not.
+        Orbits are Keplerian. Distances to scale; sizes, gaps and spin rates are not.
       </p>
     </figure>
 
     <div class="id">
-      <p class="cue"><span class="hint">Scroll to build it. Drag to look around.</span><span class="held">Fig. 1, shown here as a still frame.</span></p>
+      <p class="cue">
+        <span class="hint">Scroll to build it. Drag to look around.</span><span class="held">Fig. 1, shown here as a still frame.</span>
+        {/* The legend is below the fold on a narrow screen while the swarm is built, so its first line is said here too. */}
+        <span class="live cm" aria-hidden="true"><span data-v="n">21,600</span> <i>/ <span data-v="total">60,000</span> collectors</i></span>
+      </p>
       <p class="eyebrow">Computer science, University of Waterloo</p>
       <h1 id="hero-h" aria-label="Jerry Li">
         {["Jerry", "Li"].map((word, w) => (
@@ -60,18 +64,19 @@ const ledger = [
         ))}
       </h1>
       <p class="lede">
-        I build software people use in 182 countries, and I publish research: on when AI agents
-        should hand work to other agents, and on how binary stars trade mass.
+        I like AI agents, simulation and space. I build software, run experiments, and think about
+        megastructures like the one on this page.
       </p>
     </div>
 
     <ol class="ledger" aria-label="At a glance">
       {ledger.map((row, i) => (
         <li style={`--i:${i}`}>
-          <a href={row.href}>
+          {/* Under the pointer the value rolls over into the accent (.roll) and a hairline draws along the cell's top edge ([data-wire]); both are in global.css. */}
+          <a href={row.href} data-wire>
             <span class="k">{row.k}</span>
             <span class="dots" aria-hidden="true"></span>
-            <span class="v cm">{row.v}</span>
+            <span class="v cm roll"><span>{row.v}</span></span>
           </a>
         </li>
       ))}
@@ -79,52 +84,52 @@ const ledger = [
 
     {/* Narrow screens have no index rail, so the sections are listed here as plain links. */}
     <nav class="jump" aria-label="Sections">
-      <a href="#work">Work</a>
-      <a href="#research">Research</a>
-      <a href="#projects">Projects</a>
-      <a href="#record">Record</a>
-      <a href="#contact">Contact</a>
+      {["About", "Work", "Research", "Projects", "Record", "Contact"].map((name) => (
+        <a href={`#${name.toLowerCase()}`}><span class="roll"><span>{name}</span></span></a>
+      ))}
     </nav>
   </div>
 </section>
-
-<script>
-  import "../scripts/hero";
-</script>
+</div>
 
 <style>
+  /* Only where there is a scene to build (the inline script in Base.astro says so before first paint; voyage.ts takes it back if the scene cannot run). */
+  /* The stretch is a block of its own and not padding: a sticky box is kept inside its parent's content, and padding is outside it. */
+  :global(html[data-motion]:not([data-flat])) .hold::after {
+    content: "";
+    display: block;
+    height: 110svh;
+  }
   .hero {
-    position: relative;
+    position: sticky;
+    top: 0;
     background: #06080d;
     overflow: clip;
     isolation: isolate;
   }
-  .sky {
+  /* With the scene running behind the page, the cover is a window onto it, and a drag on it swings the camera. */
+  :global(html[data-voyage]) .hero {
+    background: none;
+    cursor: grab;
+    touch-action: pan-y;
+  }
+  :global(html[data-voyage]) .hero:active {
+    cursor: grabbing;
+  }
+  :global(html[data-voyage]) .hero::after {
+    content: none;
+  }
+  .hero :global(.sky.still) {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     z-index: -1;
-    opacity: 0;
-    transition: opacity 1.4s ease;
-    cursor: grab;
-    touch-action: pan-y;
-  }
-  .sky:active {
-    cursor: grabbing;
-  }
-  .sky[data-on],
-  .sky.still {
-    opacity: 1;
-  }
-  .sky.still {
     object-fit: cover;
-    cursor: auto;
   }
 
   /* Poster mode (?poster=0..1), used by tools/cover.mjs: only the scene. */
   :global(html[data-poster]) .frame,
-  :global(html[data-poster]) .tags,
   :global(html[data-poster]) .hero::after {
     visibility: hidden;
   }
@@ -140,44 +145,6 @@ const ledger = [
       linear-gradient(90deg, rgb(6 8 13 / 0.94), rgb(6 8 13 / 0.86) 26%, rgb(6 8 13 / 0.42) 46%, transparent 62%),
       linear-gradient(0deg, rgb(6 8 13 / 0.92), rgb(6 8 13 / 0.6) 14%, transparent 30%),
       linear-gradient(180deg, rgb(6 8 13 / 0.88), rgb(6 8 13 / 0.62) 7%, transparent 17%);
-  }
-
-  /* Small names riding on a few bodies. */
-  .tags {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    overflow: clip;
-  }
-  .tags span {
-    position: absolute;
-    left: 0;
-    top: 0;
-    padding-left: 15px;
-    font-size: 12.5px;
-    line-height: 1;
-    letter-spacing: 0.01em;
-    color: var(--ink-3);
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.5s ease;
-    will-change: transform;
-  }
-  .tags span::before {
-    content: "";
-    position: absolute;
-    left: 3px;
-    top: 50%;
-    width: 9px;
-    height: 1px;
-    background: var(--ink-4);
-  }
-  .tags span[data-on] {
-    opacity: 1;
-  }
-  .tags .hot {
-    color: var(--accent);
   }
 
   /* Legend top left, the stars filling the right, the name bottom left, the ledger along the foot. */
@@ -204,8 +171,20 @@ const ledger = [
     font-size: 13.5px;
     line-height: 1.5;
     color: var(--ink-3);
-    animation: fade-up 0.9s var(--ease-out) 1.2s both;
   }
+  /* The legend comes in last, a part at a time: its caption, each line of telemetry, the small print. */
+  .legend > figcaption,
+  .tele > div,
+  .legend > .fine {
+    animation: rise-in var(--t-arrive) var(--ease-out) backwards;
+    animation-delay: calc(1.15s + var(--j, 0) * 60ms);
+  }
+  .tele > div:nth-child(1) { --j: 2; }
+  .tele > div:nth-child(2) { --j: 3; }
+  .tele > div:nth-child(3) { --j: 4; }
+  .tele > div:nth-child(4) { --j: 5; }
+  .tele > div:nth-child(5) { --j: 6; }
+  .legend > .fine { --j: 8; }
   .legend .n {
     color: var(--ink);
     margin-right: 0.5em;
@@ -248,10 +227,11 @@ const ledger = [
     display: none;
     color: var(--ink-2);
   }
-  .hero[data-live] .hint {
+  /* Where the scene will run (Base.astro says so before first paint) the line says how to use it; anywhere else, that it is a still. */
+  :global(html[data-motion]:not([data-flat])) .hint {
     display: inline;
   }
-  .hero[data-live] .held {
+  :global(html[data-motion]:not([data-flat])) .held {
     display: none;
   }
 
@@ -264,7 +244,7 @@ const ledger = [
     font-size: 15px;
     color: var(--ink-3);
     margin-bottom: clamp(6px, 1.4svh, 14px);
-    animation: fade-up 0.9s var(--ease-out) 0.25s both;
+    animation: rise-in var(--t-arrive) var(--ease-out) 0.25s backwards;
   }
   h1 {
     font-size: clamp(72px, min(12.6vw, 21.5svh), 196px);
@@ -276,7 +256,15 @@ const ledger = [
     column-gap: 0.2em;
     margin-left: -0.04em;
   }
-  /* Page-load choreography is pure CSS, so it runs before any JS and costs nothing. */
+  /*
+    The opening is pure CSS: it costs nothing, and it is the page's own
+    vocabulary. The name rises by the letter inside its word; every other
+    block rises from behind its own foot (it is moved down by its height and
+    cut off at its foot by as much, so the edge it comes up through stays put);
+    the ledger's rule is drawn from the left and its dividers grow down from it.
+    It waits for the scene, so that type and scene arrive together, but never
+    for more than a third of a second (Base.astro's inline script lets it go).
+  */
   .word {
     display: inline-flex;
     overflow: clip;
@@ -286,14 +274,29 @@ const ledger = [
   }
   .ch {
     display: inline-block;
-    animation: rise 0.95s var(--ease-out) both;
+    animation: rise var(--t-arrive) var(--ease-out) both;
     animation-delay: calc(0.15s + var(--i) * 30ms);
   }
+  /* (Far enough down that no tall letter's tip shows in the room left for descenders.) */
   @keyframes rise {
-    from { transform: translateY(105%); }
+    from { transform: translateY(130%); }
   }
-  @keyframes fade-up {
-    from { opacity: 0; transform: translateY(12px); }
+  @keyframes rise-in {
+    from { transform: translateY(104%); clip-path: inset(0 0 104% 0); }
+    to { transform: none; clip-path: inset(0 0 -30% 0); }
+  }
+  @keyframes slot-in {
+    from { transform: translateY(125%); }
+  }
+  @keyframes draw-x {
+    from { transform: scaleX(0); }
+  }
+  @keyframes draw-y {
+    from { transform: scaleY(0); }
+  }
+  :global(html[data-motion]:not([data-voyage]):not([data-go])) .hero *,
+  :global(html[data-motion]:not([data-voyage]):not([data-go])) .hero *::before {
+    animation-play-state: paused;
   }
   .lede {
     margin-top: clamp(18px, 3svh, 30px);
@@ -301,7 +304,7 @@ const ledger = [
     line-height: 1.45;
     color: var(--ink-2);
     max-width: 37ch;
-    animation: fade-up 0.9s var(--ease-out) 0.55s both;
+    animation: rise-in var(--t-arrive) var(--ease-out) 0.5s backwards;
   }
 
   .jump,
@@ -315,14 +318,40 @@ const ledger = [
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     margin-top: clamp(22px, 4svh, 40px);
-    border-top: 1px solid var(--hair);
+    position: relative;
+    border-top: 1px solid transparent;
+  }
+  /* Its rule is drawn from the left; each divider grows down from the rule as the rule reaches it. */
+  .ledger::before {
+    content: "";
+    position: absolute;
+    inset: -1px 0 auto;
+    height: 1px;
+    background: var(--hair);
+    transform-origin: left;
+    animation: draw-x var(--t-arrive) var(--ease-out) 0.7s backwards;
   }
   .ledger li {
-    animation: fade-up 0.8s var(--ease-out) both;
-    animation-delay: calc(0.75s + var(--i) * 70ms);
+    position: relative;
   }
-  .ledger li + li {
-    border-left: 1px solid var(--hair);
+  .ledger li + li::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 1px;
+    background: var(--hair);
+    transform-origin: top;
+    animation: draw-y var(--t-state) var(--ease-io) backwards;
+    animation-delay: calc(0.82s + var(--i) * 70ms);
+  }
+  /* And in each cell the value comes up into its slot, its label from behind its own foot. */
+  .ledger .v > span {
+    animation: slot-in var(--t-arrive) var(--ease-out) backwards;
+    animation-delay: calc(0.9s + var(--i) * 70ms);
+  }
+  .ledger .k {
+    animation: rise-in var(--t-arrive) var(--ease-out) backwards;
+    animation-delay: calc(0.96s + var(--i) * 70ms);
   }
   .ledger a {
     display: flex;
@@ -331,10 +360,19 @@ const ledger = [
     height: 100%;
     padding: 14px 16px 2px;
     color: var(--ink-3);
-    transition: color 0.2s ease;
+    transition:
+      color var(--t-press) var(--ease-io),
+      --u var(--t-press) var(--ease-io);
   }
   .ledger li:first-child a {
     padding-left: 0;
+  }
+  /* The cell's hairline lies on the ledger's own rule, and over the first pixel of the divider beside it. */
+  .ledger a::before {
+    inset: -1px 0 auto;
+  }
+  .ledger li + li a::before {
+    left: -1px;
   }
   .k {
     font-size: 13.5px;
@@ -343,25 +381,32 @@ const ledger = [
   .dots {
     display: none;
   }
+  /* Computer Modern is set tighter than its own ink, so the slot the value rolls in is given a little room. */
   .v {
+    --roll-ink: var(--accent);
+    --roll-room: 2px;
     font-size: clamp(19px, 1.62vw, 23px);
     line-height: 1.15;
     color: var(--ink);
     white-space: nowrap;
-    transition: color 0.2s ease;
   }
   .ledger a:hover,
   .ledger a:focus-visible {
     color: var(--ink-2);
   }
-  .ledger a:hover .v,
-  .ledger a:focus-visible .v {
-    color: var(--accent);
+  @media (prefers-reduced-motion: reduce) {
+    .ledger a {
+      transition: none;
+    }
   }
 
+  /* With reduced motion the cover is simply there: nothing on it arrives. */
   @media (prefers-reduced-motion: reduce) {
-    .ch, .lede, .eyebrow, .legend, .ledger li { animation: none; }
-    .sky, .tags span { transition: none; }
+    .hero *,
+    .hero *::before,
+    .hero *::after {
+      animation: none !important;
+    }
   }
 
   /* Short windows: keep the name and the ledger, let the small print go. */
@@ -399,13 +444,10 @@ const ledger = [
       padding-top: calc(var(--bar) + var(--sky-h, 62vw) + 8px);
       padding-bottom: 40px;
     }
-    .sky {
+    .hero :global(.sky.still) {
       height: calc(var(--bar) + var(--sky-h, 62vw) + 56px);
       -webkit-mask-image: linear-gradient(#000 78%, transparent);
       mask-image: linear-gradient(#000 78%, transparent);
-    }
-    .tags {
-      height: calc(var(--bar) + var(--sky-h, 62vw) + 56px);
     }
     /* On a narrow screen the type sits under the scene, so only the top and the seam are held down. */
     .hero::after {
@@ -413,15 +455,61 @@ const ledger = [
         linear-gradient(180deg, rgb(6 8 13 / 0.9), rgb(6 8 13 / 0.6) 5%, transparent 12%),
         linear-gradient(0deg, rgb(6 8 13 / 1) calc(100% - var(--bar) - var(--sky-h, 62vw) - 30px), transparent calc(100% - var(--bar) - var(--sky-h, 62vw) + 60px));
     }
+    /* With the scene running behind the page, the cover keeps its own ground
+       under its type and carries it off when it leaves, so the name is never
+       read against the sphere. It thins out at the foot, into the open sky. */
+    :global(html[data-voyage]) .hero::after {
+      content: "";
+      background: linear-gradient(180deg, transparent calc(var(--bar) + var(--sky-h, 62vw) - 64px), #06080d calc(var(--bar) + var(--sky-h, 62vw) + 30px), #06080d calc(100% - 150px), transparent);
+    }
+    :global(html[data-motion]:not([data-flat])) .hold::after {
+      height: 150svh;
+    }
     .cue {
-      display: block;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
       margin-bottom: 18px;
       font-size: 12.5px;
       color: var(--ink-3);
+      animation: rise-in var(--t-arrive) var(--ease-out) 0.2s backwards;
+    }
+    .cue .live {
+      font-size: 14px;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .cue .live i {
+      font-style: normal;
+      color: var(--ink-3);
+    }
+    /* The count is as wide as it will ever be from the start, so the line beside it never re-wraps as the digits come. */
+    .cue .live [data-v="n"] {
+      display: inline-block;
+      min-width: 6ch;
+      text-align: right;
+    }
+    /* Its room is kept from the first paint, so nothing below moves when the scene starts and the count appears. */
+    .hero:not([data-live]) .cue .live {
+      visibility: hidden;
+    }
+    :global(html:not([data-motion])) .cue .live,
+    :global(html[data-flat]) .cue .live {
+      display: none;
+    }
+    /* The ledger is a list here: a rule over it and under each line, none to draw across or down. */
+    .ledger {
+      border-top-color: var(--hair);
+    }
+    .ledger::before,
+    .ledger li + li::before {
+      content: none;
     }
     .hero .legend .hint,
     .hero .legend .held,
-    .hero[data-live] .legend .hint {
+    :global(html[data-motion]:not([data-flat])) .hero .legend .hint {
       display: none;
     }
     .cue .hint {
@@ -459,6 +547,9 @@ const ledger = [
     .ledger li + li {
       border-left: 0;
     }
+    .ledger li + li a::before {
+      left: 0;
+    }
     .ledger li {
       border-bottom: 1px solid var(--hair);
     }
@@ -487,7 +578,6 @@ const ledger = [
     .legend {
       max-width: none;
       margin-top: 28px;
-      animation-delay: 0.9s;
     }
   }
   @media (max-width: 420px) {

@@ -7,7 +7,7 @@ import Figure from "../Figure.astro";
 import {
   FRAMES, MAX_BODIES, VIEW_W, VIEW_H, CX, CY, TRAIL, ACCENT_TRAIL, TRAIL_ALPHA, ACCENT_ALPHA,
   A_INNER, A_OUTER, FAMILY_INNER, FAMILY_OUTER,
-  createUniverse, generate, fingerprint, hex, sci, sparkPath, familyCounts, camDeg,
+  createUniverse, generate, fingerprint, hex, sci, sparkPath, sparkY, familyCounts, camDeg,
 } from "../../scripts/worldline";
 
 const SEED = "yuzeli";
@@ -83,6 +83,7 @@ const cam = camDeg(phi, tilt);
 const counts = familyCounts(u);
 const SPARK_W = 150, SPARK_H = 36;
 const spark = sparkPath(u, SPARK_W, SPARK_H);
+const now = sparkY(u, F, SPARK_W, SPARK_H);
 const readout = `seed ${SEED} → ${hex(fingerprint(SEED))}`;
 const KEYS = Array.from({ length: 10 }, (_, k) => (k === 0 ? 1 : k * 100));
 const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
@@ -118,6 +119,8 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
           <span class="wl-cam">ortho <span class="num" data-cam>az {cam.az.toFixed(1)}° el {cam.el.toFixed(1)}°</span></span>
           <span class="wl-int">velocity Verlet, <i>h</i> = 1/3</span>
           <span class="wl-scale"><span class="wl-bar" style={`width:${((100 / VIEW_W) * 100).toFixed(3)}%`}></span><span class="num">100 u</span></span>
+          {/* What the body under the pointer is: written by the script, empty without it. */}
+          <span class="wl-pick" data-pick></span>
         </div>
       </div>
 
@@ -149,10 +152,15 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
       <div class="wl-sec wl-energy">
         <div class="wl-row"><span class="k">|Δ<i>E</i>/<i>E</i><sub>0</sub>|</span><span class="v num" data-de set:html={sci(u.dE[F])} /></div>
         <svg class="wl-spark" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <clipPath id="wl-played"><rect data-played x="-3" y="-8" width={SPARK_W + 6} height={SPARK_H + 16} /></clipPath>
+          </defs>
           <line class="wl-sbase" x1="0" x2={SPARK_W} y1={SPARK_H - 2} y2={SPARK_H - 2} />
-          <path class="wl-sline" d={spark} />
+          <path class="wl-sahead" d={spark} />
+          <path class="wl-sline" d={spark} clip-path="url(#wl-played)" />
           <line class="wl-scur" x1={SPARK_W} x2={SPARK_W} y1="0" y2={SPARK_H} />
           <circle class="wl-smax" cx={f1((u.dEmaxFrame / F) * SPARK_W)} cy="2" r="2" />
+          <path class="wl-snow" d={`M${f1(now[0])} ${f1(now[1])}h0.01`} />
         </svg>
         <div class="wl-row wl-max"><span class="k">max</span><span class="v num" data-demax set:html={sci(u.dEmax)} /></div>
       </div>
@@ -160,7 +168,7 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
         <div class="wl-row"><span class="k"><span class="sw in"></span><i>a</i> &lt; {A_INNER}</span><span class="v num" data-c1>{counts[1]}</span></div>
         <div class="wl-row"><span class="k"><span class="sw ink"></span>{A_INNER} to {A_OUTER}</span><span class="v num" data-c0>{counts[0]}</span></div>
         <div class="wl-row"><span class="k"><span class="sw out"></span><i>a</i> &gt; {A_OUTER}</span><span class="v num" data-c2>{counts[2]}</span></div>
-        <div class="wl-row"><span class="k"><span class="sw acc"></span>planet</span><span class="v num">1</span></div>
+        <div class="wl-row"><span class="k"><span class="sw acc"></span>planet</span><span class="v num" data-c3>1</span></div>
       </div>
     </aside>
   </div>
@@ -196,6 +204,8 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
   .wl-stage::before { top: 5px; left: 5px; border-top-width: 1px; border-left-width: 1px; }
   .wl-stage::after { bottom: 5px; right: 5px; border-bottom-width: 1px; border-right-width: 1px; }
   .wl-stage .wl-snap { overflow: hidden; }
+  /* Live, the viewport is read with the pointer; a finger still scrolls the page over it. */
+  .wl-stage[data-live] { cursor: crosshair; touch-action: pan-y; }
   .wl-stage canvas { aspect-ratio: 640 / 400; height: auto; }
   .wl-grid { fill: none; stroke: var(--ink); stroke-opacity: 0.07; stroke-width: 1; vector-effect: non-scaling-stroke; }
   .wl-grid path, .wl-grid ellipse { vector-effect: non-scaling-stroke; }
@@ -230,6 +240,21 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
     border: 1px solid var(--ink-3);
     border-top: 0;
   }
+  /* The body being read: its semi-major axis and mass, set beside it. */
+  .wl-hud > .wl-pick {
+    top: 0;
+    left: 0;
+    opacity: 0;
+    padding: 2px 5px 3px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    color: var(--ink-2);
+    will-change: transform;
+  }
+  .wl-pick :global(i) { font-family: var(--math); font-size: 12px; }
+  .wl-pick :global(.num) { font-family: var(--cm); font-size: 11.5px; color: var(--ink); }
+  .wl-pick :global(sup) { font-size: 9px; line-height: 0; vertical-align: 0.5em; margin-left: 1px; }
+  .wl-pick :global(.acc) { color: var(--accent); }
 
   /* Timeline scrubber */
   .wl-tl { position: relative; margin-top: 10px; padding: 0 1px; user-select: none; -webkit-user-select: none; }
@@ -253,6 +278,7 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
     background: var(--panel);
     border: 1px solid var(--ink-4);
   }
+  .wl-key { transition: background-color var(--t-state) var(--ease-out), border-color var(--t-state) var(--ease-out); }
   .wl-key.on { background: var(--ink-2); border-color: transparent; }
   .wl-head {
     position: absolute;
@@ -303,8 +329,9 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
   .wl-row .k { white-space: nowrap; }
   .wl-row .v { color: var(--ink); font-family: var(--cm); font-size: 13px; white-space: nowrap; }
   .wl-insp i { font-family: var(--math); font-size: 1.08em; }
-  .wl-insp sub, .wl-insp sup { font-size: max(10px, 0.74em); line-height: 0; }
-  .wl-insp sup { vertical-align: 0.5em; margin-left: 1px; }
+  /* (The exponents are written by the script, so they carry no scope of their own.) */
+  .wl-insp sub, .wl-insp :global(sup) { font-size: max(10px, 0.74em); line-height: 0; }
+  .wl-insp :global(sup) { vertical-align: 0.5em; margin-left: 1px; }
   .wl-seed input {
     font: inherit;
     font-family: var(--cm);
@@ -326,8 +353,12 @@ const pct = (d: number) => `${(((d - 1) / F) * 100).toFixed(3)}%`;
   .wl-spark { display: block; width: 100%; height: 36px; margin: 4px 0 2px; overflow: visible; }
   .wl-sbase { stroke: var(--hair); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .wl-sline { fill: none; stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  /* The frames not yet played: already computed, so already drawn, but faint. */
+  .wl-sahead { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
   .wl-scur { stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; }
-  .wl-smax { fill: var(--ink); }
+  .wl-smax { fill: var(--ink); transition: opacity var(--t-state) var(--ease-out); }
+  /* The drift at the playhead, as a point on the trace (a dot that stays round however the plot is stretched). */
+  .wl-snow { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; vector-effect: non-scaling-stroke; }
   .wl-max .v { color: var(--ink-2); font-size: 12px; }
   .sw { display: inline-block; width: 12px; height: 2px; margin-right: 7px; vertical-align: 0.3em; background: var(--ink); }
   .sw.in { background: var(--s-green); }

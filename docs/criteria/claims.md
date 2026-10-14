@@ -26,6 +26,20 @@ table it should not be on the site.
 | Waterloo Defence, Software Lead | cover, Work, résumé | WD team page; L experience |
 | Mathos AI (YC W24), software engineering intern | cover, Work | R; L |
 
+## About (the intro in his own voice)
+
+Drafted on 13 Oct 2026 after Jerry asked for an intro that states his interests, in the manner of sigilwen.ca. He has not yet confirmed the wording.
+
+| Claim | Source |
+|---|---|
+| Cover line: likes AI agents, simulation and space; builds software, runs experiments (astrophysics left out on his instruction of 13 Oct 2026: "a short stint in hs", while space is "smth I find really cool") | His work on this page (the paper, the binary-star papers, Worldline Engine) and his own words on 12 Oct 2026: space is one of his main interests |
+| From Toronto; computer science at Waterloo; Schulich Leader | S (the earlier site read "Toronto → Waterloo"); R |
+| Interested in Dyson swarms, asteroid mining, and science fiction like the Xeelee Sequence | Jerry, 12 Oct 2026: "I'm interested in Dyson spheres and asteroid mining"; he named the Xeelee Sequence as the feel he wanted |
+| "My experiments could not find the gain" | P Table 15 (no comparison resolved a gain) |
+| Started TopsOJ in high school; more than 100,000 people have used it | S, R; GA: 101,950 users |
+| Works on AI video at Mathos; leads the software for Waterloo Defence's counter-drone turret | R; WD |
+| Programming alongside coding agents, more than 100 billion tokens | Jerry, 13 Oct 2026: "I have over 100 billion tokens used" (his August LinkedIn post said over 20 billion) |
+
 ## Cover simulation (Fig. 1 and the closing figure)
 
 | Claim | Source |
@@ -40,8 +54,11 @@ table it should not be on the site.
 | Rolled to 8.5 g/m² it just covers the sphere | A: 4π(1.496 × 10^11 m)² = 2.81 × 10^23 m²; 2.39 × 10^21 kg ÷ 2.81 × 10^23 m² = 8.5 g/m² |
 | Sunlight held, in watts; 3.83 × 10^26 W outbound | A: built fraction × the nominal solar luminosity, 3.828 × 10^26 W |
 | Earth, Mars, Jupiter and the Trojans | A: J2000 orbital elements, rounded; Trojans 60° ahead of and behind Jupiter |
-| 16 Psyche, quarry; the camera keeps its orbit | A: Psyche's semi-major axis is 2.92 AU. That it is being mined is the fiction of the scene |
-| Distances to scale; sizes and gaps are not | A: stated in the caption. The Sun is drawn about 18 times too large and each panel far larger than life, so the drawn swarm shows gaps that the percentage in the telemetry does not count |
+| 16 Psyche, quarry | A: Psyche's semi-major axis is 2.92 AU and its orbit runs from about 2.5 to 3.3 AU; the rock is drawn about 3.1 AU out. That it is being mined is the fiction of the scene, and so are the pit, the floodlights, the cargo lane and the boulders beside it. Its shape is generated from the seed (`src/scripts/geo/psyche.ts`), not Psyche's measured shape; only the flattening (shortest axis roughly two thirds of the longest) follows the real body |
+| Distances to scale; sizes, gaps and spin rates are not | A: stated in the caption. The Sun is drawn about 18 times too large and each panel far larger than life, so the drawn swarm shows gaps that the percentage in the telemetry does not count. Psyche turns once in 4.2 hours, which at the scene's forty seconds a year would be a blur; it is drawn turning once in 84 seconds, and the boulders tumble at rates chosen to be watched |
+| The rock is lit round its edge once the swarm is up | A: seen from 3.1 AU the lit sphere reaches about nineteen degrees either side of the Sun (a radius of 1 AU at 3.1 AU), so it lights a body further round its limb than a point Sun would. The shader widens the light by that angle in proportion to the built fraction (`FS_BIG` in `src/scripts/cosmos.ts`) |
+| The galaxy behind the scene | A: an effect, not a map. A band of light and dust is painted once from the seed along the same great circle the star field is gathered on; it is not the real Milky Way's shape or position. It is dim near the Sun and brightens as the camera leaves, as a stopped-down lens would show it |
+| The beam's name: 3.83 × 10^26 W, outbound | A: the nominal solar luminosity again, shown once the built fraction reaches 1. The beam leaves through the pole because the three ring families leave the poles open |
 | Light shafts and bloom | A: an effect, not data. The light sources are drawn alone, with every panel standing in the way, and smeared outward from the Sun (`leaving()` in `src/scripts/cosmos.ts`) |
 | Seed yuzeli → 0xca722d88 | A: the same hash the Worldline figure uses (`src/scripts/worldline.ts`) |
 
@@ -132,7 +149,8 @@ table it should not be on the site.
 | Featured on the Chrome Web Store | S, R |
 | USACO Platinum, perfect 1,000 on Gold; PhysicsBowl 1st in Canada and 7th in the world; Newton 4th and 9th; AIME three times | S, R |
 | 9,000+ followers on LinkedIn | L: 9,163 followers on 11 Oct 2026 |
-| First on Tokenboard's worldwide ranking in August 2026, past 20 billion tokens | L post: "I've used over 20 billion tokens and am #1 globally on tokenboard" |
+| First on Tokenboard's worldwide ranking in August 2026 | L post: "I've used over 20 billion tokens and am #1 globally on tokenboard" |
+| Over 100 billion tokens used with coding agents to date | Jerry, 13 Oct 2026 |
 
 ## Open items for Jerry
 
@@ -140,5 +158,5 @@ table it should not be on the site.
 
 - **Waterloo Defence stack.** The entry lists computer vision, tracking, ballistics and MuJoCo, and names no programming language. Jerry confirmed on 13 Oct 2026 that this is fine.
 - **Mathos figure.** Jerry said on 13 Oct 2026 that Fig. 2 is fine. It was not checked against the Mathos code: the stages come from the résumé, and their order, and that a rendered file is stored before it is downloaded, are a reading of it.
-- **Résumé.** To fit one page with the new entries, `resume/resume.tex` lost the 3Blue1Brown partnership, EloMMR, the submission count, the CUPS and Selenium details and two lines of astrophysics findings. It now differs from the Overleaf copy; copy it back if you keep it.
+- **Résumé.** Since 13 Oct 2026 the site serves the Overleaf master ("Jerry Li - Resume Master - 2027 Applications") with three edits made in both places: the scholarship reads $100,000+, the NeurIPS entry's subtitle reads "Independent Research, Sole Author", and the degree is expected in 2029 (Jerry: "write 2029 everywhere or dont mention it"). It is one page. It says more than the site does about Waterloo Defence (a perception system and its detector's benchmark numbers); the site's own entry still follows the team's public wording. The per-application résumé projects on Overleaf were not opened or changed.
 - **Paper link.** No public copy was found; the paper page links nowhere external. Add the OpenReview or arXiv link when there is one.

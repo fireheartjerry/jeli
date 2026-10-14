@@ -48,8 +48,26 @@ const KEYS = {
   pitch: [0, 10, -7, 12, -4],
   thr: [0.34, 0.55, 0.86, 0.7, 0.62],
 };
-/** Scroll fraction spent finding the markers before the flight starts. */
-export const FIND = 0.14;
+/**
+ * Beats, in scroll progress. The plate is read top to bottom and comes up the
+ * window top first, so the story is told in that order: the detector finds
+ * the two markers in the webcam frame, frames start to flow through the
+ * bridge, and the manoeuvre is flown while the sim's panels come into view.
+ * Nothing after 0.93: with the plate in the middle of the window the scripted
+ * flight is over (and the aircraft is flown on from there, see the script).
+ */
+export const BEATS = {
+  stick: [0, 0.36], // the stick's marker: outline, bits, id, pose
+  throttle: [0.13, 0.31], // the smaller one on the rail
+  fly: [0.36, 0.93],
+} as const;
+/**
+ * Within the stick's beat: its outline is traced, its sixteen bits are read,
+ * then the pose axes are raised. The outline starts as soon as the top of the
+ * card is in view and is traced no faster than the plate comes up, so each
+ * edge is drawn just after it can be seen.
+ */
+export const FOUND = { trace: [0.03, 0.56], bits: [0.5, 0.76], id: 0.78, axes: [0.78, 1] } as const;
 /** Where in the flight the badge's fire button is held. */
 export const FIRE = [0.6, 0.7];
 
@@ -78,21 +96,33 @@ type P = [number, number];
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const d2r = Math.PI / 180;
 
+/** The sim's state: heading (degrees, clockwise from north), altitude (ft) and place. */
+export type Sim = { hdg: number; alt: number; x: number; y: number };
+/**
+ * One step of the sim, `du` units of flight long: heading follows bank,
+ * altitude follows pitch, and the aircraft goes where it points. `k` is the
+ * size of a unit of distance (1 in the sim's own units, FLIGHT.scale on the map).
+ * The scripted flight is integrated with this, and so is the flying after it.
+ */
+export function advance(s: Sim, roll: number, pitch: number, thr: number, du: number, k = 1) {
+  const v = speedOf(thr);
+  s.hdg += KH * roll * du;
+  s.alt += KA * v * Math.sin(pitch * d2r) * du * 60;
+  s.x += v * Math.sin(s.hdg * d2r) * du * k;
+  s.y -= v * Math.cos(s.hdg * d2r) * du * k;
+}
+
 /** Integrate the flight once: heading follows bank, altitude follows pitch, the track follows heading. */
 export const FLIGHT = (() => {
   const hdg: number[] = [], alt: number[] = [], world: P[] = [];
-  let h = H0, a = ALT0, x = 0, y = 0;
+  const s: Sim = { hdg: H0, alt: ALT0, x: 0, y: 0 };
   for (let i = 0; i <= STEPS; i++) {
     const f = i / STEPS;
     const { roll, pitch, thr } = attitude(f);
-    hdg.push(h);
-    alt.push(a);
-    world.push([x, y]);
-    const v = speedOf(thr), dt = 1 / STEPS;
-    h += KH * roll * dt;
-    a += KA * v * Math.sin(pitch * d2r) * dt * 60;
-    x += v * Math.sin(h * d2r) * dt;
-    y -= v * Math.cos(h * d2r) * dt;
+    hdg.push(s.hdg);
+    alt.push(s.alt);
+    world.push([s.x, s.y]);
+    advance(s, roll, pitch, thr, 1 / STEPS);
   }
   // Fit the track into the map, leaving room for the title and the trend line.
   const xs = world.map((p) => p[0]), ys = world.map((p) => p[1]);
@@ -107,17 +137,15 @@ export const FLIGHT = (() => {
   return { hdg, alt, pts, cum, d, scale: sc, len: cum[cum.length - 1], hdgRange: [Math.min(...hdg), Math.max(...hdg)], altRange: [Math.min(...alt), Math.max(...alt)] };
 })();
 
-/** Everything the figure shows at scroll progress t, before live turbulence or a hand on the card. */
-export function flight(t: number) {
-  const found = Math.min(Math.max(t / FIND, 0), 1);
-  const fly = Math.max((t - FIND) / (1 - FIND), 0);
+/** Everything the scripted flight shows `fly` of the way through it (0 to 1), before live turbulence or a hand on the card. */
+export function flight(fly: number) {
+  fly = Math.min(Math.max(fly, 0), 1);
   const { roll, pitch, thr } = attitude(fly);
   const x = fly * STEPS, i = Math.min(Math.floor(x), STEPS - 1), u = x - i;
   const lerp = (a: number[], ) => a[i] + (a[i + 1] - a[i]) * u;
   const F = FLIGHT;
   const pos: P = [F.pts[i][0] + (F.pts[i + 1][0] - F.pts[i][0]) * u, F.pts[i][1] + (F.pts[i + 1][1] - F.pts[i][1]) * u];
   return {
-    found,
     fly,
     roll,
     pitch,
@@ -126,9 +154,64 @@ export function flight(t: number) {
     hdg: lerp(F.hdg),
     alt: lerp(F.alt),
     len: lerp(F.cum),
+    /** The last point of the stored track at or before here. */
+    at: i,
     pos,
   };
 }
+
+// ---------------------------------------------------------------- flying on
+
+// When the scripted manoeuvre is over the aircraft is not parked: someone goes
+// on flying it. What they fly is a lazy eight over the middle of the map (a
+// figure of eight, banked one way and then the other, climbing into each turn
+// and descending out of it), with its size and its lean drifting slowly so
+// that no two laps are the same. The stick is moved to
+// follow it, the card tilts as the stick is moved, and the sim is stepped with
+// the same equations as before, so the HUD and the map stay true to each other.
+
+/** Seconds on screen that one unit of flight time takes, flown on. */
+export const PACE = 14;
+/** The most bank and pitch asked for, degrees, and how far ahead along the eight the aircraft steers for (map units). */
+const BANK = 24, CLIMB = 8, AHEAD = 50;
+const wrap180 = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
+
+/** The eight, at angle `th` round it, as it stands `s` seconds into the flying on. */
+export function eight(th: number, s: number): P {
+  const A = 96 + 8 * Math.sin(0.043 * s + 1), B = 50 + 5 * Math.sin(0.031 * s + 2.4);
+  const lean = 0.22 * Math.sin(0.027 * s);
+  return [MAP.x + MAP.w * 0.5 + A * Math.sin(th), MAP.y + MAP.h * 0.5 + B * Math.sin(2 * th + lean)];
+}
+/** Where on the eight the scripted flight hands over: just past its eastern end, heading the way the aircraft already is. */
+export const EIGHT_FROM = Math.PI / 2 - 0.25;
+/**
+ * What is asked of the stick and the throttle. `th` is how far round the
+ * eight the point being steered for has got; it is moved on (backwards: the
+ * aircraft arrives turning right) until it is AHEAD of the aircraft again.
+ * The bank asked for is the one that flies the arc through that point (pure
+ * pursuit), worked back through the sim's own turn rate, so the aircraft is
+ * led round the eight without hunting from side to side.
+ */
+export function autopilot(sim: Sim, thr: number, th: number, s: number) {
+  let [tx, ty] = eight(th, s);
+  for (let i = 0; i < 60 && Math.hypot(tx - sim.x, ty - sim.y) < AHEAD; i++) [tx, ty] = eight((th -= 0.01), s);
+  const far = Math.hypot(tx - sim.x, ty - sim.y) || 1;
+  const off = wrap180(Math.atan2(tx - sim.x, -(ty - sim.y)) / d2r - sim.hdg);
+  // Degrees of heading per unit of flight that the arc needs, over what a degree of bank gives.
+  const arc = (speedOf(thr) * FLIGHT.scale * 2 * Math.sin(off * d2r)) / far / d2r / KH;
+  const roll = Math.abs(off) > 90 ? Math.sign(off) * BANK : Math.min(Math.max(arc, -BANK), BANK);
+  // A lazy eight climbs into each of its turns and comes down through the crossing: highest at the two ends.
+  // (The nose follows the height wanted gently enough that it never hunts: about four degrees either way.)
+  const height = 1830 - 180 * Math.cos(2 * th) + 30 * Math.sin(0.023 * s);
+  return {
+    th,
+    roll,
+    pitch: Math.min(Math.max((height - sim.alt) * 0.02, -CLIMB), CLIMB),
+    thr: 0.64 + 0.09 * Math.sin(0.071 * s + 1.9) + 0.04 * Math.sin(0.19 * s),
+  };
+}
+/** The sim's own floor and ceiling, ft: the altitude tape is printed between them. */
+export const ALT_LIMITS = [1300, 2200];
 
 /** The dashed trend: where the current bank and speed carry the aircraft next. */
 export function trend(pos: P, hdg: number, roll: number, thr: number) {
@@ -216,12 +299,15 @@ function marker(p: (x: number, y: number, z?: number) => P, bits: string[]) {
     const k = -0.5 + i * S6;
     grid += seg(p(k, 0.5), p(k, -0.5)) + seg(p(-0.5, k), p(0.5, k));
   }
-  return { ink, grid, corners };
+  // Where the detector samples each of the sixteen bits: the middle of its cell, row by row.
+  const cells: P[] = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) cells.push(p(-0.5 + (c + 1.5) * S6, 0.5 - (r + 1.5) * S6));
+  return { ink, grid, corners, cells };
 }
 
 export function scene(roll: number, pitch: number, gap = 1) {
   const p = projector(roll, pitch);
-  const { ink, grid, corners } = marker(p, BITS);
+  const { ink, grid, corners, cells } = marker(p, BITS);
 
   // The card has a little thickness; its back face peeks out below the front.
   const card = quad([p(-CARD, CARD), p(CARD, CARD), p(CARD, -CARD), p(-CARD, -CARD)]);
@@ -251,6 +337,7 @@ export function scene(roll: number, pitch: number, gap = 1) {
     thumbs,
     quad: quad(corners),
     corners,
+    cells,
     cornerLabels,
     o,
     axes,
@@ -263,10 +350,14 @@ export const thrY = (thr: number) => THR.y1 - thr * (THR.y1 - THR.y0);
 export function throttleCard(thr: number, jitter = 0) {
   const p = projector(jitter, 0, THR.x, thrY(thr), THR.s);
   const { ink, corners } = marker(p, BITS_THR);
+  let around = 0;
+  for (let i = 0; i < 4; i++) around += Math.hypot(corners[(i + 1) % 4][0] - corners[i][0], corners[(i + 1) % 4][1] - corners[i][1]);
   return {
     card: quad([p(-CARD, CARD), p(CARD, CARD), p(CARD, -CARD), p(-CARD, -CARD)]),
     ink,
     quad: quad(corners),
+    /** The length of its outline, for tracing it. */
+    around,
   };
 }
 
@@ -279,7 +370,15 @@ export const pointer = (roll: number) => `translate(${ADI.cx} ${ADI.cy}) rotate(
 /** Tapes slide so the current value sits on the centre line. */
 export const spdTape = (v: number) => `translate(0 ${r1(v * SPD.k)})`;
 export const altTape = (v: number) => `translate(0 ${r1(v * ALT.k)})`;
-export const hdgTape = (v: number) => `translate(${r1(-v * HDG.k)} 0)`;
+/**
+ * The heading strip is drawn round the nearest multiple of 30 degrees (its
+ * base) and slid by what is left over. Its ticks repeat every 10, so the same
+ * few serve any heading, and only the five labels are rewritten as the base
+ * moves on: the strip never runs out, however long the aircraft turns.
+ */
+export const HDG_SPAN = [-60, -30, 0, 30, 60];
+export const hdgBase = (h: number) => Math.round(h / 30) * 30;
+export const hdgTape = (h: number) => `translate(${r1(-(h - hdgBase(h)) * HDG.k)} 0)`;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 /** Tape and ladder labels fade as they slide under a value box or out of the window. */

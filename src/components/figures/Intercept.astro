@@ -11,8 +11,8 @@
 // screens); CSS shows one. Every number is an illustrative textbook value.
 import Figure from "../Figure.astro";
 import {
-  GUN, TARGET, CAMERA, D0, BOUNDS, TICK, MAX_ITER, LAYOUTS,
-  createSolution, solve, detections, fitTrack, geom, artScale, fx, plotY, readoutFlight,
+  GUN, TARGET, CAMERA, D0, BOUNDS, TICK, MAX_ITER, LAYOUTS, GAUGE,
+  createSolution, solve, detections, fitTrack, geom, artScale, fx, plotY, readoutFlight, lensAt, fovPaths,
   type Layout,
 } from "../../scripts/geo/intercept";
 
@@ -49,22 +49,15 @@ function backdrop(L: Layout) {
   }
   // The fixed camera sits on a post behind the rifle; its field of view is a wedge
   // from the lens (the front of the camera body drawn below, after its tilt).
-  // The wedge runs past the viewBox so it reaches the screen's edge (the plot clips it).
-  const lens = { x: ox + 7.4 * L.art, y: oy - 52.3 * L.art };
-  const over = 60;
-  const ray = (deg: number) => {
-    const c = Math.cos(deg * RAD), sn = Math.sin(deg * RAD);
-    const t = Math.min((right + over - lens.x) / c, (lens.y - top + over) / sn);
-    return { x: r1(lens.x + t * c), y: r1(lens.y - t * sn), t };
-  };
-  const lo = ray(CAMERA.tilt - CAMERA.half), hi = ray(CAMERA.tilt + CAMERA.half);
-  const fov = `M${r1(lens.x)} ${r1(lens.y)}L${hi.x} ${hi.y}`;
-  const fovFill = `M${r1(lens.x)} ${r1(lens.y)}L${lo.x} ${lo.y}V${top - over}H${hi.x}L${hi.x} ${hi.y}Z`;
+  const lens = lensAt(L);
+  const { edge: fov, fill: fovFill } = fovPaths(L, CAMERA.half);
+  // Its label runs along the inside of the upper edge, between the camera's
+  // own panel and the solver's.
   const hiA = (CAMERA.tilt + CAMERA.half) * RAD;
-  const fovAt = (oy - top) * 0.62;
+  const fovAt = (oy - top) * 0.56, fovOff = L.f * 1.12;
   const fovLab = {
-    x: r1(lens.x + fovAt * Math.cos(hiA) - 6 * Math.sin(hiA)),
-    y: r1(lens.y - fovAt * Math.sin(hiA) - 6 * Math.cos(hiA)),
+    x: r1(lens.x + fovAt * Math.cos(hiA) + fovOff * Math.sin(hiA)),
+    y: r1(lens.y - fovAt * Math.sin(hiA) + fovOff * Math.cos(hiA)),
     a: -(CAMERA.tilt + CAMERA.half),
   };
   // Elevation scale around the pivot.
@@ -81,14 +74,16 @@ function backdrop(L: Layout) {
 
 const views = LAYOUTS.map((L) => ({ L, G: geom(L, S, det), B: backdrop(L) }));
 
+// Each instrument carries a scale along its foot with the bodies the sky shows
+// on it: the round, its no-drag twin, the drone (scripts/geo/intercept.ts, GAUGE).
 const cells = [
-  { k: "range", label: "range", unit: "m" },
-  { k: "tof", label: "time of flight", unit: "s" },
-  { k: "lead", label: "lead", unit: "" },
-  { k: "elev", label: "elevation", unit: "" },
-  { k: "drop", label: "drop", unit: "m" },
-  { k: "speed", label: "speed on arrival", unit: "m/s" },
-];
+  { k: "range", label: "range", unit: "m", round: GAUGE.rangeRound, drone: GAUGE.rangeDrone },
+  { k: "tof", label: "time of flight", unit: "s", round: GAUGE.tofRound, vac: GAUGE.tofVac },
+  { k: "lead", label: "lead", unit: "", drone: GAUGE.leadDrone, aim: true },
+  { k: "elev", label: "elevation", unit: "", round: GAUGE.elevRound, drone: GAUGE.elevDrone },
+  { k: "drop", label: "drop", unit: "m", round: GAUGE.dropRound, vac: GAUGE.dropVac },
+  { k: "speed", label: "speed on arrival", unit: "m/s", round: GAUGE.speedRound, vac: GAUGE.speedVac },
+] as { k: string; label: string; unit: string; round?: number; drone?: number; vac?: number; aim?: boolean }[];
 
 const label = `A side view of a counter-drone engagement, with a camera view and instruments. In the illustrated case the drone is ${fx(S.range, 0)} metres away and flying at ${TARGET.speed} metres per second; the round takes ${fx(S.tof, 2)} seconds to arrive, so the mount aims ${fx(S.lead / RAD, 1)} degrees above the line of sight.`;
 const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.range, 0)} m away with a camera. The solved trajectory leaves the barrel at ${fx(S.theta / RAD, 1)} degrees, ${fx(S.lead / RAD, 2)} degrees above the line of sight, slows from ${GUN.v0} to ${fx(S.vImpact, 0)} m/s, falls ${fx(S.drop, 2)} m below the aim line, and meets the drone ${fx(S.tof, 3)} s later, ${fx(TARGET.speed * S.tof, 1)} m ahead of where the camera saw it. A dashed line shows the same shot without drag, which would be far past the drone by then. The solver took ${S.n} passes before its correction fell below one millimetre.`;
@@ -106,7 +101,8 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
   {views.map(({ L, G, B }) => {
     const C = L.cam, P = L.plot, I = L.ins, k = L.key, w = L.wide;
     const pad = w ? 14 : 10;
-    const hit = w ? { x: 244, y: 0, w: L.right - 244, h: L.oy } : { x: 64, y: 0, w: L.right - 64, h: L.oy + 4 };
+    // The sky a pointer may work in: all of it but the two panels.
+    const hit = w ? `M244 ${P.y + P.h + 6}H${P.x + P.w + 6}V0H${L.right}V${L.oy}H244Z` : `M64 0H${L.right}V${L.oy + 4}H64Z`;
     return (
       <svg
         class:list={["ic", `ic-${k}`]}
@@ -118,6 +114,9 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
         <defs>
           <clipPath id={`ic-sky-${k}`}><rect x="0" y={L.top} width={L.right} height={L.oy - L.top} /></clipPath>
           <clipPath id={`ic-cam-${k}`}><rect x={C.x0} y={C.y0} width={C.x1 - C.x0} height={C.y1 - C.y0} /></clipPath>
+          {/* Two wipes from the mount outward: one uncovers the drop and the time marks as the path is drawn, the other the no-drag path. */}
+          <clipPath id={`ic-sweep-${k}`}><rect data-k="sweep" x="0" y={L.top} height={L.oy - L.top} {...G.a.sweep} /></clipPath>
+          <clipPath id={`ic-gclip-${k}`}><rect data-k="gclip" x="0" y={L.top} height={L.oy - L.top} {...G.a.gclip} /></clipPath>
           <g id={`ic-drone-${k}`}>
             <line class="ic-g-blade" x1="-16.5" x2="-3.5" y1="-7.3" y2="-7.3" />
             <line class="ic-g-blade" x1="3.5" x2="16.5" y1="-7.3" y2="-7.3" />
@@ -136,9 +135,9 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
           <line class="faint" x1={L.ox} x2={L.right} y1={L.oy} y2={L.oy} />
           <path class="faint" d={B.ticks} />
           {B.labels.map((l, i) => (
-            <text class="cm ic-ax" x={l.x} y={L.oy + (w ? 20 : 19)} text-anchor="middle">{l.t}{i === B.labels.length - 1 ? " m" : ""}</text>
+            <text class="cm ic-ax ic-axl" x={l.x} y={L.oy + (w ? 20 : 19)} text-anchor="middle">{l.t}{i === B.labels.length - 1 ? " m" : ""}</text>
           ))}
-          {w && <text class="ic-lab ic-sec" transform={`translate(${B.fovLab.x} ${B.fovLab.y}) rotate(${B.fovLab.a})`} text-anchor="middle">camera field of view</text>}
+          {w && <text class="ic-lab ic-sec ic-fovl" transform={`translate(${B.fovLab.x} ${B.fovLab.y}) rotate(${B.fovLab.a})`} text-anchor="middle">camera field of view</text>}
           {w && (
             <g class="ic-scale">
               <path class="faint" d="M932 334v8M932 338H1064M1064 334v8" />
@@ -160,20 +159,27 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
 
         <!-- ============================== rays and trajectories -->
         <g class="ic-rays" clip-path={`url(#ic-sky-${k})`}>
-          <path class="ic-wedge" data-k="wedge" {...G.a.wedge} />
+          <g clip-path={`url(#ic-sweep-${k})`}>
+            <path class="ic-wedge" data-k="wedge" {...G.a.wedge} />
+          </g>
           <line class="ic-los" data-k="los" {...G.a.los} />
-          <path class="ic-ghost" data-k="ghost" {...G.a.ghost} />
+          <g clip-path={`url(#ic-gclip-${k})`}>
+            <path class="ic-ghost" data-k="ghost" {...G.a.ghost} />
+          </g>
           <line class="ic-aim" data-k="aim" {...G.a.aim} />
-          <path class="ic-dim" data-k="la" {...G.a.la} />
+          <path class="ic-dim" data-k="la" pathLength="1" {...G.a.la} />
           {Array.from({ length: MAX_ITER }, (_, i) => (
             <path class="ic-cand" data-k={`cand${i}`} pathLength="1" {...G.a[`cand${i}`]} />
           ))}
           <path class="ic-arcp" data-k="arcP" pathLength="1" {...G.a.arcP} />
           <path class="ic-arcf" data-k="arcF" pathLength="1" {...G.a.arcF} />
-          <path class="ic-tks" data-k="tks" {...G.a.tks} />
+          <g clip-path={`url(#ic-sweep-${k})`}>
+            <path class="ic-tks" data-k="tks" {...G.a.tks} />
+          </g>
           {Array.from({ length: MAX_ITER }, (_, i) => (
-            <path class="ic-cpt" data-k={`cpt${i}`} {...G.a[`cpt${i}`]} />
+            <path class="ic-cpt" data-k={`cpt${i}`} pathLength="1" {...G.a[`cpt${i}`]} />
           ))}
+          <path class="ic-am" data-k="am" d="M0 -5.5V5.5" {...G.a.am} />
           <circle class="ic-gdot" data-k="gdot" r={w ? 3 : 2.6} {...G.a.gdot} />
         </g>
 
@@ -229,6 +235,13 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
           <circle class="ic-rnd" data-k="rnd" r={w ? 3.2 : 2.8} {...G.a.rnd} />
         </g>
 
+        <!-- ============================== the probe: the shot at the instant the round is this far downrange -->
+        <g class="ic-probe" opacity="0">
+          <line class="ic-pl" x1="0" x2="0" y1={L.top} y2={L.oy} />
+          <text class="cm ic-ax ic-pm" x="0" y={L.oy + (w ? 20 : 19)} text-anchor="middle"></text>
+          <text class="cm ic-lab ic-pt" x="0" y="0"></text>
+        </g>
+
         <!-- ============================== annotation -->
         <g class="ic-ann">
           {w && <path class="ic-leader" data-k="dlead" {...G.a.dlead} />}
@@ -248,6 +261,8 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
           {w && (
             <text class="ic-lab ic-acc ic-sec" data-k="tkl" text-anchor="middle" {...G.a.tkl}><tspan class="cm">{TICK} s</tspan> apart</text>
           )}
+          {/* How far off the pass in hand was: written over its aim point while the solver works. */}
+          {w && <text class="cm ic-lab ic-corr" data-k="cl" text-anchor="middle" {...G.a.cl}><tspan data-t="cl">{G.t.cl}</tspan></text>}
           <text class="ic-lab ic-red" data-k="gl" text-anchor="end" {...G.a.gl}>no drag</text>
           <path class="ic-varr" data-k="varr" {...G.a.varr} />
           <text class="ic-lab" data-k="vl" {...G.a.vl}><tspan class="cm">{TARGET.speed} m/s</tspan></text>
@@ -255,7 +270,7 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
           {w && <text class="ic-lab ic-hint" data-k="hint" {...G.a.hint}>drag to move</text>}
           {!w && <text class="ic-lab ic-hint" x={L.right} y={L.oy + 42} text-anchor="end">drag the drone</text>}
           {w && <text class="ic-lab ic-sec" data-k="hl" text-anchor="end" {...G.a.hl}><tspan class="cm" data-t="height">{G.t.height}</tspan><tspan class="cm"> m</tspan></text>}
-          <text class="ic-lab ic-replay" x={w ? C.x + C.w + 14 : 8} y={L.top + (w ? 17 : 13)} opacity="0">replay at <tspan class="cm">¼</tspan> speed</text>
+          <text class="ic-lab ic-replay" x={w ? P.x + P.w + 12 : 8} y={L.top + (w ? 17 : 13)} opacity="0">replay at <tspan class="cm">¼</tspan> speed</text>
         </g>
 
         <!-- ============================== what the camera sees -->
@@ -275,9 +290,11 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
             <line class="ic-scan" x1={C.x0} x2={C.x1} y1={C.y0} y2={C.y0} opacity="0" />
             <path class="ic-cdet" data-k="ctrail" {...G.a.ctrail} />
             <g class="ic-ccross" data-k="ccross" {...G.a.ccross}>
-              <path d={`M${C.x0 + 6} 0H${C.cx - 10}M${C.cx + 10} 0H${C.x1 - 6}M${C.cx} -5V-13`} />
+              <path d={`M${C.x0 + 8} 0H${C.cx - 10}M${C.cx + 10} 0H${C.x1 - 6}M${C.cx} -5V-13`} />
               <circle cx={C.cx} cy="0" r="1.4" />
             </g>
+            {/* The elevation the solver is asking for: it steps with each pass, and the bore comes up to it. */}
+            <path class="ic-caim" data-k="caim" d={`M${C.x0 + 0.5} 0l6.5 -3.6v7.2z`} {...G.a.caim} />
             <path class="ic-dim" data-k="cbr" {...G.a.cbr} />
             <path class="ic-dim" data-k="cdb" {...G.a.cdb} />
             <g class="ic-ring" data-k="cring" {...G.a.cring}>
@@ -290,7 +307,7 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
             </g>
             <circle class="ic-rnd" data-k="crnd" r="2.4" {...G.a.crnd} />
           </g>
-          <text class="ic-lab" data-k="cll" x={C.x0 + 9} {...G.a.cll}>barrel</text>
+          <text class="ic-lab" data-k="cll" x={C.x0 + 11} {...G.a.cll}>barrel</text>
           <text class="ic-lab" data-k="cdl" x={C.cx - 17} text-anchor="end" {...G.a.cdl}>drone</text>
           <text class="ic-lab" data-k="cdt" x={C.cx - 27} text-anchor="end" {...G.a.cdt}>drop</text>
           <text class="ic-lab" data-k="cbt" x={C.bx + 7} {...G.a.cbt}>lead</text>
@@ -299,22 +316,24 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
 
         <!-- ============================== the solver -->
         <g class="ic-solver">
-          {!w && <rect class="ic-panel" x={P.x + 0.5} y={P.y + 0.5} width={P.w - 1} height={P.h - 1} rx="8" />}
-          <text class="ic-lab ic-title" x={P.x + (w ? 0 : pad)} y={P.y + (w ? 12 : 23)}>solver<tspan class="ic-sub">{w ? ", correction per pass" : ", correction"}</tspan></text>
+          <rect class="ic-panel" x={P.x + 0.5} y={P.y + 0.5} width={P.w - 1} height={P.h - 1} rx="8" />
+          <text class="ic-lab ic-title" x={P.x + pad} y={P.y + (w ? 21 : 23)}>solver<tspan class="ic-sub">{w ? ", correction per pass" : ", correction"}</tspan></text>
           {[1, 0.1, 0.01, 0.001].map((m) => (
             <>
-              <path class={m === 0.001 ? "ic-tol" : "hair"} d={`M${P.x0 - 12} ${r1(plotY(L, m))}H${P.x + P.w - (w ? 2 : pad)}`} />
-              {(m === 1 || m === 0.001 || (!w && m === 0.01)) && <text class="cm ic-ax" x={P.x0 - 17} y={r1(plotY(L, m) + 4)} text-anchor="end">{m === 1 ? "1 m" : m === 0.01 ? "1 cm" : "1 mm"}</text>}
+              <path class={m === 0.001 ? "ic-tol" : "hair"} d={`M${P.x0 - 12} ${r1(plotY(L, m))}H${P.x + P.w - pad}`} />
+              {m !== 0.1 && <text class:list={["cm ic-ax", { "ic-sec": w && m === 0.01 }]} x={P.x0 - 17} y={r1(plotY(L, m) + 4)} text-anchor="end">{m === 1 ? "1 m" : m === 0.01 ? "1 cm" : "1 mm"}</text>}
             </>
           ))}
-          <path class="ic-sline" data-k="sline" {...G.a.sline} />
+          <path class="ic-sline" data-k="sline" pathLength="1" {...G.a.sline} />
           {Array.from({ length: MAX_ITER }, (_, i) => (
             <>
               <circle class="ic-sd" data-k={`sd${i}`} r={w ? 2.6 : 3.2} {...G.a[`sd${i}`]} />
-              <text class="cm ic-ax" data-k={`sn${i}`} x={P.x0 + i * P.dx} y={r1(plotY(L, 1e-4) + (w ? 20 : 24))} text-anchor="middle" {...G.a[`sn${i}`]}>{i + 1}</text>
+              <text class="cm ic-ax" data-k={`sn${i}`} x={P.x0 + i * P.dx} y={r1(plotY(L, 1e-4) + (w ? 14 : 24))} text-anchor="middle" {...G.a[`sn${i}`]}>{i + 1}</text>
             </>
           ))}
           <circle class="ic-slast" data-k="slast" r={w ? 5.2 : 6.4} {...G.a.slast} />
+          {/* The passes walked again before each replay. */}
+          <circle class="ic-swalk" r={w ? 2.2 : 2.8} cx={P.x0} cy={P.y1m} opacity="0" />
         </g>
 
         <!-- ============================== instruments -->
@@ -325,10 +344,9 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
             return (
               <g class="ic-cell" data-cell={c.k} transform={`translate(${x} ${y})`}>
                 {(w || col > 0) && <line class="hair" x1="0.5" x2="0.5" y1="2" y2={I.ch - 4} />}
-                {!w && row > 0 && <line class="hair" x1={col ? 0 : 0} x2={I.cw} y1="0.5" y2="0.5" />}
-                <text class="ic-lab ic-k" x={pad} y={w ? 14 : 24}>{c.label}</text>
-                <text class="cm ic-v" x={pad} y={w ? 50 : 59}><tspan data-t={c.k}>{G.t[c.k]}</tspan>{c.unit && <tspan class="ic-u" dx="3">{c.unit}</tspan>}</text>
-                <text class="ic-lab ic-s" x={pad} y={w ? 76 : 82}>
+                <text class="ic-lab ic-k" x={pad} y={w ? 14 : 22}>{c.label}</text>
+                <text class="cm ic-v" x={pad} y={w ? 50 : 56}><tspan data-t={c.k}>{G.t[c.k]}</tspan>{c.unit && <tspan class="ic-u" dx="3">{c.unit}</tspan>}</text>
+                <text class="ic-lab ic-s" x={pad} y={w ? 75 : 78}>
                   {c.k === "range" && <>meets at <tspan class="cm" data-t="rangeI">{G.t.rangeI}</tspan><tspan class="cm"> m</tspan></>}
                   {c.k === "tof" && <>no drag <tspan class="cm" data-t="tofVac">{G.t.tofVac}</tspan><tspan class="cm"> s</tspan></>}
                   {c.k === "lead" && <><tspan class="cm" data-t="moved">{G.t.moved}</tspan><tspan class="cm"> m</tspan> ahead</>}
@@ -336,6 +354,14 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
                   {c.k === "drop" && <>no drag <tspan class="cm" data-t="dropVac">{G.t.dropVac}</tspan><tspan class="cm"> m</tspan></>}
                   {c.k === "speed" && <>from <tspan class="cm">{GUN.v0} m/s</tspan></>}
                 </text>
+                {/* The scale along the foot: the same bodies as the sky, one axis at a time. */}
+                <g class="ic-gauge">
+                  <path class="ic-gt" d={`M${r1(I.g0)} ${I.gy}H${r1(I.g1)}M${r1(I.g0)} ${I.gy - 2.5}v5M${r1(I.g1)} ${I.gy - 2.5}v5`} />
+                  {c.aim && <circle class="ic-ga" cx={r1(I.g0)} cy={I.gy} r="3.4" />}
+                  {c.vac !== undefined && <circle class="ic-gv" data-k={`g${c.vac}`} r="2.4" {...G.a[`g${c.vac}`]} />}
+                  {c.drone !== undefined && <path class="ic-gd" data-k={`g${c.drone}`} d="M0 -4V4" {...G.a[`g${c.drone}`]} />}
+                  {c.round !== undefined && <circle class="ic-gr" data-k={`g${c.round}`} r="2.7" {...G.a[`g${c.round}`]} />}
+                </g>
               </g>
             );
           })}
@@ -343,12 +369,9 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
 
         <!-- ============================== the reader's hand -->
         <rect class="ic-field" x={r1(L.ox + BOUNDS.x0 * L.s)} y={r1(L.oy - BOUNDS.y1 * L.s)} width={r1((BOUNDS.x1 - BOUNDS.x0) * L.s)} height={r1((BOUNDS.y1 - BOUNDS.y0) * L.s)} rx={w ? 10 : 6} />
-        <g class="ic-cur" opacity="0">
-          <path d="M-7 0H-2.5M2.5 0H7M0 -7V-2.5M0 2.5V7" />
-          <text class="cm ic-ax ic-lab" x="11" y="-9"></text>
-        </g>
+        <path class="ic-cur" d="M-7 0H-2.5M2.5 0H7M0 -7V-2.5M0 2.5V7" opacity="0" />
         <circle class="ic-grab" data-k="grab" r={w ? 31 : 24} {...G.a.grab} />
-        <rect class="ic-hit" x={hit.x} y={hit.y} width={hit.w} height={hit.h} />
+        <path class="ic-hit" d={hit} />
         <circle class="ic-focus" data-k="focus" r={w ? 31 : 24} {...G.a.focus} />
       </svg>
     );
@@ -359,11 +382,12 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
 </Figure>
 
 <style is:global>
-  /* Two layouts, one shown. Label sizes are in viewBox units times --u, which
-     grows as the plate shrinks so text stays near 11px on screen. */
+  /* Two layouts, one shown. Label sizes are in viewBox units times --ic-u, which
+     grows as the plate shrinks so text stays near 11px on screen. (The name is
+     the figure's own: the page registers a --u of its own, as a number.) */
   .fig .plot svg.ic-n { display: none; }
-  .fig svg.ic-w { --u: clamp(1px, calc(2.5235px - 0.1315vw), 1.36px); --f: calc(12.5 * var(--u)); --fc: calc(13 * var(--u)); --fv: calc(26 * var(--u)); }
-  .fig svg.ic-n { --u: clamp(0.522px, max(calc(1.95px - 0.235vw), calc(1.152px - 0.0915vw)), 1.12px); --f: calc(14.5 * var(--u)); --fc: calc(15 * var(--u)); --fv: calc(27 * var(--u)); }
+  .fig svg.ic-w { --ic-u: clamp(1px, calc(2.5235px - 0.1315vw), 1.36px); --f: calc(12.5 * var(--ic-u)); --fc: calc(13 * var(--ic-u)); --fv: calc(26 * var(--ic-u)); }
+  .fig svg.ic-n { --ic-u: clamp(0.522px, max(calc(1.95px - 0.235vw), calc(1.152px - 0.0915vw)), 1.12px); --f: calc(14.5 * var(--ic-u)); --fc: calc(15 * var(--ic-u)); --fv: calc(27 * var(--ic-u)); }
   @media (max-width: 899.98px) {
     .fig .plot svg.ic-w { display: none; }
     .fig .plot svg.ic-n { display: block; max-width: 560px; margin-inline: auto; }
@@ -383,8 +407,9 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
   .fig svg.ic .ic-red { fill: var(--s-red); }
   .fig svg.ic .ic-title { fill: var(--ink); font-weight: 500; }
   .fig svg.ic .ic-title .ic-sub { fill: var(--ink-3); font-weight: 400; }
-  .fig svg.ic .ic-cam .ic-lab, .fig svg.ic .ic-cam .ic-ax { stroke: var(--panel); }
+  .fig svg.ic .ic-cam .ic-lab, .fig svg.ic .ic-cam .ic-ax, .fig svg.ic .ic-solver .ic-lab { stroke: var(--panel); }
   .fig svg.ic .ic-cam .ic-ax { paint-order: stroke; stroke-width: 3px; }
+  .fig svg.ic .ic-corr { fill: var(--accent); opacity: 0; }
 
   /* Background. */
   .fig svg.ic .ic-fov { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 1.5 5; stroke-linecap: round; }
@@ -407,7 +432,8 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
   .fig svg.ic .ic-arcf { fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; }
   .fig svg.ic .ic-tks { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-linecap: round; }
   .fig svg.ic .ic-cand { fill: none; stroke: var(--accent); stroke-width: 1.1; opacity: 0; }
-  .fig svg.ic .ic-cpt { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+  .fig svg.ic .ic-cpt { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-linejoin: round; opacity: 0; }
+  .fig svg.ic .ic-am { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; opacity: 0; }
   .fig svg.ic .ic-dim { fill: none; stroke: var(--ink-3); stroke-width: 1; }
   .fig svg.ic .ic-leader { fill: none; stroke: var(--ink-4); stroke-width: 1; }
   .fig svg.ic .ic-dot { stroke-dasharray: 1 4; stroke-linecap: round; }
@@ -443,22 +469,30 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
   .fig svg.ic .ic-cbox path { fill: none; stroke: var(--ink); stroke-width: 1.25; stroke-linejoin: round; }
   .fig svg.ic .ic-cam .ic-rnd { stroke: var(--panel); }
   .fig svg.ic .ic-scan { stroke: var(--ink); stroke-width: 1; stroke-opacity: 0.16; }
-  .fig svg.ic .ic-cam text { transition: opacity 0.2s ease; }
+  .fig svg.ic .ic-caim { fill: var(--accent); }
 
   /* The solver plot. */
   .fig svg.ic .ic-tol { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 3; }
   .fig svg.ic .ic-sline { fill: none; stroke: var(--ink-4); stroke-width: 1; }
   .fig svg.ic .ic-sd { fill: var(--ink); }
   .fig svg.ic .ic-slast { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+  .fig svg.ic .ic-swalk { fill: var(--accent); stroke: var(--panel); stroke-width: 1; }
 
   /* Instruments. */
   .fig svg.ic .ic-k { fill: var(--ink-3); }
   .fig svg.ic text.ic-v { font-size: var(--fv); fill: var(--ink); }
   .fig svg.ic .ic-u { font-size: 0.52em; fill: var(--ink-3); }
   .fig svg.ic .ic-s { font-size: calc(var(--f) * 0.93); }
+  /* The scale along the foot of each: the round is the accent dot it is in the sky,
+     its no-drag twin the open red one, the drone an ink mark. */
+  .fig svg.ic .ic-gt { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.ic .ic-gr { fill: var(--accent); stroke: var(--panel-2); stroke-width: 1.5; }
+  .fig svg.ic .ic-gd { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-linecap: round; }
+  .fig svg.ic .ic-gv { fill: var(--panel-2); stroke: var(--s-red); stroke-width: 1.25; }
+  .fig svg.ic .ic-ga { fill: var(--panel-2); stroke: var(--accent); stroke-width: 1.25; }
 
   /* The reader's hand. */
-  .fig svg.ic .ic-hit { fill: transparent; pointer-events: none; }
+  .fig svg.ic .ic-hit { fill: transparent; stroke: none; pointer-events: none; }
   .fig svg.ic[data-live] .ic-hit { pointer-events: all; cursor: crosshair; touch-action: pan-y; }
   .fig svg.ic[data-live].near .ic-hit { cursor: grab; }
   .fig svg.ic[data-live].dragging .ic-hit { cursor: grabbing; }
@@ -468,8 +502,11 @@ const aria = `Side view, to scale. A mount on the left tracks a drone ${fx(S.ran
   /* Where the drone may be put, and where the pointer would put it. */
   .fig svg.ic .ic-field { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 1.5 6; stroke-linecap: round; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
   .fig svg.ic[data-live]:hover .ic-field, .fig svg.ic.dragging .ic-field { opacity: 1; }
-  .fig svg.ic .ic-cur { pointer-events: none; transition: opacity 0.15s ease; }
-  .fig svg.ic .ic-cur path { fill: none; stroke: var(--ink-2); stroke-width: 1; }
+  .fig svg.ic .ic-cur { fill: none; stroke: var(--ink-2); stroke-width: 1; pointer-events: none; transition: opacity 0.15s ease; }
+  /* The probe: a rule at the round's distance downrange, that distance on the axis (whose own labels step aside), and the round's clock and speed by the pointer. */
+  .fig svg.ic .ic-probe { pointer-events: none; }
+  .fig svg.ic .ic-pl { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 1.5 4; stroke-linecap: round; }
+  .fig svg.ic .ic-pm, .fig svg.ic .ic-pt { fill: var(--ink); }
   @media (hover: none) {
     .fig svg.ic[data-live]:hover .ic-field { opacity: 0; }
     .fig svg.ic.dragging .ic-field { opacity: 1; }

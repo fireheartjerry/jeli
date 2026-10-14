@@ -1,12 +1,40 @@
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { CustomEase } from "gsap/CustomEase";
+import { SplitText } from "gsap/SplitText";
 
-gsap.registerPlugin(ScrollTrigger);
+gsap.registerPlugin(ScrollTrigger, CustomEase, SplitText);
 
-export { gsap, ScrollTrigger };
+export { gsap, ScrollTrigger, SplitText };
 
 export const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * The site moves on two curves, the same two the stylesheet names --ease-out
+ * and --ease-io, and nothing overshoots.
+ *
+ *   "arrive"  something coming to rest: quick off the mark, a long settle.
+ *             Type rising into place, a plate coming up, a row sliding in.
+ *   "swap"    one state for another, at rest at both ends: a label rolling
+ *             over, the camera of a figure moving between two views.
+ *
+ * Anything tied to the scroll is linear (the hand is the easing), and data is
+ * always drawn linear: a line that eases looks like a different line.
+ */
+CustomEase.create("arrive", "0.22, 1, 0.36, 1");
+CustomEase.create("swap", "0.65, 0, 0.35, 1");
+
+/** How long things take, seconds: a press, a change of state, a block of type arriving, and the gap between neighbours. */
+export const T = { press: 0.18, state: 0.32, arrive: 0.9, step: 0.03 } as const;
+
+/**
+ * How far a scrubbed figure trails the scroll, seconds. When the page itself
+ * glides (scroll.ts turns that on for wheels), most of the smoothing has
+ * already happened, and a figure need only trail it a little.
+ */
+export const scrub = { lag: 0.6 };
+export const trail = (seconds: number) => +(seconds * (scrub.lag / 0.6)).toFixed(3);
 
 type Drawable = SVGGeometryElement;
 
@@ -47,7 +75,7 @@ export function scrubbed(
       trigger,
       start: "top 82%",
       end: "bottom 38%",
-      scrub: 0.6,
+      scrub: scrub.lag,
       ...vars,
     },
   });

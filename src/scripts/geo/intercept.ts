@@ -123,7 +123,7 @@ function elevationThrough(xp: number, yp: number): number {
 // ---------------------------------------------------------------- the solver
 
 /** One pass of the fixed-point iteration. */
-export const IT = { guess: 0, px: 1, py: 2, theta: 3, tof: 4, miss: 5, n: 6 } as const;
+export const IT = { guess: 0, px: 1, py: 2, theta: 3, tof: 4, miss: 5, v: 6, n: 7 } as const;
 
 export interface Solution {
   ok: boolean;
@@ -143,7 +143,7 @@ export interface Solution {
   tofVac: number; dropVac: number;
   /** How far apart round and drone are at the solved time of flight (m). */
   miss: number;
-  /** Passes used, and each pass: [guess, px, py, theta, tof, miss]. */
+  /** Passes used, and each pass: [guess, px, py, theta, tof, miss, speed on arrival]. */
   n: number;
   it: Float64Array;
   /** The solved trajectory at NS equal time steps: position, speed, path length. */
@@ -214,6 +214,7 @@ export function solve(dx: number, dy: number, vx: number, vy: number, out: Solut
     out.it[o + IT.theta] = theta;
     out.it[o + IT.tof] = tof;
     out.it[o + IT.miss] = miss;
+    out.it[o + IT.v] = vImpact;
     out.n = n + 1;
     sample(theta, tof, NC, out.cx, out.cy, n * NC);
     if (miss < TOL || n === MAX_ITER - 1) {
@@ -258,23 +259,101 @@ export function vacuumAt(s: Solution, t: number, out: Float64Array) {
   return out;
 }
 
+/** When the solved round is `x` metres downrange (the inverse of roundAt along x, which only grows). */
+export function timeAt(s: Solution, x: number) {
+  if (x <= 0) return 0;
+  if (x >= s.tx[NS - 1]) return s.tof;
+  let lo = 0, hi = NS - 1;
+  while (hi - lo > 1) {
+    const m = (lo + hi) >> 1;
+    if (s.tx[m] <= x) lo = m;
+    else hi = m;
+  }
+  return ((lo + (x - s.tx[lo]) / (s.tx[hi] - s.tx[lo])) / (NS - 1)) * s.tof;
+}
+
+/**
+ * The six instruments as positions along their scales, each 0..1, with the
+ * round `t` seconds into its flight and the drone `td` seconds on from where
+ * the camera saw it. The round, its no-drag twin and the drone are the same
+ * three bodies the sky shows; these are their coordinates one axis at a time.
+ */
+export const GAUGE = {
+  rangeRound: 0, // how far out the round is, on a scale that ends at the drone's range now
+  rangeDrone: 1, // the drone closing along the same scale
+  tofRound: 2, // the shot clock, on a scale that ends at the time of flight
+  tofVac: 3, // the no-drag round stops its clock when it has covered the same ground
+  leadDrone: 4, // the drone using up its lead: from where it was seen to the aim point
+  elevRound: 5, // the round as the mount sees it, sinking from the bore line toward the sight line
+  elevDrone: 6, // the drone as the mount sees it, rising from the sight line
+  dropRound: 7, // metres fallen below the bore line
+  dropVac: 8, // the same without drag, until its shorter flight ends
+  speedRound: 9, // speed, on a scale that ends at the muzzle speed
+  speedVac: 10, // the no-drag round keeps almost all of it
+  n: 11,
+} as const;
+const gp = new Float64Array(4);
+const unit = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+export function gauges(s: Solution, t: number, td: number, out: Float64Array) {
+  const tc = Math.min(Math.max(t, 0), s.tof), tv = Math.min(tc, s.tofVac);
+  roundAt(s, tc, gp);
+  const rx = gp[0], ry = gp[1], v = gp[2];
+  const ddx = s.dx + s.vx * td, ddy = s.dy + s.vy * td;
+  const span = s.theta - s.los;
+  out[GAUGE.rangeRound] = unit(Math.hypot(rx, ry) / s.range);
+  out[GAUGE.rangeDrone] = unit(Math.hypot(ddx, ddy) / s.range);
+  out[GAUGE.tofRound] = unit(tc / s.tof);
+  out[GAUGE.tofVac] = unit(tv / s.tof);
+  out[GAUGE.leadDrone] = unit(1 - td / s.tof);
+  // Before it has gone anywhere the round is on the bore line.
+  out[GAUGE.elevRound] = rx > 1e-6 ? unit((Math.atan2(ry, rx) - s.los) / span) : 1;
+  out[GAUGE.elevDrone] = unit((Math.atan2(ddy, ddx) - s.los) / span);
+  out[GAUGE.dropRound] = unit((rx * Math.tan(s.theta) - ry) / s.drop);
+  out[GAUGE.dropVac] = unit((0.5 * GUN.g * tv * tv) / s.drop);
+  out[GAUGE.speedRound] = unit(v / GUN.v0);
+  out[GAUGE.speedVac] = unit(Math.hypot(GUN.v0 * Math.cos(s.theta), GUN.v0 * Math.sin(s.theta) - GUN.g * tv) / GUN.v0);
+  return out;
+}
+
 // ---------------------------------------------------------------- the track
 
-// Detection noise, fixed once so the server and the client draw the same
-// marks. The constant and linear parts are projected out, so a least-squares
-// line through the noisy detections is exactly the drone's true track: the
-// figure's estimate and its truth are the same line.
-const NOISE = (() => {
+/** Frames the camera goes on taking while a round is in the air (the longest flight on the plate is under half a second). */
+export const AHEAD = 16;
+
+/**
+ * One set of camera noise: where each detection lands relative to the drone.
+ * x and y scatter the track's detections; the constant and linear parts are
+ * projected out of them, so a least-squares line through the noisy
+ * detections is exactly the drone's true track (the figure's estimate and its
+ * truth are the same line, whichever set is in use). `side` scatters the
+ * marks across the line of sight in the camera's view. The a-arrays are for
+ * the frames taken after firing, which no fit uses (see fillAhead).
+ */
+export interface Noise {
+  x: Float64Array; y: Float64Array; side: Float64Array;
+  ax: Float64Array; ay: Float64Array; aside: Float64Array;
+}
+export function createNoise(): Noise {
   const n = TARGET.frames;
-  let a = 0x9e3779b9;
+  return {
+    x: new Float64Array(n), y: new Float64Array(n), side: new Float64Array(n),
+    ax: new Float64Array(AHEAD), ay: new Float64Array(AHEAD), aside: new Float64Array(AHEAD),
+  };
+}
+/** The set the server draws, and the first one the client shows. */
+export const SEED = 0x9e3779b9;
+/** Fill `out` from a seed. The same seed always gives the same set. */
+export function fillNoise(out: Noise, seed: number): Noise {
+  const n = TARGET.frames;
+  let a = seed | 0;
   const rnd = () => {
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  const axis = () => {
-    const v = Array.from({ length: n }, () => rnd() + rnd() + rnd() - 1.5);
+  const axis = (v: Float64Array) => {
+    for (let j = 0; j < n; j++) v[j] = rnd() + rnd() + rnd() - 1.5;
     // Remove the mean and the slope against the frame index.
     const m = (n - 1) / 2;
     let s0 = 0, s1 = 0, s2 = 0;
@@ -283,34 +362,75 @@ const NOISE = (() => {
     let ss = 0;
     for (let j = 0; j < n; j++) { v[j] -= mean + slope * (j - m); ss += v[j] * v[j]; }
     const k = TARGET.sigma / Math.sqrt(ss / n);
-    return Float64Array.from(v, (x) => x * k);
+    for (let j = 0; j < n; j++) v[j] *= k;
   };
-  return { x: axis(), y: axis() };
-})();
+  axis(out.x);
+  axis(out.y);
+  // Across the line of sight, in metres: a third, zero-mean axis from its own stream.
+  let b = (seed ^ 0xcfda5eb2) | 0;
+  const lcg = () => {
+    b = (Math.imul(b, 1664525) + 1013904223) | 0;
+    return (b >>> 0) / 4294967296;
+  };
+  let mean = 0;
+  for (let j = 0; j < n; j++) {
+    out.side[j] = lcg() + lcg() - 1;
+    mean += out.side[j] / n;
+  }
+  for (let j = 0; j < n; j++) out.side[j] = (out.side[j] - mean) * TARGET.sigma * 1.6;
+  return fillAhead(out, seed ^ 0x5bd1e995);
+}
+/**
+ * The noise on the frames taken after firing, from a seed of its own: plain
+ * noise of the same size as the track's (a sum of three uniforms has a
+ * standard deviation of a half). The replay draws a new set for every shot,
+ * so no two flights are tracked by quite the same detections, while the
+ * track the solution came from stays as it was.
+ */
+export function fillAhead(out: Noise, seed: number): Noise {
+  let a = seed | 0;
+  const rnd = () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const tri = () => rnd() + rnd() + rnd() - 1.5;
+  for (let j = 0; j < AHEAD; j++) {
+    out.ax[j] = tri() * 2 * TARGET.sigma;
+    out.ay[j] = tri() * 2 * TARGET.sigma;
+    out.aside[j] = tri() * 2 * TARGET.sigma * 1.6;
+  }
+  return out;
+}
+const NOISE = fillNoise(createNoise(), SEED);
 
 /** Detections of a drone that is at (dx, dy) now: frame j was j / fps seconds ago. Writes [x0, y0, x1, y1, ...]. */
-export function detections(dx: number, dy: number, vx: number, vy: number, out: Float64Array) {
+export function detections(dx: number, dy: number, vx: number, vy: number, out: Float64Array, noise: Noise = NOISE) {
   for (let j = 0; j < TARGET.frames; j++) {
     const t = -j / TARGET.fps;
-    out[2 * j] = dx + vx * t + NOISE.x[j];
-    out[2 * j + 1] = dy + vy * t + NOISE.y[j];
+    out[2 * j] = dx + vx * t + noise.x[j];
+    out[2 * j + 1] = dy + vy * t + noise.y[j];
   }
   return out;
 }
 
-/** Least-squares constant-velocity fit through the detections. Writes [x, y, vx, vy] at the newest frame. */
-export function fitTrack(det: Float64Array, out: Float64Array) {
-  const n = TARGET.frames, m = (n - 1) / 2;
+/**
+ * Least-squares constant-velocity fit through `n` of the detections, starting
+ * at frame `from` (0 is the newest). Writes [x, y, vx, vy] at frame `from`.
+ */
+export function fitFrames(det: Float64Array, from: number, n: number, out: Float64Array) {
+  const m = (n - 1) / 2;
   let sx = 0, sy = 0, stx = 0, sty = 0, stt = 0;
-  for (let j = 0; j < n; j++) {
-    const t = -(j - m) / TARGET.fps;
+  for (let i = 0; i < n; i++) {
+    const j = from + i, t = -(i - m) / TARGET.fps;
     sx += det[2 * j];
     sy += det[2 * j + 1];
     stx += t * det[2 * j];
     sty += t * det[2 * j + 1];
     stt += t * t;
   }
-  const vx = stx / stt, vy = sty / stt, t0 = m / TARGET.fps;
+  const vx = stt > 0 ? stx / stt : 0, vy = stt > 0 ? sty / stt : 0, t0 = m / TARGET.fps;
   out[0] = sx / n + vx * t0;
   out[1] = sy / n + vy * t0;
   out[2] = vx;
@@ -318,22 +438,8 @@ export function fitTrack(det: Float64Array, out: Float64Array) {
   return out;
 }
 
-/** Lateral scatter for the camera view, in metres across the line of sight: a third, zero-mean noise axis. */
-const SIDE = (() => {
-  const n = TARGET.frames;
-  let a = 0x51ed270b;
-  const out = new Float64Array(n);
-  let mean = 0;
-  for (let j = 0; j < n; j++) {
-    a = (Math.imul(a, 1664525) + 1013904223) | 0;
-    const u = (a >>> 0) / 4294967296;
-    a = (Math.imul(a, 1664525) + 1013904223) | 0;
-    out[j] = u + (a >>> 0) / 4294967296 - 1;
-    mean += out[j] / n;
-  }
-  for (let j = 0; j < n; j++) out[j] = (out[j] - mean) * TARGET.sigma * 1.6;
-  return out;
-})();
+/** The fit through every detection kept in the track: [x, y, vx, vy] at the newest frame. */
+export const fitTrack = (det: Float64Array, out: Float64Array) => fitFrames(det, 0, TARGET.frames, out);
 
 // ---------------------------------------------------------------- the drawing
 
@@ -364,8 +470,8 @@ export interface Layout {
   cam: { x: number; y: number; w: number; h: number; x0: number; x1: number; y0: number; y1: number; cx: number; k: number; bx: number };
   /** Solver plot: frame, first pass x and pitch, y of a 1 m miss and px per decade. */
   plot: { x: number; y: number; w: number; h: number; x0: number; dx: number; y1m: number; dec: number };
-  /** Instrument cells. */
-  ins: { x: number; y: number; cw: number; ch: number; cols: number };
+  /** Instrument cells, and the scale along the foot of each (its two ends and its height, inside the cell). */
+  ins: { x: number; y: number; cw: number; ch: number; cols: number; g0: number; g1: number; gy: number };
 }
 
 export const WIDE: Layout = {
@@ -373,8 +479,11 @@ export const WIDE: Layout = {
   ox: 108, oy: 356, s: 13.2, top: 6, right: 1200,
   art: 1.25, glyph: 22, ring: 12, f: 12.5,
   cam: { x: 10, y: 8, w: 226, h: 178, x0: 46, x1: 228, y0: 40, y1: 178, cx: 137, k: 24, bx: 178 },
-  plot: { x: 250, y: 396, w: 192, h: 96, x0: 304, dx: 19, y1m: 429, dec: 11 },
-  ins: { x: 462, y: 396, cw: 123, ch: 96, cols: 6 },
+  // The solver sits beside the camera, where it is in view while it iterates.
+  // It is the shorter of the two so that the steepest shot the reader can set
+  // up (a near, high drone) still passes clear under its corner.
+  plot: { x: 246, y: 8, w: 194, h: 124, x0: 306, dx: 18, y1m: 52, dec: 15 },
+  ins: { x: 250, y: 396, cw: 950 / 6, ch: 96, cols: 6, g0: 14, g1: 950 / 6 - 16, gy: 89 },
 };
 
 export const NARROW: Layout = {
@@ -383,7 +492,7 @@ export const NARROW: Layout = {
   art: 0.6, glyph: 12, ring: 6, f: 14.5,
   cam: { x: 0, y: 208, w: 192, h: 204, x0: 42, x1: 186, y0: 244, y1: 404, cx: 114, k: 30, bx: 150 },
   plot: { x: 208, y: 208, w: 192, h: 204, x0: 264, dx: 22, y1m: 272, dec: 28 },
-  ins: { x: 0, y: 428, cw: 400 / 3, ch: 98, cols: 3 },
+  ins: { x: 0, y: 428, cw: 400 / 3, ch: 98, cols: 3, g0: 10, g1: 400 / 3 - 12, gy: 91 },
 };
 
 export const LAYOUTS = [WIDE, NARROW] as const;
@@ -399,6 +508,25 @@ export const toY = (L: Layout, y: number) => L.oy - L.s * y;
 export const camY = (L: Layout, el: number, mid: number) => (L.cam.y0 + L.cam.y1) / 2 - (el - mid) * L.cam.k;
 /** Solver plot: a miss in metres to y (log scale). */
 export const plotY = (L: Layout, miss: number) => L.plot.y1m - Math.log10(Math.max(miss, 1e-5)) * L.plot.dec;
+
+/** The camera's lens: the front of the camera body on its post, in the plot's units. */
+export const lensAt = (L: Layout) => ({ x: L.ox + 7.4 * L.art, y: L.oy - 52.3 * L.art });
+
+/**
+ * The camera's field of view opened to `half` degrees either side of its
+ * axis, as two paths: the dotted upper edge, and the faint wedge. Both run
+ * past the viewBox so that they reach the screen's edge (the plot clips them).
+ */
+export function fovPaths(L: Layout, half: number) {
+  const lens = lensAt(L), over = 60;
+  const ray = (deg: number) => {
+    const c = Math.cos(deg * RAD), sn = Math.sin(deg * RAD);
+    const t = Math.min((L.right + over - lens.x) / c, (lens.y - L.top + over) / sn);
+    return `${r1(lens.x + t * c)} ${r1(lens.y - t * sn)}`;
+  };
+  const from = `M${r1(lens.x)} ${r1(lens.y)}`, lo = ray(CAMERA.tilt - half), hi = ray(CAMERA.tilt + half);
+  return { edge: `${from}L${hi}`, fill: `${from}L${lo}V${L.top - over}H${hi.split(" ")[0]}L${hi}Z` };
+}
 
 /** Numbers as the figure prints them (true minus sign, fixed decimals). */
 export const fx = (v: number, d: number) => {
@@ -422,14 +550,27 @@ export interface Geom {
   /** Attributes by element key, and text by text key. */
   a: Record<string, Attrs>;
   t: Record<string, string>;
-  /** Detection marks, newest first, for the track and for the camera view. */
+  /**
+   * Detection marks in the order they were taken, for the track and for the
+   * camera view: TARGET.frames of them up to the moment of firing, then AHEAD
+   * more for the frames the camera takes while the round is in the air.
+   */
   det: string[];
   cdet: string[];
+  /** What each pass of the solver believed, as the instruments would print it, and how far off it was. */
+  pass: Record<string, string>[];
+  miss: string[];
   /** Numbers the script animates from. */
   n: {
     dX: number; dY: number; iX: number; iY: number;
     los: number; th: number; elI: number; mid: number;
     oldX: number; arcLen: number; ghostT: number; ghostIn: boolean; ghostLabel: boolean;
+    /** Where the no-drag path ends, and the far end of the prediction while the solver is working. */
+    gX: number; prdX: number;
+    /** Per pass: the aim point on the track, where its correction is written, and the bore it asks for in the camera view. */
+    aimX: number[]; aimY: number[]; corrX: number[]; corrY: number[]; cmdY: number[];
+    /** Per pass: how far along the convergence line its point is, 0..1. */
+    sfrac: number[];
   };
 }
 
@@ -440,12 +581,37 @@ function along(L: Layout, a: number, r: number, off: number) {
   return `translate(${r1(x)} ${r1(y)}) rotate(${r2(-a / RAD)})`;
 }
 
+/** A correction as the figure prints it: metres, centimetres or millimetres, whichever reads. */
+export const fmtMiss = (m: number) => (m >= 1 ? `${fx(m, 2)} m` : m >= 0.01 ? `${fx(m * 100, 1)} cm` : `${fx(m * 1000, m >= 0.001 ? 1 : 2)} mm`);
+
+/**
+ * The detection marks, in the order the camera took them: the track's own
+ * frames up to the moment of firing, then the frames it goes on taking while
+ * the round is in the air (the drone keeps to its line, so those land ahead of
+ * the track). One zero-length stroke each, for the sky and for the camera view.
+ */
+export function trackMarks(L: Layout, s: Solution, det: Float64Array, noise: Noise, mid: number, sky: string[], cam: string[]) {
+  const C = L.cam, n = TARGET.frames;
+  const put = (i: number, x: number, y: number, side: number) => {
+    sky[i] = `M${r1(toX(L, x))} ${r1(toY(L, y))}h0`;
+    const az = Math.atan2(side, Math.hypot(x, y)) / RAD;
+    cam[i] = `M${r1(C.cx + az * C.k)} ${r1(camY(L, Math.atan2(y, x) / RAD, mid))}h0`;
+  };
+  for (let j = 0; j < n; j++) put(n - 1 - j, det[2 * j], det[2 * j + 1], noise.side[j]);
+  for (let k = 1; k <= AHEAD; k++) {
+    const t = k / TARGET.fps;
+    put(n - 1 + k, s.dx + s.vx * t + noise.ax[k - 1], s.dy + s.vy * t + noise.ay[k - 1], noise.aside[k - 1]);
+  }
+}
+
+const gv = new Float64Array(GAUGE.n);
+
 /**
  * Everything in the plate that depends on where the drone is: the solved
  * diagram, as attributes keyed by element. The server prints it; the script
  * applies it again after every solve.
  */
-export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
+export function geom(L: Layout, s: Solution, det: Float64Array, noise: Noise = NOISE): Geom {
   const a: Record<string, Attrs> = {};
   const t: Record<string, string> = {};
   const { ox, oy } = L;
@@ -454,13 +620,17 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   const th = s.theta / RAD, los = s.los / RAD;
   const elI = Math.atan2(s.iy, s.ix) / RAD;
   const rD = s.range * L.s;
+  const C = L.cam, P = L.plot, mid = (los + th) / 2;
+  const speed = Math.hypot(s.vx, s.vy);
+  /** In the wide layout the solver's panel stands in the sky: is this point under it (with a margin)? */
+  const underPanel = (x: number, y: number) => L.wide && x < P.x + P.w + 6 && y < P.y + P.h + 6;
 
-  // ---- the track: detections (newest first), the fitted line through them, the prediction ahead.
-  const marks: string[] = [];
-  for (let j = 0; j < TARGET.frames; j++) marks.push(`M${r1(toX(L, det[2 * j]))} ${r1(toY(L, det[2 * j + 1]))}h0`);
+  // ---- the track: detections, the fitted line through them, the prediction ahead.
+  const marks: string[] = [], cmarks: string[] = [];
+  trackMarks(L, s, det, noise, mid, marks, cmarks);
   const span = (TARGET.frames - 1) / TARGET.fps;
   const oldX = toX(L, s.dx - s.vx * span), oldY = toY(L, s.dy - s.vy * span);
-  a.det = { d: marks.join("") };
+  a.det = { d: marks.slice(0, TARGET.frames).join("") };
   a.trk = { x1: r1(oldX), y1: r1(oldY), x2: r1(dX), y2: r1(dY) };
   const dir = Math.sign(s.vx) || -1; // the drone flies toward -x
   const p0 = dX + dir * (L.glyph + 2), p1 = iX - dir * (L.ring + 5);
@@ -494,10 +664,14 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
     ticks += `M${r1(x - st * tl)} ${r1(y - ct * tl)}L${r1(x + st * tl)} ${r1(y + ct * tl)}`;
   }
   a.tks = { d: ticks };
+  // The wedge and the time marks are uncovered from the mount outward, as the path is drawn.
+  a.sweep = { width: L.right };
   // "0.05 s apart" sits over the gap between the second and third marks.
   roundAt(s, 2.5 * TICK, pt);
   const tickR = Math.hypot(pt[0], pt[1]) * L.s;
-  a.tkl = { transform: along(L, s.theta, tickR, -L.f * 0.62) };
+  /** A label riding above the bore line, centred at radius r and about `half` long each way: does its far end run under the panel? */
+  const hidden = (r: number, half: number) => underPanel(ox + (r + half) * ct - L.f * 1.4 * st, oy - (r + half) * st - L.f * 1.4 * ct);
+  a.tkl = { transform: along(L, s.theta, tickR, -L.f * 0.62), opacity: hidden(tickR, L.f * 3.1) ? 0 : 1 };
 
   // ---- the same shot without drag: a parabola, drawn as one exact quadratic.
   const gT = vacuumExit(L, s), ghostIn = gT >= s.tof;
@@ -505,6 +679,7 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   const gX = toX(L, pt[0]), gY = toY(L, pt[1]);
   const cX = toX(L, (GUN.v0 * ct * gT) / 2), cY = toY(L, (GUN.v0 * st * gT) / 2);
   a.ghost = { d: `M${r1(ox + r0 * ct)} ${r1(oy - r0 * st)}Q${r1(cX)} ${r1(cY)} ${r1(gX)} ${r1(gY)}` };
+  a.gclip = { width: L.right };
   a.gdot = { cx: r1(gX), cy: r1(gY), opacity: ghostIn ? 1 : 0 };
   const gA = Math.atan2(GUN.v0 * st - GUN.g * gT, GUN.v0 * ct);
   let ghostLabel = true;
@@ -540,11 +715,13 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   a.tl = { x: r1(tlx), y: r1(vy), opacity: tlx + L.f * 5.6 < L.right - 28 ? 1 : 0 };
 
   // ---- dimensions: the drop at the intercept, the lead between the two rays, the track's height.
-  // The callout rises from the intercept ring.
+  // The callout rises from the intercept ring. Its text ends at the ring; beside
+  // the solver's panel it keeps to the panel's right instead.
   const up = L.ring + L.f * 3.3;
+  const calloutX = underPanel(iX - 7 - L.f * 9.4, iY - up) ? Math.max(iX - 7, P.x + P.w + 8 + L.f * 9.4) : iX - 7;
   a.dlead = { d: `M${r1(iX)} ${r1(iY - L.ring - 2.5)}V${r1(iY - up)}` };
-  a.il = { x: r1(iX - 7), y: r1(iY - up + L.f * 0.3) };
-  a.dl = { x: r1(iX - 7), y: r1(iY - up + L.f * 1.6) };
+  a.il = { x: r1(calloutX), y: r1(iY - up + L.f * 0.3) };
+  a.dl = { x: r1(calloutX), y: r1(iY - up + L.f * 1.6) };
   // Labels ride the two rays in a fixed order outward from the mount: line of
   // sight (below), time marks (above), lead (below), aim line (above). A near
   // drone leaves less ray to share, so each one yields to the one before it.
@@ -559,10 +736,10 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   // The aim label sits before the intercept if there is room after the time
   // marks' own label, and otherwise on the bore line beyond it.
   const rI = s.rangeI * L.s, before = rD * 0.74, half = L.f * 3.8;
-  const fits = before - half > tickR + L.f * 3.6 && before + half < rI - L.ring - 8;
+  const fits = before - half > tickR + L.f * 3.6 && before + half < rI - L.ring - 8 && !hidden(before, half);
   const beyond = rI + L.ring + 14 + half;
   // Beyond the intercept it must also stay clear of the no-drag label near the ghost's end.
-  const clear = beyond + half < Math.min(aimR - 6, Math.hypot(gX - ox, gY - oy) - L.f * 7);
+  const clear = beyond + half < Math.min(aimR - 6, Math.hypot(gX - ox, gY - oy) - L.f * 7) && !hidden(beyond, half);
   a.aiml = { transform: along(L, s.theta, fits ? before : beyond, -L.f * 0.62), opacity: fits || clear ? 1 : 0 };
   const hx = L.right - 12, hy = dY;
   a.hdim = { d: `M${r1(hx - 3)} ${oy}H${r1(hx + 3)}M${r1(hx)} ${oy}V${r1(hy)}M${r1(hx - 3)} ${r1(hy)}H${r1(hx + 3)}` };
@@ -572,26 +749,54 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   // ---- the mount follows.
   a.rifle = { transform: `rotate(${r2(-th)})` };
 
-  // ---- candidates: each pass's trajectory, and where it thought the drone would be.
+  // ---- the camera view: a window in elevation, centred between the drone and the bore.
+  const yOf = (el: number) => camY(L, el, mid);
+
+  // ---- candidates: each pass's trajectory, where it thought the drone would
+  // be, and what the instruments would have read had it stopped there.
+  const aimX: number[] = [], aimY: number[] = [], corrX: number[] = [], corrY: number[] = [], cmdY: number[] = [];
+  const pass: Record<string, string>[] = [], miss: string[] = [];
+  let prdX = iX;
   for (let n = 0; n < MAX_ITER; n++) {
-    let d = "";
-    if (n < s.n) for (let i = 0; i < NC; i++) d += `${i ? "L" : "M"}${r1(toX(L, s.cx[n * NC + i]))} ${r1(toY(L, s.cy[n * NC + i]))}`;
-    a[`cand${n}`] = { d };
-    // Where this pass aimed (a tick on the track), and how far the drone would
-    // have flown past it by the time the round arrived (a bracket above).
-    let mark = "";
+    let d = "", mark = "";
     if (n < s.n) {
-      const o = n * IT.n, px = toX(L, s.it[o + IT.px]), py = toY(L, s.it[o + IT.py]);
-      const qx = toX(L, s.dx + s.vx * s.it[o + IT.tof]), by = py - L.glyph * 0.5 - 5;
-      mark = `M${r1(px)} ${r1(py - 4.5)}V${r1(py + 4.5)}`;
-      if (Math.abs(qx - px) > 3) mark += `M${r1(px)} ${r1(by + 3)}V${r1(by)}H${r1(qx)}V${r1(by + 3)}`;
+      for (let i = 0; i < NC; i++) d += `${i ? "L" : "M"}${r1(toX(L, s.cx[n * NC + i]))} ${r1(toY(L, s.cy[n * NC + i]))}`;
+      // Where this pass aimed (the mark that slides along the track), and how
+      // far the drone would have flown past it by the time the round arrived
+      // (a bracket above, drawn from the aim point to where the drone would be).
+      const o = n * IT.n, wx = s.it[o + IT.px], wy = s.it[o + IT.py], theta = s.it[o + IT.theta], tof = s.it[o + IT.tof];
+      const px = toX(L, wx), py = toY(L, wy);
+      const qx = toX(L, s.dx + s.vx * tof), by = py - L.glyph * 0.5 - 5;
+      if (Math.abs(qx - px) > 3) mark = `M${r1(px)} ${r1(by + 3)}V${r1(by)}H${r1(qx)}V${r1(by + 3)}`;
+      aimX.push(px);
+      aimY.push(py);
+      corrX.push(Math.abs(qx - px) > L.f * 3.4 ? (px + qx) / 2 : px);
+      corrY.push(by - 5);
+      cmdY.push(yOf(theta / RAD));
+      if ((px - prdX) * dir > 0) prdX = px;
+      const tofVac = wx / (GUN.v0 * Math.cos(theta));
+      pass.push({
+        rangeI: fx(Math.hypot(wx, wy), 1),
+        tof: fx(tof, 3),
+        tofVac: fx(tofVac, 3),
+        lead: `${fx((theta - s.los) / RAD, 2)}°`,
+        moved: fx(speed * s.it[o + IT.guess], 2),
+        elev: `${fx(theta / RAD, 2)}°`,
+        drop: fx(wx * Math.tan(theta) - wy, 2),
+        dropVac: fx(0.5 * GUN.g * tofVac * tofVac, 2),
+        speed: fx(s.it[o + IT.v], 0),
+      });
+      miss.push(fmtMiss(s.it[o + IT.miss]));
     }
+    a[`cand${n}`] = { d };
     a[`cpt${n}`] = { d: mark };
   }
+  // The aim mark, and the correction written over it, end where the solver ends.
+  a.am = { transform: `translate(${r1(iX)} ${r1(iY)})` };
+  a.cl = { x: r1(corrX[s.n - 1] ?? iX), y: r1(corrY[s.n - 1] ?? iY) };
+  t.cl = miss[s.n - 1] ?? "";
 
-  // ---- the camera view: a window in elevation, centred between the drone and the bore.
-  const C = L.cam, mid = (los + th) / 2;
-  const yOf = (el: number) => camY(L, el, mid);
+  // ---- the camera view.
   let tape = "", grid = "";
   const lo = Math.ceil((mid - (C.y1 - C.y0) / 2 / C.k) * 2) / 2, hi = mid + (C.y1 - C.y0) / 2 / C.k;
   let li = 0;
@@ -615,16 +820,12 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   a.ctape = { d: tape };
   a.cgrid = { d: grid };
   a.ccross = { transform: `translate(0 ${r1(yOf(th))})` };
+  // The elevation the solver asks for, on the tape: the bore comes up to meet it.
+  a.caim = { transform: `translate(0 ${r1(yOf(th))})` };
   a.cring = { transform: `translate(${C.cx} ${r1(yOf(elI))})` };
   a.cbox = { transform: `translate(${C.cx} ${r1(yOf(los))})` };
   a.crnd = { cx: C.cx, cy: r1(yOf(elI)) };
-  const cmarks: string[] = [];
-  for (let j = 0; j < TARGET.frames; j++) {
-    const e = Math.atan2(det[2 * j + 1], det[2 * j]) / RAD;
-    const az = Math.atan2(SIDE[j], Math.hypot(det[2 * j], det[2 * j + 1])) / RAD;
-    cmarks.push(`M${r1(C.cx + az * C.k)} ${r1(yOf(e))}h0`);
-  }
-  a.ctrail = { d: cmarks.join("") };
+  a.ctrail = { d: cmarks.slice(0, TARGET.frames).join("") };
   const by0 = yOf(los), by1 = yOf(th);
   a.cbr = { d: `M${C.bx - 3} ${r1(by0)}h6M${C.bx} ${r1(by0)}V${r1(by1)}M${C.bx - 3} ${r1(by1)}h6` };
   a.cbt = { y: r1((by0 + by1) / 2 - L.f * 0.18) };
@@ -638,15 +839,29 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   // ---- the solver plot: how far each pass's aim point was from where the
   // drone would really be on arrival (the correction the next pass makes), on a log scale.
   let line = "";
+  const sfrac: number[] = [];
+  let run = 0, px = 0, py = 0;
   for (let n = 0; n < MAX_ITER; n++) {
     const on = n < s.n;
-    const x = L.plot.x0 + n * L.plot.dx, y = on ? r1(plotY(L, s.it[n * IT.n + IT.miss])) : L.plot.y1m;
+    const x = P.x0 + n * P.dx, y = on ? r1(plotY(L, s.it[n * IT.n + IT.miss])) : P.y1m;
     a[`sd${n}`] = { cx: x, cy: y, opacity: on ? 1 : 0 };
     a[`sn${n}`] = { opacity: on ? 1 : 0 };
-    if (on) line += `${n ? "L" : "M"}${x} ${y}`;
+    if (on) {
+      line += `${n ? "L" : "M"}${x} ${y}`;
+      if (n) run += Math.hypot(x - px, y - py);
+      sfrac.push(run);
+      px = x;
+      py = y;
+    }
   }
+  for (let n = 0; n < sfrac.length; n++) sfrac[n] = run > 0 ? sfrac[n] / run : 1;
   a.sline = { d: line };
-  a.slast = { cx: L.plot.x0 + (s.n - 1) * L.plot.dx, cy: r1(plotY(L, s.it[(s.n - 1) * IT.n + IT.miss])) };
+  a.slast = { cx: P.x0 + (s.n - 1) * P.dx, cy: r1(plotY(L, s.it[(s.n - 1) * IT.n + IT.miss])) };
+
+  // ---- the instruments' scales, as the solved diagram leaves them: the round
+  // arrived, the drone drawn where the camera saw it.
+  gauges(s, s.tof, 0, gv);
+  for (let i = 0; i < GAUGE.n; i++) a[`g${i}`] = { transform: gaugeAt(L, gv[i]) };
 
   // ---- the numbers.
   t.range = fx(s.range, 1);
@@ -654,7 +869,7 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   t.tof = fx(s.tof, 3);
   t.tofVac = fx(s.tofVac, 3);
   t.lead = `${fx(s.lead / RAD, 2)}°`;
-  t.moved = fx(Math.hypot(s.vx, s.vy) * s.tof, 2);
+  t.moved = fx(speed * s.tof, 2);
   t.elev = `${fx(th, 2)}°`;
   t.los = fx(los, 2);
   t.drop = fx(s.drop, 2);
@@ -668,8 +883,17 @@ export function geom(L: Layout, s: Solution, det: Float64Array): Geom {
   t.rangeL = fx(s.range, 1);
   t.elevL = fx(th, 1);
 
-  return { a, t, det: marks, cdet: cmarks, n: { dX, dY, iX, iY, los, th, elI, mid, oldX, arcLen: s.tl[NS - 1] * L.s, ghostT: gT, ghostIn, ghostLabel } };
+  return {
+    a, t, det: marks, cdet: cmarks, pass, miss,
+    n: {
+      dX, dY, iX, iY, los, th, elI, mid, oldX, arcLen: s.tl[NS - 1] * L.s, ghostT: gT, ghostIn, ghostLabel,
+      gX, prdX: prdX + dir * (L.ring + 5), aimX, aimY, corrX, corrY, cmdY, sfrac,
+    },
+  };
 }
+
+/** Where a mark sits on an instrument's scale: `u` of the way along it, inside its cell. */
+export const gaugeAt = (L: Layout, u: number) => `translate(${r1(L.ins.g0 + (L.ins.g1 - L.ins.g0) * u)} ${L.ins.gy})`;
 
 /**
  * When the round clears the muzzle as drawn. The mount is drawn larger than

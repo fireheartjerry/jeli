@@ -1,0 +1,593 @@
+---
+// Fig: one MP4 export at Mathos AI, start to finish. A request arrives from a
+// chat (through the OAuth and MCP server) or from the app, becomes a Celery
+// job, is rendered by Remotion inside its own locked-down Fargate sandbox, is
+// stored as a file and comes back into the chat. Lifecycle email (EventBridge
+// to SES) is drawn beside it as a separate strand that the export does not
+// feed: it has no wire to the rest and none of the accent.
+//
+// Everything that moves is decided by draw() in the figure's script, a pure
+// function of its clocks. Here it runs once, at the moment the scroll story
+// ends on, into a sink that collects attributes, so the page ships the
+// finished state and the script only has to replay it. Everything that does
+// not move is simply drawn: the plate lets its sheet out from the top as it
+// arrives, and the stage is on it. The question, the tool name (create_video),
+// the job ids, the file name and the frame counts are examples; nothing is
+// measured. tools/call is the real MCP method.
+//
+// Two drawings are rendered and a container query shows one: 640 across on a
+// twelve-column grid, or 400 across and stacked for a phone.
+import Figure from "../Figure.astro";
+import { LAYOUTS, OURS, SAY, draw, still, transform, type Sink } from "../../scripts/figures/export";
+
+interface Props { n?: number }
+const { n = 2 } = Astro.props;
+
+/** Collects what draw() decides instead of writing it anywhere. */
+class Still implements Sink {
+  a: Record<string, Record<string, string | number>> = {};
+  x: Record<string, string> = {};
+  k: Record<string, Set<string>> = {};
+  private of(k: string) { return (this.a[k] ??= {}); }
+  n(k: string, a: string, v: number, d = 2) { const m = 10 ** d; this.of(k)[a] = Math.round(v * m) / m; }
+  s(k: string, a: string, v: string) { this.of(k)[a] = v; }
+  t(k: string, v: string) { this.x[k] = v; }
+  c(k: string, name: string, on: boolean) { const s = (this.k[k] ??= new Set()); if (on) s.add(name); else s.delete(name); }
+  m(k: string, x: number, y: number, rot = 0, sc = 1) { this.of(k).transform = transform(x, y, rot, sc); }
+  o(k: string, v: number) { this.n(k, "opacity", Math.min(1, Math.max(0, v)), 2); }
+  fresh() { return true; }
+  // Nothing follows, dips or rolls on the server: each value is simply taken.
+  dip(_k: string, set: () => void) { set(); }
+  roll(k: string, _k2: string, v: string) { this.t(k, v); }
+}
+
+const views = LAYOUTS.map((L) => {
+  const s = new Still();
+  draw(L, still(), s);
+  return { L, A: (k: string) => s.a[k] ?? {}, T: (k: string) => s.x[k] ?? "", C: (k: string) => [...(s.k[k] ?? [])] };
+});
+
+// Glyphs, each drawn about its own origin.
+const SHACKLE = "M0 0V-2.6a2.8 2.8 0 0 0-5.6 0V0";
+const KEY = "M-2 0a2.3 2.3 0 1 0-4.6 0a2.3 2.3 0 1 0 4.6 0H6.4M3.6 0v2.3M5.8 0v1.9";
+const CURSOR = "M0 0v11.4l3-2.8 2.1 4.6 1.8-.8-2.1-4.6h4.1z";
+const SPIN = "M0-4A4 4 0 1 1-4 0";
+const TICK = "M-3.2 .2l2.2 2.3 4.2-4.7";
+const SAVE = "M0-4.4v6.4M-3.1-.8l3.1 3.1 3.1-3.1M-4.7 5h9.4";
+const PLAY = "M-2.6-4L4 0l-6.6 4z";
+const ENVELOPE = "M-6-4.25h12v8.5h-12zM-6-3.6l6 4.3 6-4.3";
+const at = (x: number, y: number) => `translate(${x} ${y})`;
+
+const label = "One MP4 export at Mathos AI, followed from the request to the delivered file";
+// Without the script every stage is its own Tab stop; with it the figure is one stop and the arrow keys move inside.
+const PLOT = "Plot. Tab through its parts to read what each does.";
+const aria =
+  "A schematic in three parts, read top to bottom. Request: in a ChatGPT or Claude chat a user asks for a video explaining why the derivative of x squared is 2x. " +
+  "The assistant issues a tool call, here named create_video, to the OAuth and MCP server; the user authorises it and a token goes back to the chat. The Export MP4 button in the Mathos app is the other way in. " +
+  "Either way the request becomes one job in a Celery queue. Render: each job gets its own locked-down Fargate sandbox, one render per sandbox, where Remotion renders the lesson frame by frame, " +
+  `${OURS.frames} frames in this example, shown as a filmstrip beside one frame of the lesson, a parabola with its tangent line. ` +
+  "Delivery: the finished MP4 goes to a file store and comes back into the same chat as an attachment. " +
+  "Beside this, and not connected to it, is the lifecycle email pipeline: an account event reaches EventBridge, which triggers SES, which delivers to an inbox. " +
+  "The question, the tool name, the jobs, the file name and the frame counts are examples.";
+---
+
+<Figure name="export" n={n} title="One export, start to finish" label={label} readout="delivered">
+  <div class="ex-box">
+    {views.map(({ L, A, T, C }) => {
+      const id = L.wide ? "w" : "n";
+      const { chat, bub, ask, chip, gate, btn, app, abtn, player, queue: Q, pv, tl, fs, tile, att, rep, src, eb, ses, mail, mm } = L;
+      const mid = (b: { x: number; y: number; w: number; h: number }) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+      const bar = (b: { x: number; y: number; w: number; bar: number }) => `M${b.x + 0.5} ${b.y + b.bar + 0.5}H${b.x + b.w - 0.5}`;
+      return (
+        <svg class:list={["ex", `ex-${id}`]} viewBox={`0 0 ${L.W} ${L.H}`} role="group" aria-label={PLOT} aria-describedby={`ex-${id}-desc`}>
+          <desc id={`ex-${id}-desc`}>{aria}</desc>
+          <defs>
+            <clipPath id={`ex-type-${id}`}>
+              {/* The first line's window stops short of the second line's superscript. */}
+              <rect data-k="bub.l1" x={bub.tx - 2} y={bub.y1 - 9} height={L.wide ? 15 : 16} {...A("bub.l1")} />
+              <rect data-k="bub.l2" x={bub.tx - 2} y={bub.y2 - (L.wide ? 8 : 9)} height="18" {...A("bub.l2")} />
+            </clipPath>
+            <clipPath id={`ex-q-${id}`}><rect x={Q.x} y={Q.y + Q.bar + 1} width={Q.w} height={Q.rows * Q.pitch + 2} /></clipPath>
+            <clipPath id={`ex-pv-${id}`}><rect x={pv.x} y={pv.y} width={pv.w} height={pv.h} rx="3" /></clipPath>
+            <clipPath id={`ex-tl-${id}`}><rect data-k="tl.clip" x={tl.x0} y={tl.top} height={tl.bot - tl.top} {...A("tl.clip")} /></clipPath>
+            <clipPath id={`ex-in-${id}`}><rect x={mail.x} y={mail.y + mail.bar + 1} width={mail.w} height={mail.h - mail.bar - 3} /></clipPath>
+            <clipPath id={`ex-fs-${id}`}><rect data-k="fs.clip" y={fs.y} height={fs.h} {...A("fs.clip")} /></clipPath>
+          </defs>
+
+          <g aria-hidden="true">
+            {/* ============ surfaces ============ */}
+            <g class="st" data-st="chat"><path class="inset" d={L.d.chat} /></g>
+            <g class="st" data-st="oauth"><path class="inset" d={L.d.strip} /></g>
+            <g class="st" data-st="app"><path class="inset" d={L.d.app} /></g>
+            <g class="st" data-st="queue"><path class="inset" d={L.d.queue} /></g>
+            <g class="st" data-st="chat"><path class="inset" d={L.d.reply} /></g>
+            <g class="st" data-st="mail"><path class="inset" d={L.d.mail} /></g>
+
+            {/* ============ wires, the route our job has taken, and notes on both ============ */}
+            <g>
+              <path class="w" d={L.d.w1} />
+              <circle class="jn" cx={L.sx} cy={L.jy} r="1.9" />
+              <path class="tr draw" pathLength="1" data-k="tr.call" d={L.seg.call} {...A("tr.call")} />
+              <path class="tr draw" pathLength="1" data-k="tr.tok" d={L.seg.tok} {...A("tr.tok")} />
+              <text x={L.notes.call[0]} y={L.notes.call[1]}>call</text>
+              <text x={L.notes.tok[0]} y={L.notes.tok[1]}>token</text>
+              <text x={L.notes.job[0]} y={L.notes.job[1]} text-anchor="end">job</text>
+            </g>
+            <g>
+              <path class="w" d={L.d.w2} />
+              <path class="w" d={L.d.w3} />
+              <text x={L.notes.down[0]} y={L.notes.down[1]} text-anchor="end">file stored</text>
+              {/* where our job has been since it left the queue */}
+              <g class="wd">
+                <path class="tr draw" pathLength="1" data-k="tr.disp" d={L.seg.disp0} {...A("tr.disp")} />
+                <path class="tr draw" pathLength="1" data-k="tr.out" d={L.seg.out0} {...A("tr.out")} />
+                <path class="tr draw" pathLength="1" data-k="tr.res" d={L.seg.res} {...A("tr.res")} />
+              </g>
+            </g>
+
+            {/* ============ 1. the request ============ */}
+            <g class="st" data-st="chat">
+                <path class="dots" d={`M${chat.x + 10} ${chat.y + chat.bar / 2}h14.2`} />
+                <text x={chat.x + 34} y={chat.y + chat.bar / 2}><tspan class="k">ChatGPT or Claude</tspan></text>
+                <text x={chat.x + chat.w - 10} y={chat.y + chat.bar / 2} text-anchor="end">Mathos over MCP</text>
+                <path class="hair" d={bar(chat)} />
+                <g data-k="bub" {...A("bub")}>
+                  <rect class="card" x={bub.x} y={bub.y} width={bub.w} height={bub.h} rx="9" />
+                  <g clip-path={`url(#ex-type-${id})`}>
+                    <text class="msg" data-m="l1" x={bub.tx} y={bub.y1}>Make a video explaining why the</text>
+                    <text class="msg" data-m="l2" x={bub.tx} y={bub.y2}>derivative of <tspan class="mi">x</tspan><tspan class="sup" dy={-L.sup}>2</tspan><tspan dy={L.sup}> is 2</tspan><tspan class="mi">x</tspan></text>
+                  </g>
+                  <path class="caret" data-k="bub.caret" d="M0-6.5V6.5" {...A("bub.caret")} />
+                </g>
+                <g data-k="ask" {...A("ask")}>
+                  <circle class="ava" cx={ask.ax} cy={ask.y} r="5" />
+                  <line class="sk" data-k="ask.sk" x1={ask.x0} y1={ask.y} y2={ask.y} {...A("ask.sk")} />
+                </g>
+                <g data-k="chip" {...A("chip")}>
+                  <rect class="chip" x={chip.x} y={chip.y} width={chip.w} height={chip.h} rx="5.5" />
+                  <g class="wd">
+                    <path class="spin" data-k="chip.spin" d={SPIN} {...A("chip.spin")} />
+                    <path class="tick draw" pathLength="1" data-k="chip.tick" d={TICK} transform={at(chip.gx, chip.gy)} {...A("chip.tick")} />
+                  </g>
+                  <text class="mono" x={chip.tx} y={chip.gy}>tools/call <tspan class="strong">create_video</tspan></text>
+                  <path class="key" data-k="chip.key" d={KEY} transform={at(chip.kx, chip.gy)} {...A("chip.key")} />
+                </g>
+            </g>
+
+            <g class="st" data-st="oauth">
+                <circle class="ping acc" data-k="gate.ping" cx={gate.x} cy={gate.y} {...A("gate.ping")} />
+                <rect class="lock-b" x={gate.x - 4.5} y={gate.y - 1.5} width="9" height="7.5" rx="1.6" />
+                <path class="lock-s" data-k="gate.sh" d={SHACKLE} {...A("gate.sh")} />
+                <text x={gate.tx} y={gate.y}><tspan class="k">OAuth and MCP server</tspan></text>
+                <g data-k="consent" class:list={["consent", C("consent")]}>
+                  <rect data-k="allow" class:list={["btn", C("allow")]} x={btn.x} y={btn.y} width={btn.w} height={btn.h} rx="5" />
+                  <text class="btn-t" x={btn.x + btn.w / 2} y={gate.y} text-anchor="middle">Allow</text>
+                  <g data-k="consent.ok" {...A("consent.ok")}>
+                    <path class="tick" d={TICK} transform={at(gate.ox + 4, gate.y)} />
+                    <text x={gate.ox + 12} y={gate.y}>authorised</text>
+                  </g>
+                </g>
+                <path class="cursor" data-k="cur.allow" d={CURSOR} {...A("cur.allow")} />
+            </g>
+
+            <g class="st" data-st="app">
+                <path class="dots" d={`M${app.x + 10} ${app.y + app.bar / 2}h14.2`} />
+                <text x={app.x + 34} y={app.y + app.bar / 2}><tspan class="k">Mathos app</tspan></text>
+                <path class="hair" d={bar(app)} />
+                {L.wide && (
+                  <>
+                    <rect class="card" x={player.x} y={player.y} width={player.w} height={player.h} rx="4" />
+                    <path class="poster" d={`M${player.x + 14} ${player.y + 72}H${player.x + player.w - 14}M${player.x + 40} ${player.y + 12}V${player.y + 84}M${player.x + 22} ${player.y + 72}c20 0 26-52 48-52s28 40 48 40s24-26 46-34`} />
+                    <circle class="playc" cx={player.x + player.w / 2} cy={player.y + 46} r="13" />
+                    <path class="playt" d={PLAY} transform={at(player.x + player.w / 2, player.y + 46)} />
+                    <path class="sk thin" d={`M${player.x + 10} ${player.y + player.h - 9}H${player.x + player.w - 10}`} />
+                    <path class="scrub" d={`M${player.x + 10} ${player.y + player.h - 9}h52`} />
+                    <circle class="knob" cx={player.x + 62} cy={player.y + player.h - 9} r="3" />
+                  </>
+                )}
+                <rect data-k="app.btn" class:list={["abtn", C("app.btn")]} x={abtn.x} y={abtn.y} width={abtn.w} height={abtn.h} rx="6" />
+                <path class="ico" d={SAVE} transform={at(abtn.x + 16, abtn.y + abtn.h / 2 - 0.5)} />
+                <text class="strong" x={abtn.x + 28} y={abtn.y + abtn.h / 2}>Export MP4</text>
+                <path class="gbtn" d={[8, 8 + abtn.h + 8].map((dx) => `M${abtn.x + abtn.w + dx + 5} ${abtn.y + 0.5}h${abtn.h - 11}a5 5 0 0 1 5 5v${abtn.h - 11}a5 5 0 0 1-5 5h${-(abtn.h - 11)}a5 5 0 0 1-5-5v${-(abtn.h - 11)}a5 5 0 0 1 5-5z`).join("")} />
+                <path class="cursor" data-k="cur.app" d={CURSOR} {...A("cur.app")} />
+            </g>
+
+            {/* ============ 2. the render ============ */}
+            <g class="st" data-st="queue">
+                <text x={Q.x + 11} y={Q.y + Q.bar / 2 + 0.5}><tspan class="k">Celery queue</tspan></text>
+                {!L.wide && <text x={Q.x + Q.w - 11} y={Q.y + Q.bar / 2 + 0.5} text-anchor="end">one job per export</text>}
+                <path class="hair" d={bar(Q)} />
+                <g class="wd" clip-path={`url(#ex-q-${id})`}>
+                  <rect class="our-bg" data-k="q.our" x={Q.x + 4} width={Q.w - 8} height={Q.pitch - 2} rx="4" {...A("q.our")} />
+                  {Array.from({ length: Q.rows + 1 }, (_, i) => (
+                    <g data-k={`q${i}`} class:list={["row", C(`q${i}`)]} {...A(`q${i}`)}>
+                      <path class="gl" data-k={`q${i}g`} {...A(`q${i}g`)} />
+                      <text class="mono id" data-k={`q${i}i`} x={Q.x + Q.ix} y={Q.pitch / 2}>{T(`q${i}i`)}</text>
+                      {Q.src && <text class="src" data-k={`q${i}f`} x={Q.x + Q.fx} y={Q.pitch / 2}>{T(`q${i}f`)}</text>}
+                      <text class="state" data-k={`q${i}s`} x={Q.x + Q.w - 11} y={Q.pitch / 2} text-anchor="end">{T(`q${i}s`)}</text>
+                      {/* its twin, which carries the old word out as the state changes */}
+                      <text class="state" data-k={`q${i}r`} x={Q.x + Q.w - 11} y={Q.pitch / 2} text-anchor="end" opacity="0" />
+                    </g>
+                  ))}
+                </g>
+            </g>
+
+            <g class="st" data-st="box">
+              {/* where a sandbox goes: these stay when everything in them is cut away */}
+              {L.boxes.map((G, s) => <rect class="gh" x={G.x + 0.5} y={G.y + 0.5} width={G.w - 1} height={G.h - 1} rx={s ? 6 : 8} />)}
+              <g class="wd">
+              <g data-k="b0e" {...A("b0e")}>
+                <text x={L.boxes[0].x + L.boxes[0].w / 2} y={L.boxes[0].y + L.boxes[0].h / 2 - 8} text-anchor="middle"><tspan class="k">empty</tspan></text>
+                <text x={L.boxes[0].x + L.boxes[0].w / 2} y={L.boxes[0].y + L.boxes[0].h / 2 + 9} text-anchor="middle">the next render gets its own sandbox</text>
+              </g>
+              {L.boxes.map((G, s) => (
+                <g data-k={`b${s}`} class:list={["bx", C(`b${s}`)]}>
+                  <g data-k={`b${s}c`} {...A(`b${s}c`)}>
+                    <rect class="bg" x={G.x + 0.5} y={G.y + 0.5} width={G.w - 1} height={G.h - 1} rx={s ? 6 : 8} />
+                    <circle class="ping" data-k={`b${s}g`} cx={G.lx} cy={G.ly} {...A(`b${s}g`)} />
+                    <rect class="lock-b" x={G.lx - 4.5} y={G.ly - 1.5} width="9" height="7.5" rx="1.6" />
+                    <path class="lock-s" data-k={`b${s}l`} d={SHACKLE} {...A(`b${s}l`)} />
+                    {s === 0 ? (
+                      <>
+                        <text x={G.ix} y={G.ly}><tspan class="k">Fargate sandbox</tspan><tspan class="mono id" dx={L.wide ? 9 : 8} data-k="b0i">{T("b0i")}</tspan></text>
+                        <text data-k="b0s" x={G.x + G.w - 10} y={G.ly} text-anchor="end">{T("b0s")}</text>
+                        <path class="hair" d={`M${G.x + 1} ${G.y + G.bar + 0.5}H${G.x + G.w - 1}`} />
+
+                        {/* the frame being drawn */}
+                        <g data-k="pv" {...A("pv")}>
+                        <rect class="card" x={pv.x} y={pv.y} width={pv.w} height={pv.h} rx="3" />
+                        <g clip-path={`url(#ex-pv-${id})`}>
+                          <path class="ax" data-k="pv.axes" {...A("pv.axes")} />
+                          <path class="curve draw" pathLength="1" data-k="pv.curve" {...A("pv.curve")} />
+                          <line class="tri" data-k="pv.run" {...A("pv.run")} />
+                          <line class="tri" data-k="pv.rise" {...A("pv.rise")} />
+                          <line class="tan" data-k="pv.tan" {...A("pv.tan")} />
+                          <circle class="pt" data-k="pv.pt" r={L.wide ? 2.6 : 3} {...A("pv.pt")} />
+                        </g>
+                        <text class="mi halo" data-k="pv.lab" {...A("pv.lab")}><tspan data-k="pv.l0">{T("pv.l0")}</tspan><tspan class="fn" data-k="pv.l1">{T("pv.l1")}</tspan><tspan class="sup" dy={-L.sup} data-k="pv.l2">{T("pv.l2")}</tspan><tspan dy={L.sup} data-k="pv.l3">{T("pv.l3")}</tspan></text>
+                        <text class="halo" x={pv.x + pv.w - 7} y={pv.y + pv.h - (L.wide ? 9 : 10)} text-anchor="end">slope <tspan class="cmn strong" data-k="pv.m">{T("pv.m")}</tspan></text>
+                        </g>
+
+                        {/* Remotion's timeline */}
+                        <g data-k="tl" {...A("tl")}>
+                        <text x={tl.tx} y={tl.ty}><tspan class="k">Remotion</tspan></text>
+                        {L.wide ? (
+                          <text x={tl.cx} y={tl.cy} text-anchor="end">frame<tspan class="cmn big" dx="5" data-k="tl.f">{T("tl.f")}</tspan><tspan class="cmn" data-k="tl.N">{T("tl.N")}</tspan></text>
+                        ) : (
+                          <>
+                            <text class="cm huge" data-k="tl.f" x={tl.cx} y={tl.cy}>{T("tl.f")}</text>
+                            <text data-k="tl.N" x={tl.cx} y={tl.cy + 22}>{T("tl.N")}</text>
+                          </>
+                        )}
+                        <text x={tl.lx} y={tl.sy}>scenes</text>
+                        <text x={tl.lx} y={tl.ny}>narration</text>
+                        <path class="sc" data-k="tl.sc" {...A("tl.sc")} />
+                        <path class="na" data-k="tl.na" {...A("tl.na")} />
+                        <g clip-path={`url(#ex-tl-${id})`}>
+                          <path class="sc on" data-k="tl.scp" {...A("tl.scp")} />
+                          <path class="na on" data-k="tl.nap" {...A("tl.nap")} />
+                        </g>
+                        <path class="faint" d={L.d.ruler} />
+                        <text class="cm" x={tl.x0} y={tl.ly}>0</text>
+                        <text class="cm" data-k="tl.end" x={tl.x1} y={tl.ly} text-anchor="end">{T("tl.end")}</text>
+                        <path class="ph" data-k="tl.ph" d={L.d.playhead} {...A("tl.ph")} />
+                        </g>
+
+                        {/* every frame it has drawn, and a needle for the one the reader points back at */}
+                        <g data-k="fs" {...A("fs")}>
+                        <rect class="film" x={fs.x} y={fs.y} width={fs.w} height={fs.h} rx="3" />
+                        <path class="sprk" d={L.d.sprockets} style={`stroke-dasharray:3 ${(fs.pitch / 2 - 3).toFixed(2)}`} />
+                        <path class="cell0" d={L.d.cells} />
+                        <g clip-path={`url(#ex-fs-${id})`}>
+                          <path class="cell1" d={L.d.cells} />
+                          <path class="th" data-k="fs.th" {...A("fs.th")} />
+                          <path class="tg" data-k="fs.tg" {...A("fs.tg")} />
+                        </g>
+                        <rect class="cur" data-k="fs.cur" y={fs.cy} width={fs.cw} height={fs.ch} rx="1.5" {...A("fs.cur")} />
+                        <path class="scan" data-k="fs.scan" d={`M0 ${fs.cy + 2}V${fs.cy + fs.ch - 2}`} {...A("fs.scan")} />
+                        <path class="needle" data-k="peek" d={L.d.needle} {...A("peek")} />
+                        </g>
+                      </>
+                    ) : (
+                      <>
+                        <text class="mono id" data-k={`b${s}i`} x={G.ix} y={G.ly}>{T(`b${s}i`)}</text>
+                        {L.wide && <text x={G.rx} y={G.ly}>1 render</text>}
+                        <line class="strip0" x1={G.sx0} x2={G.sx1 - 2} y1={G.ly} y2={G.ly} style={`stroke-dasharray:${(G.sp - 2).toFixed(2)} 2`} />
+                        <line class="strip1" data-k={`b${s}p`} y1={G.ly} y2={G.ly} style={`stroke-dasharray:${(G.sp - 2).toFixed(2)} 2`} {...A(`b${s}p`)} />
+                        <text class="cm" data-k={`b${s}n`} x={G.x + G.w - 10} y={G.ly} text-anchor="end">{T(`b${s}n`)}</text>
+                      </>
+                    )}
+                  </g>
+                  <path class="o draw" pathLength="1" data-k={`b${s}o`} d={L.d.box[s]} {...A(`b${s}o`)} />
+                </g>
+              ))}
+              {/* the bright point at the head of whichever outline is being drawn */}
+              <path class="pen" pathLength="1" data-k="pen" {...A("pen")} />
+              </g>
+            </g>
+
+            {/* ============ 3. delivery ============ */}
+            <g class="st" data-st="store">
+                <path class="store" d={L.d.store} />
+                <text x={L.notes.store[0]} y={L.notes.store[1]} text-anchor={L.notes.store[2]}><tspan class="k">file store</tspan></text>
+            </g>
+
+            <g class="st" data-st="chat">
+                <text x={rep.lx} y={rep.ly}>same chat</text>
+                <g class="wd">
+                  <circle class="ava" data-k="rep.ava" cx={rep.ax} cy={rep.ay} r="5" {...A("rep.ava")} />
+                  <g data-k="att" {...A("att")}>
+                    <rect class="att" x={att.x} y={att.y} width={att.w} height={att.h} rx="6" />
+                    <rect class="playb" x={att.x + 6} y={att.y + 6} width={att.h - 12} height={att.h - 12} rx="3.5" />
+                    <path class="playa" d={PLAY} transform={`${at(att.x + att.h / 2, att.y + att.h / 2)} scale(0.72)`} />
+                    <text class="strong" x={att.x + att.h + 2} y={att.y + att.h / 2}>{OURS.file}</text>
+                  </g>
+                  <line class="sk" data-k="rep.sk" x1={rep.x0} y1={rep.sy} y2={rep.sy} {...A("rep.sk")} />
+                </g>
+                <rect class="card" x={rep.comp.x} y={rep.comp.y} width={rep.comp.w} height={rep.comp.h} rx={rep.comp.h / 2} />
+                <path class="caret" data-k="rep.caret" d={`M${rep.comp.x + 12} ${rep.comp.y + 5}V${rep.comp.y + rep.comp.h - 5}`} {...A("rep.caret")} />
+                <text class="hint" x={rep.comp.x + 17} y={rep.comp.y + rep.comp.h / 2}>Reply</text>
+            </g>
+
+            {/* ============ beside it: lifecycle email, which the export does not feed ============ */}
+            <g class="st" data-st="mail">
+                <path class="hair" d={L.d.divide} />
+                <text x={mm.hx} y={mm.hy}><tspan class="k">Lifecycle email</tspan>{L.wide && <tspan dx="7">a separate pipeline</tspan>}</text>
+                {!L.wide && <text x={mm.hx} y={mm.hy + 16}>a separate pipeline</text>}
+                <path class="w" d={L.d.wm} />
+                <rect class="ring" data-k="src.ring" {...A("src.ring")} />
+                <rect class="ring" data-k="eb.ring" {...A("eb.ring")} />
+                <rect class="ring" data-k="ses.ring" {...A("ses.ring")} />
+                <rect data-k="src" class:list={["pill", "any", C("src")]} x={src.x} y={src.y} width={src.w} height={src.h} rx={src.h / 2} />
+                <text x={mid(src).x} y={mid(src).y} text-anchor="middle">account event</text>
+                <rect data-k="eb" class:list={["pill", C("eb")]} x={eb.x} y={eb.y} width={eb.w} height={eb.h} rx={eb.h / 2} />
+                <text class="strong" x={mid(eb).x} y={mid(eb).y} text-anchor="middle">EventBridge</text>
+                <rect data-k="ses" class:list={["pill", C("ses")]} x={ses.x} y={ses.y} width={ses.w} height={ses.h} rx={ses.h / 2} />
+                <text class="strong" x={mid(ses).x} y={mid(ses).y} text-anchor="middle">SES</text>
+                <circle class="pk" data-k="pk.ev" r={L.pr} {...A("pk.ev")} />
+                <path class="env" data-k="pk.env" d={ENVELOPE} {...A("pk.env")} />
+            </g>
+            <g class="st" data-st="mail">
+                <path class="ico" d={ENVELOPE} transform={at(mail.x + 16, mail.y + mail.bar / 2)} />
+                <text x={mail.x + 28} y={mail.y + mail.bar / 2 + 0.5}><tspan class="k">Inbox</tspan></text>
+                <path class="hair" d={bar(mail)} />
+                <g clip-path={`url(#ex-in-${id})`}>
+                  {[0, 1, 2].map((i) => (
+                    <g data-k={`mr${i}`} {...A(`mr${i}`)}>
+                      <circle class="unread" data-k={`mr${i}d`} cx={mm.dot} cy={mm.ty} r="2.4" {...A(`mr${i}d`)} />
+                      <text x={mm.x} y={mm.ty}><tspan class="k">Mathos</tspan></text>
+                      <line class="sk" data-k={`mr${i}s`} x1={mm.x} y1={mm.sy} y2={mm.sy} {...A(`mr${i}s`)} />
+                    </g>
+                  ))}
+                </g>
+            </g>
+
+            {/* ============ what travels ============ */}
+            <g class="fx wd">
+              <circle class="pk our" data-k="pk.call" cx={L.sx} r={L.pr} {...A("pk.call")} />
+              <g class="tok" data-k="tok" {...A("tok")}><rect x="-10" y="-5.5" width="20" height="11" rx="5.5" /><path d={KEY} /></g>
+              <circle class="pk" data-k="pk.app" r={L.pr} {...A("pk.app")} />
+              {[0, 1, 2].map((s) => <circle data-k={`d${s}`} class:list={["pk", C(`d${s}`)]} r={L.pr} {...A(`d${s}`)} />)}
+              {Array.from({ length: 8 }, (_, i) => (
+                <g data-k={`t${i}`} class:list={["tile", C(`t${i}`)]} {...A(`t${i}`)}>
+                  <rect x={-tile.w / 2} y={-tile.h / 2} width={tile.w} height={tile.h} rx="3" />
+                  <text text-anchor="middle">.mp4</text>
+                </g>
+              ))}
+              <g class="tile our" data-k="res" {...A("res")}>
+                <rect x={-tile.w / 2} y={-tile.h / 2} width={tile.w} height={tile.h} rx="3" />
+                <text text-anchor="middle">.mp4</text>
+              </g>
+            </g>
+
+          </g>
+
+          {/* ============ the reader's hand ============
+              Each stage has a padded, invisible hit area sized for a fingertip and a
+              ring that hugs the stage and shows keyboard focus. Stages are served as
+              labelled, focusable graphics with a native tooltip, so they can be read
+              without the script; the script makes the figure one Tab stop, moves
+              between stages with the arrow keys, and writes to the plate readout. */}
+          <g class="hits">
+            {L.hits.map((h) =>
+              h.tab ? (
+                <>
+                  <rect class="hit" data-st={h.st} tabindex="0" role="img" aria-label={SAY[h.st].full} x={h.x} y={h.y} width={h.w} height={h.h}><title>{SAY[h.st].full}</title></rect>
+                  <rect class="ring" x={h.ring.x} y={h.ring.y} width={h.ring.w} height={h.ring.h} rx="10" />
+                </>
+              ) : (
+                <rect class="hit" data-st={h.st} aria-hidden="true" x={h.x} y={h.y} width={h.w} height={h.h}><title>{SAY[h.st].full}</title></rect>
+              ),
+            )}
+          </g>
+        </svg>
+      );
+    })}
+  </div>
+  <Fragment slot="caption">
+    Follow one export. A request from the app, or from ChatGPT or Claude through the OAuth and MCP server, becomes a job in a
+    Celery queue. Each render gets its own locked-down Fargate sandbox, where Remotion draws the lesson frame by frame, and the
+    video comes back in the chat. Lifecycle email, at the bottom, is a separate pipeline on EventBridge and SES. The question,
+    the tool name, the jobs, the file name and the frame counts are examples.
+    <span class="ex-live">Point at a stage, or focus the figure and use the arrow keys, to read what it does. Point along the large sandbox to look back through its frames.</span>
+  </Fragment>
+</Figure>
+
+<style is:global>
+  /* The plate picks its drawing from its own width. --tu is one user unit of
+     text: it grows as the plate shrinks, so labels stay near 10.7px on screen.
+     (The page's stylesheet registers the name --u as a number, for its hover
+     lines, and a length written to that would be thrown away.) */
+  .fig .ex-box { container-type: inline-size; }
+  .fig svg.ex-w { --tu: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
+  .fig .plot svg.ex-n { --tu: clamp(0.88px, calc(1.983px - 0.2362cqw), 1.28px); display: none; max-width: 440px; margin-inline: auto; }
+  @container (max-width: 539.98px) {
+    .fig .plot svg.ex-w { display: none; }
+    .fig .plot svg.ex-n { display: block; }
+  }
+  /* The caption only offers the pointer once the script is running (never under reduced motion). */
+  .fig[data-fig="export"]:not([data-live]) .ex-live { visibility: hidden; }
+  /* The readout carries a sentence here: it may be cut short, but it never pushes the title onto two lines. */
+  .fig[data-fig="export"] .plate-h .t { flex: none; white-space: nowrap; }
+  .fig[data-fig="export"] .plate-h .readout { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Type. */
+  .fig svg.ex text { font-size: calc(11 * var(--tu)); dominant-baseline: central; }
+  .fig svg.ex text.cm, .fig svg.ex tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); letter-spacing: 0; }
+  .fig svg.ex .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: calc(10.4 * var(--tu)); letter-spacing: 0; }
+  .fig svg.ex .mi { font-family: var(--math); font-style: italic; font-size: calc(12.5 * var(--tu)); letter-spacing: 0; fill: var(--ink-2); }
+  .fig svg.ex .sup { font-size: 0.72em; }
+  /* A function's name is set upright, as in print. */
+  .fig svg.ex .fn { font-family: var(--cm); font-style: normal; }
+  .fig svg.ex tspan.k { fill: var(--ink); font-weight: 500; }
+  .fig svg.ex .strong { fill: var(--ink); }
+  .fig svg.ex text.msg { fill: var(--ink); }
+  .fig svg.ex text.msg .mi { fill: var(--ink); }
+  .fig svg.ex text.hint { fill: var(--ink-3); }
+  .fig svg.ex tspan.big { font-size: calc(15 * var(--tu)); fill: var(--ink); }
+  .fig svg.ex text.huge { font-size: calc(24 * var(--tu)); fill: var(--ink); }
+  .fig svg.ex .halo { paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+
+  /* Anything the script draws on: its length is 1, and it has no cap to leave a dot behind.
+     Without the script these are plain solid strokes. */
+  .fig svg.ex .draw { stroke-linecap: butt; }
+  .fig svg.ex[data-live] .draw { stroke-dasharray: 1.002 1.002; }
+
+  /* Wires. */
+  .fig svg.ex .w { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.ex .tr { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; }
+  .fig svg.ex .jn { fill: var(--ink-3); }
+
+  /* Interface skeletons. */
+  .fig svg.ex .card { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
+  .fig svg.ex .dots { fill: none; stroke: rgb(var(--ink-rgb) / 0.2); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 0.01 6.99; }
+  .fig svg.ex .sk { fill: none; stroke: rgb(var(--ink-rgb) / 0.12); stroke-width: 5; stroke-linecap: round; }
+  .fig svg.ex .sk.thin { stroke-width: 2; }
+  .fig svg.ex .ava { fill: rgb(var(--ink-rgb) / 0.08); stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.ex .caret { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+  .fig svg.ex .chip { fill: var(--panel); stroke: var(--accent); stroke-width: 1.25; }
+  .fig svg.ex .spin { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
+  .fig svg.ex .tick { fill: none; stroke: var(--s-green); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.ex .key { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-linecap: round; }
+  .fig svg.ex .lock-b { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; }
+  .fig svg.ex .lock-s { fill: none; stroke: var(--ink); stroke-width: 1.2; stroke-linecap: round; }
+  .fig svg.ex .ping { fill: none; stroke: var(--ink-2); stroke-width: 1; }
+  .fig svg.ex .ping.acc, .fig svg.ex .bx.our .ping { stroke: var(--accent); }
+  .fig svg.ex .btn { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.ex .btn.press { fill: var(--accent-soft); }
+  .fig svg.ex .btn-t { fill: var(--ink); }
+  .fig svg.ex .consent.wait .btn { stroke: var(--accent); stroke-width: 1.25; }
+  .fig svg.ex .abtn { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; }
+  .fig svg.ex .abtn.press { fill: rgb(var(--ink-rgb) / 0.14); }
+  .fig svg.ex .ico { fill: none; stroke: var(--ink); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.ex .gbtn { fill: none; stroke: var(--hair); stroke-width: 1; }
+  .fig svg.ex .poster { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linecap: round; }
+  .fig svg.ex .playc { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1; }
+  .fig svg.ex .playt { fill: var(--ink-2); }
+  .fig svg.ex .scrub { fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; }
+  .fig svg.ex .knob { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1.2; }
+  .fig svg.ex .cursor { fill: var(--ink); stroke: var(--panel); stroke-width: 1.2; stroke-linejoin: round; paint-order: stroke; }
+
+  /* The queue. */
+  .fig svg.ex .our-bg { fill: var(--accent-soft); }
+  .fig svg.ex .row .gl { fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.ex .row.st-q .gl { stroke: var(--s-amber); }
+  .fig svg.ex .row.st-r .gl { stroke: var(--ink-2); }
+  .fig svg.ex .row.st-d .gl { stroke: var(--s-green); }
+  .fig svg.ex .row .id { fill: var(--ink-2); }
+  .fig svg.ex .row.st-r .state { fill: var(--ink); }
+  .fig svg.ex .row.our .gl.gl { stroke: var(--accent); }
+  .fig svg.ex .row.our text.id, .fig svg.ex .row.our text.src, .fig svg.ex .row.our text.state { fill: var(--accent); }
+
+  /* Sandboxes. */
+  .fig svg.ex .gh { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 2 4; }
+  .fig svg.ex .bx .bg { fill: var(--panel-2); stroke: none; }
+  .fig svg.ex .bx .o { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+  .fig svg.ex .bx.our .o { stroke: var(--accent); stroke-width: 1.5; }
+  .fig svg.ex .bx.our .id { fill: var(--accent); }
+  .fig svg.ex .bx .id { fill: var(--ink-2); }
+  .fig svg.ex .strip0 { stroke: rgb(var(--ink-rgb) / 0.1); stroke-width: 9; }
+  .fig svg.ex .strip1 { stroke: var(--ink-3); stroke-width: 9; }
+
+  /* The lesson frame. */
+  .fig svg.ex .ax { fill: none; stroke: var(--ink-4); stroke-width: 0.8; }
+  .fig svg.ex .curve { fill: none; stroke: var(--ink); stroke-width: 1.25; stroke-linejoin: round; }
+  .fig svg.ex .tri { stroke: var(--ink-3); stroke-width: 0.9; stroke-dasharray: 1.5 2; }
+  .fig svg.ex .tan { stroke: var(--ink-2); stroke-width: 1.5; stroke-linecap: round; }
+  .fig svg.ex .pt { fill: var(--ink); stroke: var(--panel); stroke-width: 1.2; }
+  .fig svg.ex .bx.our .tan { stroke: var(--accent); stroke-width: 1.7; }
+  .fig svg.ex .bx.our .pt { fill: var(--accent); }
+
+  /* The timeline. */
+  .fig svg.ex .sc { fill: rgb(var(--ink-rgb) / 0.1); stroke: none; }
+  .fig svg.ex .sc.on { fill: var(--ink-3); }
+  .fig svg.ex .na { fill: none; stroke: rgb(var(--ink-rgb) / 0.2); stroke-width: 1.4; stroke-linecap: round; }
+  .fig svg.ex .na.on { stroke: var(--ink-2); }
+  .fig svg.ex .ph { fill: var(--ink); stroke: var(--ink); stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.ex .bx.our .sc.on { fill: var(--accent); }
+  .fig svg.ex .bx.our .na.on { stroke: var(--accent); }
+  .fig svg.ex .bx.our .ph { fill: var(--accent); stroke: var(--accent); }
+
+  /* The filmstrip. */
+  .fig svg.ex .film { fill: rgb(var(--ink-rgb) / 0.09); }
+  .fig svg.ex .sprk { fill: none; stroke: var(--panel-2); stroke-width: 2.4; }
+  .fig svg.ex .cell0 { fill: var(--panel-2); stroke: none; }
+  .fig svg.ex .cell1 { fill: var(--panel); stroke: var(--ink-4); stroke-width: 0.8; }
+  .fig svg.ex .th { fill: none; stroke: var(--ink-3); stroke-width: 0.8; stroke-linejoin: round; }
+  .fig svg.ex .tg { fill: none; stroke: var(--ink); stroke-width: 1.1; stroke-linecap: round; }
+  .fig svg.ex .cur { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+  .fig svg.ex .scan { fill: none; stroke: var(--ink-3); stroke-width: 1; }
+  .fig svg.ex .bx.our .tg, .fig svg.ex .bx.our .cur, .fig svg.ex .bx.our .scan { stroke: var(--accent); }
+
+  /* The file store and what comes back to the chat. */
+  .fig svg.ex .store { fill: none; stroke: var(--ink); stroke-width: 1.25; stroke-linejoin: round; }
+  .fig svg.ex .att { fill: var(--panel); stroke: var(--accent); stroke-width: 1.4; }
+  .fig svg.ex .playb { fill: var(--accent-soft); }
+  .fig svg.ex .playa { fill: var(--accent); }
+  /* Lifecycle email. It is not our job's route, so none of it takes the accent. */
+  .fig svg.ex .pill { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1; }
+  .fig svg.ex .pill.any { fill: none; stroke: var(--ink-4); stroke-dasharray: 2 3; }
+  .fig svg.ex .pill.hot { stroke: var(--ink); stroke-width: 1.5; }
+  .fig svg.ex .pill.any.hot { stroke: var(--ink-2); stroke-width: 1.2; }
+  .fig svg.ex .ring { fill: none; stroke: var(--ink-2); stroke-width: 1; }
+  .fig svg.ex .unread { fill: var(--ink-2); }
+
+  /* What travels. */
+  .fig svg.ex .pk { fill: var(--ink-2); stroke: var(--panel); stroke-width: 1; }
+  .fig svg.ex .pk.our { fill: var(--accent); }
+  .fig svg.ex .tok rect { fill: var(--panel); stroke: var(--accent); stroke-width: 1.2; }
+  .fig svg.ex .tok path { fill: none; stroke: var(--accent); stroke-width: 1.1; stroke-linecap: round; }
+  .fig svg.ex .tile rect { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1; }
+  .fig svg.ex .tile text { fill: var(--ink-2); }
+  .fig svg.ex .tile.our rect { stroke: var(--accent); stroke-width: 1.4; }
+  .fig svg.ex .tile.our text { fill: var(--accent); }
+  .fig svg.ex .env { fill: var(--panel); stroke: var(--ink); stroke-width: 1.1; stroke-linejoin: round; }
+
+  /* A sandbox's outline while it is being drawn: a short bright stroke at the head of the line. */
+  .fig svg.ex .pen { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 0.024 1; }
+  .fig svg.ex .pen.our { stroke: var(--accent); }
+  /* The frame the reader is pointing back at, on the strip. */
+  .fig svg.ex .needle { fill: none; stroke: var(--ink); stroke-width: 1.1; }
+
+  /* A state is told in colour as well as in words, and a change of state is never a flash. */
+  .fig svg.ex .btn, .fig svg.ex .abtn { transition: fill 0.18s var(--ease-out), stroke 0.18s var(--ease-out); }
+  .fig svg.ex .pill { transition: stroke 0.32s var(--ease-out), stroke-width 0.32s var(--ease-out); }
+  .fig svg.ex .row .gl, .fig svg.ex .row text { transition: stroke 0.32s var(--ease-out), fill 0.32s var(--ease-out); }
+
+  /* Pointer, touch and keyboard: a stage steps forward and the rest step back. */
+  .fig svg.ex .hit { fill: transparent; stroke: none; pointer-events: all; }
+  /* A finger may go across the drawing (along the big sandbox it steps through frames); up and down it scrolls the page as ever.
+     Set on the drawing itself: a browser does not take this from a shape inside an svg. */
+  .fig svg.ex[data-live] { touch-action: pan-y pinch-zoom; }
+  .fig svg.ex[data-live] .hit { cursor: default; }
+  .fig svg.ex .hit:focus { outline: none; }
+  .fig svg.ex .ring { fill: none; stroke: none; pointer-events: none; }
+  .fig svg.ex .hit:focus-visible + .ring { stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  .fig svg.ex .st { transition: opacity 0.32s var(--ease-out); }
+  .fig svg.ex.focus .st:not(.on) { opacity: 0.42; }
+  /* Going back up the page into the story: what had been running by itself (the rows, what is in the sandboxes,
+     what is on the wires, and what our own job has left behind it) is cut away, and the story's own moment
+     comes up in its place. The stage stays. */
+  .fig svg.ex .wd { transition: opacity 0.26s var(--ease-out); }
+  .fig svg.ex.cut .wd { opacity: 0; transition: opacity 0.09s var(--ease-io); }
+</style>

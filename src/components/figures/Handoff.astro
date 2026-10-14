@@ -1,0 +1,429 @@
+---
+// Fig: "One writer, same tree". The return campaign of the NeurIPS 2026
+// workshop paper "Verifying the Second Agent": a seven-node delegation tree is
+// held fixed and only what workers hand back changes. In arm B every worker
+// returns a patch (shared write); in arm C workers return written findings and
+// the root alone writes code. Arm A is one agent. 40 tasks over 38
+// repositories, two attempts per arm.
+// Left: the two trees. Right: cost per attempt, and the primary contrast
+// C minus B on verified success, with a bracket at the 16.1 pp effect the
+// design had 80% power to detect. That bracket is a reference, not a detection
+// boundary: what leaves the effect unresolved is the interval crossing zero.
+// Two layouts; a container query shows one. The script reveals the drawing.
+// Every mark that encodes a measurement or a count (the seven nodes, the cost
+// bars, the estimate, its interval, the bracket) appears whole, at its
+// measured length and place: the script may open it across its own scale (a
+// bar's thickness, a dot's radius, the height of an end cap) and never along
+// it. Structure is drawn on: the trees' edges, the axes, the leaders. The
+// script never prints a number of its own.
+import Figure from "../Figure.astro";
+
+interface Props { n?: number }
+const { n = 2 } = Astro.props;
+
+const f = (v: number) => Math.round(v * 100) / 100;
+const sg = (v: number, d = 2) => `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(d)}`;
+const usd = (v: number) => `$${v.toFixed(2)}`;
+const sgUsd = (v: number) => `${v < 0 ? "−" : "+"}$${Math.abs(v).toFixed(3)}`;
+
+// Cost per attempt in US dollars, with its 95% interval where the paper
+// reports one, and verified success against the single agent in percentage
+// points (vs: estimate, its decimals as reported, and its interval if any).
+type Arm = { id: "A" | "B" | "C"; name: string; cost: number; ci?: [number, number]; vs?: { v: number; dp: number; ci?: [number, number] } };
+const ARMS: Arm[] = [
+  { id: "A", name: "single agent", cost: 0.17, ci: [0.15, 0.2] },
+  { id: "B", name: "shared write", cost: 0.97, ci: [0.86, 1.08], vs: { v: -8.8, dp: 1 } },
+  { id: "C", name: "findings return", cost: 1.03, vs: { v: -7.5, dp: 2, ci: [-15.85, 1.16] } },
+];
+const [ARM_A, ARM_B, ARM_C] = ARMS;
+const ci2 = (c: [number, number]) => `[${c[0].toFixed(2)}, ${c[1].toFixed(2)}]`;
+// What the pointer reads out.
+const SAY = {
+  A: `A, one agent: ${usd(ARM_A.cost)} per attempt ${ci2(ARM_A.ci!)}`,
+  B: `B: ${usd(ARM_B.cost)} ${ci2(ARM_B.ci!)}, ${sg(ARM_B.vs!.v, ARM_B.vs!.dp)} pp vs A`,
+  C: `C: ${usd(ARM_C.cost)}, ${sg(ARM_C.vs!.v, ARM_C.vs!.dp)} pp vs A [${sg(ARM_C.vs!.ci![0])}, ${sg(ARM_C.vs!.ci![1])}]`,
+};
+// Verified success, findings return minus shared write, percentage points.
+const PRIMARY = { v: 1.25, lo: -9.76, hi: 12.82, p: 0.925, floor: 16.1 };
+// Cost per attempt, findings return minus shared write, US dollars.
+const DCOST = { v: 0.051, lo: -0.005, hi: 0.11 };
+const PMAX = 20; // contrast axis, −20 to +20 pp
+const CMAX = 1.2; // cost axis, $0 to $1.20
+const SAID = {
+  ...SAY,
+  D: `C − B cost: ${sgUsd(DCOST.v)} [${sg(DCOST.lo, 3)}, ${sg(DCOST.hi, 3)}]`,
+  P: `C − B: ${sg(PRIMARY.v)} pp [${sg(PRIMARY.lo)}, ${sg(PRIMARY.hi)}], p = ${PRIMARY.p}`,
+};
+// Nodes that may change the delivered code.
+const WRITERS = { B: 7, C: 1 };
+const writers = (n: number) => `${n} ${n === 1 ? "writer" : "writers"}`;
+// The plate readout's lines as the scroll story plays. The script shows a line
+// with a number in it only once the mark for that number is fully shown, and
+// it never computes a number of its own.
+const STORY = {
+  trees: "same tree in both arms",
+  writers: `B: ${writers(WRITERS.B)} · C: ${writers(WRITERS.C)}`,
+  costs: ARMS.map((a) => `${a.id} ${usd(a.cost)}`).join(" · "),
+  power: `80% power at ±${PRIMARY.floor} pp`,
+  ci: `C − B: ${sg(PRIMARY.v)} pp [${sg(PRIMARY.lo)}, ${sg(PRIMARY.hi)}]`,
+};
+
+function view(wide: boolean) {
+  const W = wide ? 640 : 400;
+
+  // ---------- the two trees ----------
+  const T = wide
+    ? { bx: 78, cx: 238, top: 78, dx: 19, dy: 46, r: 5, rr: 6, vy: 46, gap: 2.5 }
+    : { bx: 100, cx: 300, top: 76, dx: 22, dy: 48, r: 6.5, rr: 7.5, vy: 42, gap: 3 };
+  const split = wide ? 167.5 : 203; // where tree B's area ends and tree C's begins
+  const tree = (id: "B" | "C", x: number) => {
+    const root = { x, y: T.top };
+    const mids = [-2, 2].map((s) => ({ x: x + s * T.dx, y: T.top + T.dy }));
+    const leaves = [-3, -1, 1, 3].map((s) => ({ x: x + s * T.dx, y: T.top + 2 * T.dy }));
+    // Edges run child to parent, the way a handoff travels, and stop short of
+    // each node's rim so a handoff is never drawn under a node.
+    const edge = (c: { x: number; y: number }, p: { x: number; y: number }, lv: number, rc: number, rp: number) => {
+      const d = Math.hypot(p.x - c.x, p.y - c.y), ux = (p.x - c.x) / d, uy = (p.y - c.y) / d;
+      const a = [f(c.x + ux * (rc + T.gap)), f(c.y + uy * (rc + T.gap))], b = [f(p.x - ux * (rp + T.gap)), f(p.y - uy * (rp + T.gap))];
+      return {
+        d: `M${a[0]} ${a[1]}L${b[0]} ${b[1]}`, len: f(d - rc - rp - 2 * T.gap), lv,
+        mx: f((a[0] + b[0]) / 2), my: f((a[1] + b[1]) / 2), a, b,
+      };
+    };
+    const edges = [
+      ...mids.map((m) => edge(m, root, 0, T.r, T.rr)),
+      ...leaves.map((l, i) => edge(l, mids[i >> 1], 1, T.r, T.r)),
+    ];
+    const sy0 = T.top - T.rr - T.gap, sy1 = T.vy + 6 + T.gap;
+    const stub = { d: `M${x} ${sy0}V${sy1}`, len: f(sy0 - sy1), my: f((sy0 + sy1) / 2), a: [x, sy0], b: [x, sy1] };
+    const nodes = [
+      { ...root, r: T.rr, lv: 0, writer: true },
+      ...mids.map((m) => ({ ...m, r: T.r, lv: 1, writer: id === "B" })),
+      ...leaves.map((l) => ({ ...l, r: T.r, lv: 2, writer: id === "B" })),
+    ];
+    const labelX = x - 3 * T.dx - T.r - (wide ? 1 : 6);
+    return {
+      id, x, root, edges, stub, nodes, labelX,
+      name: id === "B" ? "shared write" : "findings return",
+      ret: id === "B" ? "workers return patches" : "workers return findings",
+      writers: WRITERS[id],
+      callX: x - T.rr - (wide ? 13 : 15),
+      // The inspectable area takes in the tree with its callout and labels. The
+      // two areas meet halfway between the trees.
+      hit: id === "B"
+        ? { x: labelX - (wide ? 12 : 14), y: T.vy - 12, w: split - 0.5 - (labelX - (wide ? 12 : 14)), h: 0 }
+        : { x: split + 0.5, y: T.vy - 12, w: (wide ? 339.5 : 399) - split - 0.5, h: 0 },
+    };
+  };
+  const trees = [tree("B", T.bx), tree("C", T.cx)];
+  const armY = T.top + 2 * T.dy + (wide ? 26 : 28);
+  const retY = armY + (wide ? 18 : 19);
+  const footY = retY + (wide ? 34 : 26);
+  for (const t of trees) t.hit.h = retY + 12 - t.hit.y;
+
+  // ---------- cost per attempt ----------
+  // Rows are a full pitch apart so each is a comfortable target: about 26px
+  // under a pointer side by side, and over 40px under a finger when stacked.
+  const K = wide ? { x0: 358, y0: 0, lab: 0, bar: 466, k: 106, h: 8, pitch: 30, first: 38 } : { x0: 0, y0: footY + 28, lab: 0, bar: 128, k: 196, h: 10, pitch: 52, first: 42 };
+  const cRows = ARMS.map((a, i) => {
+    const y = K.y0 + K.first + i * K.pitch;
+    return { ...a, y, w: f(a.cost * K.k), x1: f(K.bar + a.cost * K.k) };
+  });
+  const kx = (v: number) => f(K.bar + v * K.k);
+  const dY = cRows[2].y + K.pitch; // the difference sits one row below arm C
+  const kAxisY = dY + (wide ? 19 : 28);
+  // The cost difference: a small dimension between the ends of bars B and C.
+  const dim = `M${cRows[1].x1} ${cRows[1].y + K.h / 2 + 2}V${dY}M${cRows[2].x1} ${cRows[2].y + K.h / 2 + 2}V${dY}`;
+  const right = wide ? 640 : 392;
+
+  // ---------- primary contrast ----------
+  const P = wide ? { y0: kAxisY + 38, mid: 499, k: 6.6 } : { y0: kAxisY + 42, mid: 196, k: 9.4 };
+  const px = (v: number) => f(P.mid + v * P.k);
+  const brkL = P.y0 + (wide ? 28 : 31);
+  const brkY = brkL + (wide ? 11 : 13);
+  const whY = brkY + (wide ? 27 : 32);
+  const pAxisY = whY + (wide ? 28 : 33);
+  const H = pAxisY + (wide ? 22 : 24);
+  const cap = wide ? 5 : 7;
+  const lift = wide ? 13 : 16; // value above the whisker, p below it
+
+  // The two scales, as the script draws them: a baseline, then a tick as the pen passes it ([x, length]).
+  const kTicks = [0, 0.25, 0.5, 0.75, 1].map((c) => [kx(c), (c * 4) % 2 ? 2.5 : 5]);
+  const pTicks = [-20, -15, -10, -5, 0, 5, 10, 15, 20].map((p) => [px(p), p % 10 ? 2.5 : 5]);
+  const ticksD = (ticks: number[][], y: number) => ticks.map(([x, l]) => `M${x} ${y}v${l}`).join("");
+
+  const G = {
+    H,
+    // Heights in the drawing the script times its story by: a part is drawn
+    // once the plate has let that much of its sheet out.
+    ys: {
+      vf: T.vy, leaf: T.top + 2 * T.dy + T.r, arm: armY, ret: retY, foot: footY,
+      rows: cRows.map((r) => r.y), dim: dY, kAxis: kAxisY,
+      brk: brkY, wh: whY, pAxis: pAxisY,
+    },
+    trees: trees.map((t) => ({
+      id: t.id,
+      nodes: t.nodes.map((n) => [n.x, n.y, n.r]),
+      // Each edge names its child and its parent among the nodes: root 0, mids 1 and 2, leaves 3 to 6.
+      edges: t.edges.map((e, i) => ({ len: e.len, lv: e.lv, a: e.a, b: e.b, c: 1 + i, p: i < 2 ? 0 : 1 + ((i - 2) >> 1) })),
+      stub: { len: t.stub.len, a: t.stub.a, b: t.stub.b },
+      vf: [t.x - 8, T.vy - 6, 16, 12],
+      halo: T.rr + 3.5,
+    })),
+    side: wide ? 5 : 6.5, // patch glyph, a square
+    dot: wide ? 2.4 : 3.1, // finding glyph, a dot
+    cost: { y: kAxisY, x0: K.bar, x1: kx(CMAX), ticks: kTicks },
+    con: { y: pAxisY, x0: px(-PMAX), x1: px(PMAX), ticks: pTicks },
+    // The difference in cost: a drop from the end of bar B and of bar C to one line.
+    dim: { xb: cRows[1].x1, yb: cRows[1].y + K.h / 2 + 2, xc: cRows[2].x1, yc: cRows[2].y + K.h / 2 + 2, y: dY },
+    brk: { x1: px(-PRIMARY.floor), x2: px(PRIMARY.floor), y: brkY, drop: 5 },
+    iv: { lo: px(PRIMARY.lo), hi: px(PRIMARY.hi), y: whY, cap },
+    say: SAID,
+    story: STORY,
+  };
+
+  return {
+    wide, W, H, T, trees, armY, retY, footY, K, cRows, kx, dY, kAxisY, dim, right,
+    P, px, brkL, brkY, whY, pAxisY, cap, lift, G, hug: wide ? 11 : 13,
+    kTicksD: ticksD(kTicks, kAxisY), pTicksD: ticksD(pTicks, pAxisY),
+    // Where the right-hand column's hit areas begin: side by side, at the rule between the columns.
+    hx: wide ? 340.5 : -4,
+  };
+}
+
+const views = [view(true), view(false)];
+const label = "Two seven-node agent trees that differ only in what workers hand back, their cost per attempt, and the difference in verified success";
+const aria =
+  `Two identical seven-node trees. In arm B, shared write, every worker returns a patch, so all seven nodes can change the delivered code. ` +
+  `In arm C, findings return, workers return written findings and only the root writes code. ` +
+  `Cost per attempt: ${ARMS.map((a) => `${a.id}, ${a.name}, ${usd(a.cost)}`).join("; ")}. ` +
+  `Cost difference C minus B: ${sg(DCOST.v, 3)} dollars per attempt, 95% interval ${sg(DCOST.lo, 3)} to ${sg(DCOST.hi, 3)}. ` +
+  `Primary contrast, verified success of C minus B: ${sg(PRIMARY.v)} percentage points, 95% interval ${sg(PRIMARY.lo)} to ${sg(PRIMARY.hi)}, p = ${PRIMARY.p}. ` +
+  `A bracket marks the ${PRIMARY.floor} point effect the design had 80% power to detect. The interval crosses zero, so the effect is unresolved. ` +
+  `40 tasks over 38 repositories, two attempts each.`;
+
+// Every inspectable part is also a button a keyboard can reach. Its label
+// carries, in words, the numbers the plate readout shows for it.
+const words = (v: number, dp = 2) => `${v < 0 ? "minus" : "plus"} ${Math.abs(v).toFixed(dp)}`;
+const costWords = (a: Arm) => `${a.cost.toFixed(2)} dollars per attempt${a.ci ? `, 95% interval ${a.ci[0].toFixed(2)} to ${a.ci[1].toFixed(2)}` : ""}`;
+const vsWords = (a: Arm) =>
+  a.vs ? ` Verified success ${words(a.vs.v, a.vs.dp)} points against the single agent${a.vs.ci ? `, 95% interval ${words(a.vs.ci[0])} to ${words(a.vs.ci[1])}` : ""}.` : "";
+const spoken = {
+  row: (a: Arm) => `Cost, arm ${a.id}, ${a.name}: ${costWords(a)}.${vsWords(a)}`,
+  D: `Cost of C minus B: ${words(DCOST.v, 3)} dollars per attempt, 95% interval ${words(DCOST.lo, 3)} to ${words(DCOST.hi, 3)}.`,
+  P: `Verified success of C minus B: ${words(PRIMARY.v)} points, 95% interval ${words(PRIMARY.lo)} to ${words(PRIMARY.hi)}, p equals ${PRIMARY.p}. The design had 80% power to detect a ${PRIMARY.floor} point effect. The interval crosses zero, so the effect is unresolved.`,
+};
+const PLOT = "Plot. Tab through its parts for exact values.";
+---
+
+<Figure name="handoff" n={n} title="One writer, same tree" label={label} readout={`C − B: ${sg(PRIMARY.v)} pp [${sg(PRIMARY.lo)}, ${sg(PRIMARY.hi)}]`}>
+  <div class="ho-box">
+    {views.map((v) => (
+      <svg class:list={["ho", v.wide ? "ho-w" : "ho-n"]} viewBox={`0 0 ${v.W} ${v.H}`} role="group" data-g={JSON.stringify(v.G)} aria-label={PLOT} aria-describedby={`ho-${v.wide ? "w" : "n"}-desc`}>
+        <desc id={`ho-${v.wide ? "w" : "n"}-desc`}>{aria}</desc>
+        <g aria-hidden="true">
+          {v.wide && <path class="hair sep" d={`M340 0V${v.H}`} />}
+
+          {/* ===== the trees ===== */}
+          <text class="head" x="0" y="9" dominant-baseline="central"><tspan class="k">Same tree, seven nodes</tspan>{!v.wide && <tspan class="sub" dx="9">only the handoff changes</tspan>}</text>
+          {v.wide && <text class="sub" x="0" y="27" dominant-baseline="central">only what workers hand back changes</text>}
+          {v.trees.map((t) => (
+            <g class="tree" data-k={t.id}>
+              <path class="stub" d={t.stub.d} />
+              <g class="vf">
+                <rect class="vf-r" x={t.x - 8} y={v.T.vy - 6} width="16" height="12" rx="2.5" />
+                <path class="vf-k" d={`M${t.x - 3.4} ${v.T.vy + 0.2}l2.3 2.4l4.4 -4.9`} />
+                <text class="vf-t" x={t.x + 14} y={v.T.vy} dominant-baseline="central">verifier</text>
+              </g>
+              {t.edges.map((e) => <path class="edge" d={e.d} />)}
+              {/* Handoffs in flight. This is the still frame; the script replaces it with moving ones. */}
+              <g class="pk">
+                {t.edges.map((e) =>
+                  t.id === "B"
+                    ? <rect class="pk-patch" x={f(e.mx - v.G.side / 2)} y={f(e.my - v.G.side / 2)} width={v.G.side} height={v.G.side} />
+                    : <circle class="pk-find" cx={e.mx} cy={e.my} r={v.G.dot} />
+                )}
+                <rect class="pk-patch" x={f(t.x - v.G.side / 2)} y={f(t.stub.my - v.G.side / 2)} width={v.G.side} height={v.G.side} />
+              </g>
+              {t.id === "C" && <circle class="halo" cx={t.root.x} cy={t.root.y} r={v.T.rr + 3.5} />}
+              {t.nodes.map((nd) => <circle class:list={["nd", `lv${nd.lv}`, { w: nd.writer, sole: t.id === "C" && nd.writer }]} cx={nd.x} cy={nd.y} r={nd.r} />)}
+              <g class="call">
+                <path class="lead" d={`M${t.x - v.T.rr - 5} ${t.root.y}H${t.callX + 3}`} />
+                <text class:list={["ct", { acc: t.id === "C" }]} x={t.callX} y={t.root.y} text-anchor="end" dominant-baseline="central"><tspan class="cmn">{t.writers}</tspan> {t.writers === 1 ? "writer" : "writers"}</text>
+              </g>
+              <text class="arm" x={t.labelX} y={v.armY} dominant-baseline="central"><tspan class="cmn strong">{t.id}</tspan><tspan class="k" dx="6">{t.name}</tspan></text>
+              <g class="ret">
+                {t.id === "B"
+                  ? <rect class="pk-patch" x={t.labelX + 1} y={f(v.retY - v.G.side / 2)} width={v.G.side} height={v.G.side} />
+                  : <circle class="pk-find" cx={f(t.labelX + 1 + v.G.side / 2)} cy={v.retY} r={v.G.dot} />}
+                <text x={t.labelX + (v.wide ? 12 : 15)} y={v.retY} dominant-baseline="central">{t.ret}</text>
+              </g>
+            </g>
+          ))}
+          <text class="foot" x="0" y={v.footY} dominant-baseline="central">40 tasks over 38 repositories, two attempts each</text>
+
+          {/* ===== cost per attempt ===== */}
+          <g class="cost">
+            <text class="head" x={v.K.x0} y={v.K.y0 + 9} dominant-baseline="central"><tspan class="k">Cost per attempt</tspan></text>
+            {/* The scale is two strokes, so the script can rule the baseline and then set each tick as the pen passes it. */}
+            <g class="scale">
+              <path class="faint axis ax-b" d={`M${v.K.bar} ${v.kAxisY}H${v.kx(CMAX)}`} />
+              <path class="faint axis ax-t" d={v.kTicksD} />
+              {[0, 0.5, 1].map((c) => (
+                <text class="cm tk" data-x={v.kx(c)} x={v.kx(c)} y={v.kAxisY + 8} text-anchor="middle" dominant-baseline="hanging">{c ? usd(c) : "$0"}</text>
+              ))}
+            </g>
+            {v.cRows.map((r) => (
+              <g class="crow" data-k={r.id}>
+                <text class="al" x={v.K.x0} y={r.y} dominant-baseline="central"><tspan class="cmn strong">{r.id}</tspan><tspan dx="6">{r.name}</tspan></text>
+                <rect class="bar" x={v.K.bar} y={r.y - v.K.h / 2} width={r.w} height={v.K.h} />
+                <text class="cm strong cv" x={f(r.x1 + 6)} y={r.y} dominant-baseline="central">{usd(r.cost)}</text>
+              </g>
+            ))}
+            <g class="dcost">
+              <path class="dim" d={v.dim} />
+              <path class="dimh" d={`M${v.cRows[1].x1} ${v.dY}H${v.cRows[2].x1}`} />
+              <text class="dl" x={f(v.cRows[1].x1 - 6)} y={v.dY} text-anchor="end" dominant-baseline="central">C − B <tspan class="cmn strong">{sgUsd(DCOST.v)}</tspan><tspan class="cmn"> [{sg(DCOST.lo, 3)}, {sg(DCOST.hi, 3)}]</tspan></text>
+            </g>
+          </g>
+
+          {/* ===== primary contrast ===== */}
+          <g class="con">
+            <text class="head" x={v.K.x0} y={v.P.y0 + 9} dominant-baseline="central"><tspan class="k">Verified success, C − B</tspan></text>
+            <text class="verdict" x={v.right} y={v.P.y0 + 9} text-anchor="end" dominant-baseline="central">no resolved effect</text>
+            <rect class="band" x={v.px(-PRIMARY.floor)} y={v.brkY} width={f(v.px(PRIMARY.floor) - v.px(-PRIMARY.floor))} height={v.pAxisY - v.brkY} />
+            <g class="scale">
+              <path class="faint axis ax-b" d={`M${v.px(-PMAX)} ${v.pAxisY}H${v.px(PMAX)}`} />
+              <path class="faint axis ax-t" d={v.pTicksD} />
+              {[-20, -10, 0, 10].map((p) => (
+                <text class="cm tk" data-x={v.px(p)} x={v.px(p)} y={v.pAxisY + 8} text-anchor="middle" dominant-baseline="hanging">{p ? sg(p, 0) : "0"}</text>
+              ))}
+              <text class="cm tk" data-x={v.px(PMAX)} x={v.right} y={v.pAxisY + 8} text-anchor="end" dominant-baseline="hanging">+20 pp</text>
+            </g>
+            <line class="zero" x1={v.px(0)} x2={v.px(0)} y1={v.brkY + 6} y2={v.pAxisY} />
+            <g class="floor">
+              <path class="brk" d={`M${v.px(-PRIMARY.floor)} ${v.brkY + 5}V${v.brkY}H${v.px(PRIMARY.floor)}V${v.brkY + 5}`} />
+              <text class="brl" x={v.px(0)} y={v.brkL} text-anchor="middle" dominant-baseline="central">{PRIMARY.floor} pp at 80% power</text>
+              <text class="cm bre" x={f(v.px(-PRIMARY.floor) - 5)} y={v.brkY + 1} text-anchor="end" dominant-baseline="central">{sg(-PRIMARY.floor, 1)}</text>
+              <text class="cm bre" x={f(v.px(PRIMARY.floor) + 5)} y={v.brkY + 1} dominant-baseline="central">{sg(PRIMARY.floor, 1)}</text>
+            </g>
+            {/* the interval is one mark: it is shown whole, never stretched */}
+            <g class="iv">
+              <line class="wh" x1={v.px(PRIMARY.lo)} x2={v.px(PRIMARY.hi)} y1={v.whY} y2={v.whY} />
+              <path class="caps" d={`M${v.px(PRIMARY.lo)} ${v.whY - v.cap}v${v.cap * 2}M${v.px(PRIMARY.hi)} ${v.whY - v.cap}v${v.cap * 2}`} />
+            </g>
+            <circle class="pt" cx={v.px(PRIMARY.v)} cy={v.whY} r={v.wide ? 4.5 : 6} />
+            <text class="cm acc nv" x={v.px(0) + 6} y={v.whY - v.lift} dominant-baseline="central">{sg(PRIMARY.v)} pp</text>
+            <text class="cm nlo" x={f(v.px(PRIMARY.lo) - v.cap - 3)} y={v.whY} text-anchor="end" dominant-baseline="central">{sg(PRIMARY.lo)}</text>
+            <text class="cm nhi" x={f(v.px(PRIMARY.hi) + v.cap + 3)} y={v.whY} dominant-baseline="central">{sg(PRIMARY.hi)}</text>
+            <text class="np" x={v.px(0) + 6} y={v.whY + v.lift + 1} dominant-baseline="central">p = <tspan class="cmn">{PRIMARY.p}</tspan></text>
+          </g>
+        </g>
+
+        {/* The parts a reader can inspect, by pointer or by keyboard, in reading order.
+            Each part has two rectangles: a padded, invisible hit area sized for a
+            fingertip, and a ring that hugs the visible part and shows keyboard focus.
+            Parts are served as labelled, focusable graphics with a native tooltip; the
+            script turns them into buttons that write to the plate readout instead.
+            A tree and its cost row read out the same arm, so the tree answers to the
+            pointer only and the row is the keyboard's part. */}
+        <g class="hits">
+          {v.trees.map((t) => (
+            <rect class="hit" data-k={t.id} aria-hidden="true"
+              x={t.hit.x} y={t.hit.y} width={t.hit.w} height={t.hit.h} rx="5"><title>{SAID[t.id]}</title></rect>
+          ))}
+          {v.cRows.map((r) => (
+            <>
+              <rect class="hit" data-k={r.id} tabindex="0" role="img" aria-label={spoken.row(r)}
+                x={v.hx} y={r.y - v.K.pitch / 2} width={v.right + 2 - v.hx} height={v.K.pitch}><title>{SAID[r.id]}</title></rect>
+              <rect class="ring" x={v.K.x0 - 4} y={r.y - v.hug} width={v.right - v.K.x0 + 6} height={v.hug * 2} rx="4" />
+            </>
+          ))}
+          {/* The difference answers from its own line down to the foot of the cost scale, and the contrast from
+              its heading down, so a pointer crossing the column is never over nothing. */}
+          <rect class="hit" data-k="D" tabindex="0" role="img" aria-label={spoken.D}
+            x={v.hx} y={v.dY - v.K.pitch / 2} width={v.right + 2 - v.hx} height={v.P.y0 - 2 - (v.dY - v.K.pitch / 2)}><title>{SAID.D}</title></rect>
+          <rect class="ring" x={v.K.bar - (v.wide ? 100 : 22)} y={v.dY - v.hug + 2} width={f(v.cRows[2].x1 + 10 - (v.K.bar - (v.wide ? 100 : 22)))} height={v.hug * 2 - 4} rx="4" />
+          <rect class="hit" data-k="P" tabindex="0" role="img" aria-label={spoken.P}
+            x={v.hx} y={v.P.y0 - 2} width={v.right + 2 - v.hx} height={v.H - v.P.y0 + 1}><title>{SAID.P}</title></rect>
+          <rect class="ring" x={v.K.x0 - 4} y={v.P.y0 + 19} width={v.right - v.K.x0 + 6} height={v.H - v.P.y0 - 20} rx="5" />
+        </g>
+      </svg>
+    ))}
+  </div>
+  <Fragment slot="caption">
+    Squares are patches, dots are written findings. The bracket
+    marks the 16.1 pp effect the design had 80% power to detect. The interval crosses zero, so the effect is unresolved.
+  </Fragment>
+</Figure>
+
+<style is:global>
+  /* Layout follows the plate's own width (see Overlap.astro for the rationale). */
+  .fig .ho-box { container-type: inline-size; }
+  .fig svg.ho-w { --tu: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
+  .fig .plot svg.ho-n { --tu: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
+  @container (max-width: 539.98px) {
+    .fig .plot svg.ho-w { display: none; }
+    .fig .plot svg.ho-n { display: block; }
+  }
+
+  .fig svg.ho text { font-size: calc(11 * var(--tu)); }
+  .fig svg.ho text.cm, .fig svg.ho tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); letter-spacing: 0; }
+  .fig svg.ho tspan.k { fill: var(--ink); font-weight: 500; }
+  .fig svg.ho tspan.strong { fill: var(--ink); }
+  .fig svg.ho tspan.acc, .fig svg.ho text.acc { fill: var(--accent); }
+  .fig svg.ho text.al, .fig svg.ho text.dl, .fig svg.ho text.brl, .fig svg.ho text.ct, .fig svg.ho .ret text { fill: var(--ink-2); }
+  .fig svg.ho text.nlo, .fig svg.ho text.nhi, .fig svg.ho text.np { fill: var(--ink-2); }
+  .fig svg.ho text.nv { font-size: calc(12.5 * var(--tu)); }
+  .fig svg.ho text.ct.acc { fill: var(--accent); }
+  .fig svg.ho text.verdict { fill: var(--ink); font-weight: 500; }
+  .fig svg.ho text.cv { font-size: calc(12 * var(--tu)); }
+
+  /* trees */
+  .fig svg.ho .edge, .fig svg.ho .stub { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linecap: round; }
+  .fig svg.ho .nd { fill: var(--panel); stroke: var(--ink); stroke-width: 1.25; }
+  /* Who writes. The script mixes the fill in with the scroll (--w on the tree, 0 to 1), so a writer is
+     never half filled beside its count; without the script, or without color-mix, it is simply full. */
+  .fig svg.ho .nd.w { fill: var(--ink); fill: color-mix(in srgb, var(--ink) calc(var(--w, 1) * 100%), var(--panel)); }
+  .fig svg.ho .nd.w.sole {
+    fill: var(--accent); stroke: var(--accent);
+    fill: color-mix(in srgb, var(--accent) calc(var(--w, 1) * 100%), var(--panel));
+    stroke: color-mix(in srgb, var(--accent) calc(var(--w, 1) * 100%), var(--ink));
+  }
+  .fig svg.ho .halo { fill: none; stroke: var(--accent); stroke-opacity: 0.4; stroke-width: 1; }
+  .fig svg.ho .vf-r { fill: var(--panel-2); stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.ho .vf-k { fill: none; stroke: var(--ink-2); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+  .fig svg.ho .lead { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.ho .pk-patch { fill: var(--ink); stroke: var(--panel); stroke-width: 1; }
+  .fig svg.ho .pk-find { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; }
+  .fig svg.ho .ret .pk-patch, .fig svg.ho .ret .pk-find { stroke-width: 1; }
+  .fig svg.ho .ret .pk-patch { stroke: none; }
+
+  /* cost */
+  .fig svg.ho .bar { fill: var(--ink); }
+  .fig svg.ho .crow[data-k="A"] .bar { fill: var(--ink-4); }
+  .fig svg.ho .crow[data-k="C"] .bar { fill: var(--accent); }
+  .fig svg.ho .dim { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 1 2.5; stroke-linecap: round; }
+  .fig svg.ho .dimh { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+
+  /* contrast */
+  .fig svg.ho .band { fill: rgb(var(--ink-rgb) / 0.035); }
+  .fig svg.ho .zero { stroke: var(--ink-4); stroke-width: 1; }
+  .fig svg.ho .brk { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.ho .wh, .fig svg.ho .caps { fill: none; stroke: var(--accent); stroke-width: 1.75; stroke-linecap: round; }
+  .fig svg.ho .pt { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+
+  /* Pointer: a tree, a cost row or the contrast reads out its exact numbers. */
+  .fig svg.ho .hit { fill: transparent; stroke: none; pointer-events: all; }
+  .fig svg.ho[data-live] .hit { touch-action: pan-y; cursor: crosshair; }
+  .fig svg.ho .hit:focus { outline: none; }
+  .fig svg.ho .ring { fill: none; stroke: none; pointer-events: none; }
+  .fig svg.ho .hit:focus-visible + .ring { stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  /* (What is not being read steps back. The script sets that, on the page's own clock and curve.) */
+
+  /* Moving parts, made by the script. A ring opens round a node as it writes, round the verifier as a
+     patch reaches it, and round the estimate as that attempt is graded. */
+  .fig svg.ho .wr { fill: none; stroke: var(--ink); stroke-width: 1; }
+  .fig svg.ho .vf-p { fill: none; stroke: var(--ink-2); stroke-width: 1; }
+  .fig svg.ho .pt-p { fill: none; stroke: var(--accent); stroke-width: 1.25; }
+</style>

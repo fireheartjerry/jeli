@@ -1,0 +1,74 @@
+---
+// Fig: the Roche potential of the binary as a landscape (src/scripts/roche3d.ts).
+// The plot is a night screen in both themes. A still image rendered at build
+// time shows first, and stays for readers without JavaScript or with reduced
+// motion; the live canvas replaces it once the figure's script runs.
+import Figure from "../Figure.astro";
+import { aBallistic, aConservative, F_MAX } from "../../scripts/binary";
+
+interface Props {
+  n?: number;
+}
+const { n = 10 } = Astro.props;
+const end = `moved ${(F_MAX * 100).toFixed(1)}%   ballistic ${aBallistic(F_MAX).toFixed(3)} a₀   classical ${aConservative(F_MAX).toFixed(3)} a₀`;
+---
+
+<Figure
+  name="landscape"
+  n={n}
+  size="stage"
+  title="Two stars and the ground between them"
+  label="The gravitational potential around two orbiting stars drawn as a landscape: one star fills its basin and gas spills over the pass between them into the other star's well"
+  readout={end}
+>
+  <div class="ls" data-night>
+    <img class="still" src="/roche.svg" alt="" width="1132" height="604" loading="lazy" decoding="async" />
+    <canvas data-sky aria-hidden="true"></canvas>
+  </div>
+  <Fragment slot="caption">
+    Height is the potential a parcel of gas feels beside two orbiting stars. The donor fills its basin
+    to the level of the pass at <i class="mi">L</i><sub>1</sub> and spills into its companion's well.
+    Scrolling moves mass across: follow the gas as a ballistic stream and the orbit shrinks to 0.89 of
+    its starting size, where the classical answer is 1.23. The stream is integrated from the three-body
+    equations; the disc's drag and the depth of the wells are schematic. Point at the ground to set a
+    parcel of gas down: the line drawn through it is the highest level it can reach.
+  </Fragment>
+</Figure>
+
+<style>
+  .ls {
+    position: relative;
+    aspect-ratio: 1200 / 640;
+    background: var(--paper);
+    border: 1px solid var(--hair);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  .ls > * {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .still {
+    transition: opacity 0.6s ease;
+  }
+  canvas {
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    /* A finger dragged across the ground moves the probe; dragged up or down it scrolls the page. */
+    touch-action: pan-y;
+  }
+  :global([data-fig="landscape"][data-live]) canvas {
+    opacity: 1;
+    cursor: crosshair;
+  }
+  :global([data-fig="landscape"][data-live]) .still {
+    opacity: 0;
+  }
+  @media (max-width: 560px) {
+    .ls {
+      aspect-ratio: 1 / 0.9;
+    }
+  }
+</style>

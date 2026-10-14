@@ -1,0 +1,864 @@
+---
+/**
+ * The command palette. Cmd+K or Ctrl+K opens and closes it from anywhere, and
+ * so does a click on any element marked [data-palette-open].
+ *
+ * What other code can rely on:
+ *   [data-palette-open]   on any element, anywhere: a click opens the palette.
+ *   [data-palette]        the dialog itself. It carries `hidden` whenever it
+ *                         is closed, so `[data-palette]:not([hidden])` is the
+ *                         open state, in CSS or in a query.
+ *   [data-palette-close]  inside the dialog: a click closes it.
+ * Every other attribute here is data-palette-* too, and private: the bare
+ * names are taken (CopyEmail binds every a[data-copy] on the page).
+ *
+ * Render it once per page, outside anything transformed or clipped: it is
+ * position: fixed over the whole window.
+ *
+ * Every option is server-rendered. A link option is a real link, so it still
+ * goes somewhere if its command cannot run (a copy with the clipboard
+ * blocked follows it), and without JavaScript the dialog simply never opens.
+ */
+import { paper, bibtex, sections } from "../data/paper";
+
+interface Props {
+  /**
+   * "Go to" scrolls this page instead of leaving for the home page. True on
+   * the home page; pass it on any other page that carries the same section ids.
+   */
+  home?: boolean;
+  /** Places on the page itself, listed first: a page that is not the home page passes its own headings. */
+  local?: { label: string; href: string; keys?: string }[];
+}
+const { home = Astro.url.pathname === "/", local = [] } = Astro.props;
+const at = (id: string) => (home ? `#${id}` : `/#${id}`);
+const email = "fireheartjerry@gmail.com";
+
+interface Command {
+  label: string;
+  /** Where the option leads. For a copy command, where to go if the clipboard is blocked. */
+  href?: string;
+  /** Words the filter matches that the label does not say. Never shown. */
+  keys?: string;
+  /** Small type at the right of the row. */
+  hint?: string;
+  /** Set the hint in Computer Modern: numerals and arrows. */
+  cm?: boolean;
+  /** Opens in a new tab. */
+  out?: boolean;
+  /** The text a copy command puts on the clipboard, and what the live region says after. */
+  copy?: string;
+  said?: string;
+  /** The day and night switch, the one command that is not a link. */
+  theme?: boolean;
+}
+
+// Other names a reader might type for each section of the home page.
+const also: Record<string, string> = {
+  top: "top home start beginning intro",
+  about: "about me bio interests who",
+  work: "experience jobs employment",
+  research: "papers publications science astrophysics",
+  projects: "hackathons builds side projects",
+  record: "awards scholarship schulich contests competitions results",
+  contact: "get in touch reach hello footer",
+};
+// The cover and the footer are the two ends of the page; the sections between them count from 1.
+const ends: Record<string, string> = { top: "top", contact: "end" };
+let count = 0;
+const places: Command[] = sections.map((s) => ({
+  label: s.label,
+  href: at(s.id),
+  keys: also[s.id],
+  ...(ends[s.id] ? { hint: ends[s.id] } : { hint: `§${++count}`, cm: true }),
+}));
+
+const groups: { name: string; items: Command[] }[] = [
+  ...(local.length ? [{ name: "On this page", items: local.map((c, i) => ({ ...c, hint: `${i + 1}`, cm: true })) }] : []),
+  {
+    name: local.length ? "Home page" : "Go to",
+    items: [
+      ...places,
+      // Not on the paper's own page, where "On this page" already lists it.
+      ...(Astro.url.pathname.replace(/\/$/, "") === paper.href ? [] : [{ label: "The NeurIPS paper", href: paper.href, hint: "→", cm: true, keys: `research publication workshop ${paper.title} ${paper.subtitle}` }]),
+    ],
+  },
+  {
+    name: "Do",
+    items: [
+      { label: "Copy email address", href: `mailto:${email}`, hint: "copy", copy: email, said: `Copied ${email}`, keys: "mail gmail contact write" },
+      { label: "Copy BibTeX for the NeurIPS paper", href: paper.href, hint: "copy", copy: bibtex, said: "Copied the BibTeX entry", keys: "cite citation reference bib latex" },
+      { label: "Switch to night", hint: "theme", theme: true, keys: "theme dark light day night mode appearance colour color" },
+      { label: "Open résumé (PDF)", href: "/resume.pdf", hint: "→", cm: true, keys: "cv curriculum vitae download" },
+    ],
+  },
+  {
+    name: "Elsewhere",
+    items: [
+      { label: "GitHub", href: "https://github.com/fireheartjerry", keys: "code repositories git" },
+      { label: "LinkedIn", href: "https://www.linkedin.com/in/fireheartjerry/", keys: "profile connect" },
+      { label: "TopsOJ", href: "https://topsoj.com", keys: "online judge competitive math problems" },
+      { label: "Waterloo Defence", href: "https://waterloodefence.ca", keys: "defense drones team" },
+      { label: "View this site's source", href: "https://github.com/fireheartjerry/jeli", keys: "github code repository repo open jeli" },
+    ].map((c) => ({ ...c, hint: "↗", cm: true, out: true })),
+  },
+];
+
+let n = 0;
+const rows = groups.map((g) => ({ ...g, items: g.items.map((c) => ({ ...c, id: `palette-${n++}` })) }));
+---
+
+<div class="pal" data-palette role="dialog" aria-modal="true" aria-label="Command palette" hidden>
+  <div class="scrim" data-palette-close></div>
+  <div class="panel">
+    <div class="head">
+      <input
+        class="in"
+        data-palette-input
+        type="text"
+        role="combobox"
+        aria-label="Search sections and commands"
+        aria-expanded="false"
+        aria-controls="palette-list"
+        aria-autocomplete="list"
+        placeholder="Jump to a section or run a command"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        enterkeyhint="go"
+      />
+      {/* Not a tab stop: the keyboard has Escape. This one is for the pointer. */}
+      <button class="esc" type="button" tabindex="-1" data-palette-close aria-label="Close the command palette"><kbd>esc</kbd></button>
+    </div>
+
+    <div class="list" id="palette-list" data-palette-list data-lenis-prevent role="listbox" aria-label="Sections and commands">
+      {rows.map((g) => (
+        <div class="grp" role="group" aria-label={g.name}>
+          <div class="lab" aria-hidden="true">{g.name}</div>
+          {g.items.map((c) =>
+            c.theme ? (
+              <div class="opt" role="option" id={c.id} aria-selected="false" data-palette-keys={c.keys}>
+                <span class="name" data-palette-theme>{c.label}</span>{" "}
+                <span class="hint" aria-hidden="true">{c.hint}</span>
+              </div>
+            ) : (
+              <a
+                class="opt"
+                role="option"
+                id={c.id}
+                aria-selected="false"
+                aria-label={c.out ? `${c.label}, opens in a new tab` : undefined}
+                tabindex="-1"
+                href={c.href}
+                target={c.out ? "_blank" : undefined}
+                rel={c.out ? "noopener" : undefined}
+                data-palette-keys={c.keys}
+                data-palette-copy={c.copy}
+                data-palette-said={c.said}
+              >
+                <span class="name">{c.label}</span>{" "}
+                <span class:list={["hint", { cm: c.cm }]} aria-hidden="true">
+                  {c.copy && <svg viewBox="0 0 12 12" width="0.7em" height="0.7em"><path d="M2 6.4 4.7 9 10 3" pathLength="1" /></svg>}
+                  <span data-palette-hint>{c.hint}</span>
+                </span>
+              </a>
+            ),
+          )}
+        </div>
+      ))}
+    </div>
+    <p class="none" data-palette-none hidden>Nothing matches</p>
+
+    <div class="foot">
+      <p class="keys" aria-hidden="true">
+        <span><span class="key">↑↓</span>move</span>
+        <span><span class="key">↵</span>run</span>
+        <span><span class="key">esc</span>close</span>
+      </p>
+      {/* A phone has none of those keys; there the footer is the way out. */}
+      <button class="shut" type="button" tabindex="-1" data-palette-close>Close</button>
+      <span class="count cm" data-palette-count aria-hidden="true"></span>
+    </div>
+    <div class="sr-only" aria-live="polite" data-palette-live></div>
+  </div>
+</div>
+
+<script>
+  import { toggleTheme, getTheme } from "../scripts/theme";
+
+  const root = document.querySelector<HTMLElement>("[data-palette]");
+  if (root) mount(root);
+
+  function mount(root: HTMLElement) {
+    const html = document.documentElement;
+    const input = root.querySelector<HTMLInputElement>("[data-palette-input]")!;
+    const list = root.querySelector<HTMLElement>("[data-palette-list]")!;
+    const none = root.querySelector<HTMLElement>("[data-palette-none]")!;
+    const live = root.querySelector<HTMLElement>("[data-palette-live]")!;
+    const count = root.querySelector<HTMLElement>("[data-palette-count]")!;
+    const themeLabel = root.querySelector<HTMLElement>("[data-palette-theme]")!;
+
+    // Lower case, no accents, no punctuation: "Resume" finds "résumé", "sites" finds "site's".
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/[\p{M}'’]/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+    const groups = [...list.querySelectorAll<HTMLElement>("[role=group]")].map((el) => {
+      const opts = [...el.querySelectorAll<HTMLElement>("[role=option]")];
+      return { el, opts, order: opts, keys: opts.map((o) => norm(o.dataset.paletteKeys ?? "")) };
+    });
+    const total = groups.reduce((sum, g) => sum + g.opts.length, 0);
+
+    let isOpen = false;
+    let shown: HTMLElement[] = []; // the options on show, top to bottom
+    let active: HTMLElement | null = null;
+    let back: HTMLElement | null = null; // where focus was when the palette opened
+    let landed: HTMLElement | null = null; // a section lent a tabindex so that it could take focus
+    let copying = false; // a copy is being made or confirmed: nothing else runs until the palette closes
+    let closeTimer = 0;
+    let uncopy = () => {}; // puts a "Copied" hint back as it was
+    let unlock = () => {};
+
+    // ---------- filtering ----------
+
+    // 0: a word of the label starts with what was typed. 1: the label holds
+    // every word typed. 2: only the hidden keywords do. -1: no match.
+    function rank(label: string, keys: string, words: string[]) {
+      if (words.every((w) => label.includes(w))) return label.split(" ").some((l) => l.startsWith(words[0])) ? 0 : 1;
+      return words.every((w) => label.includes(w) || keys.includes(w)) ? 2 : -1;
+    }
+
+    function filter() {
+      const words = norm(input.value).split(" ").filter(Boolean);
+      shown = [];
+      for (const g of groups) {
+        const hits = g.opts
+          .map((el, i) => ({ el, i, r: words.length ? rank(norm(el.querySelector(".name")!.textContent ?? ""), g.keys[i], words) : 0 }))
+          .filter((h) => h.r >= 0)
+          .sort((a, b) => a.r - b.r || a.i - b.i)
+          .map((h) => h.el);
+        for (const el of g.opts) el.hidden = !hits.includes(el);
+        g.el.hidden = !hits.length;
+        // Matches lead their group, best first. They are moved, not just
+        // restyled, so the order read aloud is the order seen.
+        const order = [...hits, ...g.opts.filter((el) => !hits.includes(el))];
+        if (order.some((el, i) => el !== g.order[i])) {
+          g.el.append(...order);
+          g.order = order;
+        }
+        shown.push(...hits);
+      }
+      const any = shown.length > 0;
+      if (!any && none.hidden) live.textContent = "Nothing matches";
+      else if (any && !none.hidden) live.textContent = "";
+      list.hidden = !any;
+      none.hidden = any;
+      input.setAttribute("aria-expanded", String(any));
+      count.textContent = words.length ? `${shown.length} of ${total}` : `${total} commands`;
+      list.scrollTop = 0;
+      mark(shown[0] ?? null, false);
+    }
+
+    function mark(el: HTMLElement | null, reveal = true) {
+      if (active && active !== el) active.setAttribute("aria-selected", "false");
+      active = el;
+      if (!el) {
+        input.removeAttribute("aria-activedescendant");
+        return;
+      }
+      el.setAttribute("aria-selected", "true");
+      input.setAttribute("aria-activedescendant", el.id);
+      if (!reveal) return;
+      // Keep the active row in view, and its group label with it when it leads a group.
+      const lead = el.previousElementSibling;
+      const top = (lead instanceof HTMLElement && lead.matches(".lab") ? lead : el).offsetTop;
+      const bottom = el.offsetTop + el.offsetHeight;
+      if (el === shown[0]) list.scrollTop = 0;
+      else if (el === shown[shown.length - 1]) list.scrollTop = list.scrollHeight;
+      else if (top < list.scrollTop) list.scrollTop = top;
+      else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+    }
+
+    function step(by: number) {
+      if (!shown.length) return;
+      const i = active ? shown.indexOf(active) : -1;
+      mark(shown[i < 0 ? (by > 0 ? 0 : shown.length - 1) : (i + by + shown.length) % shown.length]);
+    }
+
+    // ---------- opening and closing ----------
+
+    // No scroll behind the palette, and no jump when the scrollbar goes: its
+    // width is handed back to the body as padding.
+    function lock() {
+      const bar = innerWidth - html.clientWidth;
+      const was = [html.style.overflow, document.body.style.paddingRight];
+      scrollTo({ left: scrollX, top: scrollY, behavior: "instant" }); // stops a smooth scroll still under way
+      html.style.overflow = "hidden";
+      if (bar > 0) document.body.style.paddingRight = `${parseFloat(getComputedStyle(document.body).paddingRight) + bar}px`;
+      unlock = () => {
+        [html.style.overflow, document.body.style.paddingRight] = was;
+        unlock = () => {};
+      };
+    }
+
+    // A phone keyboard covers the bottom of the screen without resizing it;
+    // the panel is told how much is really visible.
+    const fit = () => root.style.setProperty("--palette-vh", `${visualViewport!.height}px`);
+
+    function show(opener?: HTMLElement | null) {
+      if (isOpen) return;
+      isOpen = true;
+      // Safari does not focus a button on click, so the opener stands in when nothing has focus.
+      const focused = document.activeElement;
+      back = focused instanceof HTMLElement && focused !== document.body ? focused : (opener ?? null);
+      uncopy();
+      live.textContent = "";
+      input.value = "";
+      lock();
+      root.hidden = false;
+      filter();
+      if (window.visualViewport) {
+        fit();
+        visualViewport!.addEventListener("resize", fit);
+      }
+      input.focus({ preventScroll: true });
+    }
+
+    function hide(restore = true) {
+      if (!isOpen) return;
+      isOpen = false;
+      clearTimeout(closeTimer);
+      copying = false;
+      root.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      window.visualViewport?.removeEventListener("resize", fit);
+      unlock();
+      // Leave the field first: focus then returns with a ring only if the
+      // keyboard was the last thing used.
+      input.blur();
+      if (restore) back?.focus({ preventScroll: true });
+      back = null;
+    }
+
+    // ---------- commands ----------
+
+    const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // A link to this very page: scroll rather than load.
+    function here(a: HTMLAnchorElement) {
+      const to = new URL(a.href);
+      return !a.target && to.origin === location.origin && to.pathname === location.pathname && to.search === location.search ? to : null;
+    }
+
+    // Focus on a section, so that the next Tab carries on from inside it, as it
+    // would after following a link there. The section borrows a tabindex to take it.
+    function land(el: HTMLElement) {
+      unland();
+      if (!el.hasAttribute("tabindex")) {
+        el.tabIndex = -1;
+        el.setAttribute("data-palette-landed", "");
+        landed = el;
+      }
+      el.focus({ preventScroll: true });
+    }
+    function unland() {
+      landed?.removeAttribute("tabindex");
+      landed?.removeAttribute("data-palette-landed");
+      landed = null;
+    }
+
+    function go(to: URL) {
+      const id = decodeURIComponent(to.hash.slice(1));
+      const target = id ? document.getElementById(id) : null;
+      // Focus returns to where it was. With nowhere to return to (nothing had
+      // focus, or only the last section landed on), it goes with the reader.
+      const follow = !!target && (!back || back === landed);
+      hide(!follow);
+      if (follow) land(target!);
+      // The page has its own way of getting somewhere (scripts/scroll.ts) and
+      // answers this event with it. With nothing listening, scroll plainly.
+      const place = target ?? (!id || id === "top" ? 0 : null);
+      if (place !== null && document.dispatchEvent(new CustomEvent("page:go", { detail: { target: place }, cancelable: true }))) {
+        const behavior = calm() ? "instant" : "smooth";
+        if (target) target.scrollIntoView({ behavior, block: "start" });
+        else scrollTo({ top: 0, behavior });
+      }
+      // The address follows, as it would for the link itself.
+      if (to.hash !== location.hash) history.pushState(history.state, "", to.hash || to.pathname + to.search);
+    }
+
+    async function copy(el: HTMLAnchorElement) {
+      if (copying) return;
+      copying = true;
+      const text = el.dataset.paletteCopy!;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // Clipboard blocked. If this page prints the text, select it there, ready
+        // to copy by hand; otherwise the link is the fallback (the mail client,
+        // the page with the citation).
+        const printed = [...document.querySelectorAll("pre")].find((pre) => pre.textContent?.trim() === text.trim());
+        hide();
+        if (printed) {
+          getSelection()?.selectAllChildren(printed);
+          printed.scrollIntoView({ behavior: calm() ? "instant" : "smooth", block: "center" });
+        } else {
+          location.href = el.href;
+        }
+        return;
+      }
+      // The address going out is sent up the beam of the scene behind the page, as it is from the footer.
+      if (el.href.startsWith("mailto:")) document.dispatchEvent(new CustomEvent("cosmos:pulse"));
+      if (!isOpen) return;
+      const hint = el.querySelector<HTMLElement>("[data-palette-hint]")!;
+      const was = hint.textContent;
+      hint.textContent = "Copied";
+      el.setAttribute("data-palette-done", "");
+      uncopy = () => {
+        hint.textContent = was;
+        el.removeAttribute("data-palette-done");
+        uncopy = () => {};
+      };
+      live.textContent = el.dataset.paletteSaid ?? "Copied";
+      closeTimer = window.setTimeout(hide, 900);
+    }
+
+    // Every option is run by a click: a real one, or the one Enter makes.
+    function run(el: HTMLElement, e: MouseEvent) {
+      if (copying) {
+        e.preventDefault();
+        return;
+      }
+      if (!(el instanceof HTMLAnchorElement)) {
+        toggleTheme();
+        hide();
+        return;
+      }
+      const modified = e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
+      const to = here(el);
+      if (!modified && el.dataset.paletteCopy !== undefined) {
+        e.preventDefault();
+        copy(el);
+      } else if (!modified && to) {
+        e.preventDefault();
+        go(to);
+      } else {
+        // Any other link goes where links go, and a modified click keeps its
+        // browser meaning (a new tab, a new window).
+        hide();
+      }
+    }
+
+    // ---------- wiring ----------
+
+    const hit = (e: Event, selector: string) => (e.target instanceof Element ? e.target.closest<HTMLElement>(selector) : null);
+
+    const labelTheme = () => (themeLabel.textContent = getTheme() === "dark" ? "Switch to day" : "Switch to night");
+    document.addEventListener("themechange", labelTheme);
+    labelTheme();
+
+    document.addEventListener("click", (e) => {
+      const opener = hit(e, "[data-palette-open]");
+      if (!opener) return;
+      e.preventDefault();
+      show(opener);
+    });
+
+    root.addEventListener("click", (e) => {
+      const el = hit(e, "[role=option]");
+      if (el) run(el, e);
+      else if (hit(e, "[data-palette-close]")) hide();
+    });
+
+    // A press anywhere but the field would take focus out of it.
+    root.addEventListener("mousedown", (e) => {
+      if (e.target !== input) e.preventDefault();
+    });
+
+    // Hover marks a row. A list that scrolls under a resting pointer also
+    // fires this, with the pointer where it was; that is not a hover.
+    let px = -1;
+    let py = -1;
+    list.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch" || (e.screenX === px && e.screenY === py)) return;
+      px = e.screenX;
+      py = e.screenY;
+      const el = hit(e, "[role=option]");
+      if (el && el !== active) mark(el, false);
+    });
+
+    // Only the list may be dragged; anything else would drag the page behind.
+    root.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!hit(e, "[data-palette-list]") || list.scrollHeight <= list.clientHeight) e.preventDefault();
+      },
+      { passive: false },
+    );
+
+    input.addEventListener("input", filter);
+
+    // Back, with the palette open, still goes back; the palette gets out of the way.
+    addEventListener("popstate", () => hide());
+
+    // Focus stays in the dialog while it is open.
+    document.addEventListener("focusin", (e) => {
+      if (isOpen && !hit(e, "[data-palette]")) input.focus({ preventScroll: true });
+    });
+    // A section gives its borrowed tabindex back when focus moves on, though
+    // not while the palette is merely open over it.
+    document.addEventListener("focusout", (e) => {
+      if (e.target === landed && !isOpen) unland();
+    });
+
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.isComposing) return;
+        const key = e.key ?? "";
+        // Cmd+K or Ctrl+K, by the letter the layout types; by position where the layout has no Latin letters.
+        if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (/^[a-z]$/i.test(key) ? key.toLowerCase() === "k" : e.code === "KeyK")) {
+          e.preventDefault();
+          if (e.repeat) return;
+          if (isOpen) hide();
+          else show();
+          return;
+        }
+        if (!isOpen) return;
+        if (key === "Tab") {
+          // The field is the only stop.
+          e.preventDefault();
+          input.focus({ preventScroll: true });
+          return;
+        }
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        if (key === "Escape") hide();
+        else if (key === "ArrowDown") step(1);
+        else if (key === "ArrowUp") step(-1);
+        else if (key === "Home" && !e.shiftKey) mark(shown[0] ?? null);
+        else if (key === "End" && !e.shiftKey) mark(shown[shown.length - 1] ?? null);
+        else if (key === "Enter") active?.click();
+        else return;
+        e.preventDefault();
+      },
+      true,
+    );
+  }
+</script>
+
+<style>
+  .pal {
+    --px: 22px; /* the one left edge: field, group labels, options, footer */
+    --row: 40px;
+    --head: 56px;
+    --foot: 36px;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    padding: 18vh 4vw 0;
+    color: var(--ink);
+    /* Stay rendered for the 160 ms it takes to leave. */
+    transition: display 0.16s allow-discrete;
+  }
+  .pal[hidden] {
+    display: none;
+    pointer-events: none;
+  }
+  .scrim {
+    position: absolute;
+    inset: 0;
+    background: rgb(var(--paper-rgb) / 0.72);
+    transition: opacity 0.16s var(--ease-out);
+  }
+  .panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: min(560px, 92vw);
+    max-height: 64vh;
+    overflow: hidden;
+    background: var(--panel);
+    border: 1px solid var(--hair);
+    border-radius: 14px;
+    box-shadow: var(--plate-shadow);
+    transition:
+      opacity 0.16s var(--ease-out),
+      transform 0.16s var(--ease-out);
+  }
+  .pal[hidden] .scrim,
+  .pal[hidden] .panel {
+    opacity: 0;
+  }
+  .pal[hidden] .panel {
+    transform: translateY(6px);
+  }
+  @starting-style {
+    .pal .scrim,
+    .pal .panel {
+      opacity: 0;
+    }
+    .pal .panel {
+      transform: translateY(6px);
+    }
+  }
+
+  /* ---------- field ---------- */
+  .head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: var(--head);
+    padding-inline: var(--px);
+    border-bottom: 1px solid var(--hair);
+  }
+  .in {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    outline: none; /* the caret is the focus mark; the field never loses focus while the palette is open */
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 17px;
+    letter-spacing: -0.005em;
+    caret-color: var(--accent);
+  }
+  .in::placeholder {
+    color: var(--ink-3);
+    opacity: 1;
+  }
+  .esc {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 40px;
+    height: 40px;
+  }
+
+  /* ---------- list ---------- */
+  /* Labels and rows are all one row tall, and the list shows a whole number of
+     them and a half. A list that runs on is cut through the middle of a row,
+     where it plainly continues; scrolled to its end, with half a row of
+     padding under the last, it starts on a clean edge. */
+  .list {
+    position: relative; /* rows measure their offsetTop from here */
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: calc(round(down, 64vh - var(--head) - var(--foot) - 2px - var(--row) / 2, var(--row)) + var(--row) / 2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: calc(var(--row) / 2);
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink-4) transparent;
+  }
+  .list[hidden],
+  .grp[hidden],
+  .opt[hidden],
+  .none[hidden] {
+    display: none;
+  }
+  .lab {
+    display: flex;
+    align-items: flex-end;
+    height: var(--row);
+    padding: 0 var(--px) 7px;
+    font-size: 12.5px;
+    line-height: 16px;
+    color: var(--ink-3);
+  }
+  .opt {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: var(--row);
+    padding-inline: var(--px);
+    font-size: 15px;
+    color: var(--ink-2);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* The active row: an accent tick reaching in from the frame, with the same
+     length and gap as the current tick on the index rail, over an inset surface. */
+  .opt::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: calc(50% - 0.75px);
+    width: 14px;
+    height: 1.5px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  .opt[aria-selected="true"] {
+    background: var(--panel-2);
+    color: var(--ink);
+  }
+  .opt[aria-selected="true"]::before {
+    transform: none;
+    transition: transform 0.16s var(--ease-out);
+  }
+  .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hint {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    margin-left: auto;
+    font-size: 12.5px;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .hint.cm {
+    font-size: 14.5px;
+  }
+  /* After a copy the hint says so, in the accent, with the same drawn check as the email link. */
+  .hint svg {
+    display: none;
+  }
+  .hint path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  .opt[data-palette-done] .hint {
+    color: var(--accent);
+    animation: palette-said 0.3s var(--ease-out) both;
+  }
+  .opt[data-palette-done] .hint svg {
+    display: block;
+  }
+  .opt[data-palette-done] .hint path {
+    animation: palette-check 0.34s 0.08s var(--ease-out) forwards;
+  }
+  /* Keyframe names are global, scoped style or not. */
+  @keyframes palette-said {
+    from { opacity: 0; transform: translateY(0.45em); }
+  }
+  @keyframes palette-check {
+    to { stroke-dashoffset: 0; }
+  }
+  /* A section holding focus after a jump is a place, not a control: no ring. */
+  :global([data-palette-landed]:focus-visible) {
+    outline: none;
+  }
+  .none {
+    padding: 8px var(--px);
+    font-size: 15px;
+    line-height: var(--row);
+    color: var(--ink-3);
+  }
+
+  /* ---------- footer ---------- */
+  .foot {
+    position: relative;
+    flex: none;
+    display: flex;
+    align-items: center;
+    height: var(--foot);
+    padding-inline: var(--px);
+    border-top: 1px solid var(--hair);
+    font-size: 12.5px;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .keys {
+    display: flex;
+    gap: 18px;
+  }
+  .key {
+    margin-right: 6px;
+    color: var(--ink-2);
+  }
+  .shut {
+    display: none;
+  }
+  .count {
+    margin-left: auto;
+    font-size: 13.5px;
+  }
+
+  /* ---------- phones ---------- */
+  @media (max-width: 640px), (max-height: 500px) {
+    .pal {
+      padding: 12px 12px 0;
+    }
+    .panel {
+      width: min(560px, 100%);
+      max-height: calc(var(--palette-vh, 100svh) - 24px);
+    }
+    .list {
+      max-height: 70svh;
+      max-height: calc(round(down, 70svh - var(--row) / 2, var(--row)) + var(--row) / 2);
+    }
+    /* The placeholder needs the whole width; the footer still says how to leave. */
+    .esc {
+      display: none;
+    }
+  }
+  @media (max-width: 640px), (pointer: coarse) {
+    .pal {
+      --row: 44px;
+    }
+  }
+  /* No keys to hint at: the footer becomes one wide "Close". */
+  @media (hover: none) and (pointer: coarse) {
+    .esc,
+    .keys {
+      display: none;
+    }
+    .pal {
+      --foot: 45px; /* 44 under the hairline */
+    }
+    .shut {
+      display: block;
+      position: absolute;
+      inset: 0;
+      padding-inline: var(--px);
+      text-align: left;
+      font-size: 15px;
+      color: var(--ink-2);
+    }
+  }
+
+  /* Forced colours drop the surface and the tick; the active row keeps an outline in the text colour. */
+  @media (forced-colors: active) {
+    .opt[aria-selected="true"] {
+      outline: 1px solid;
+      outline-offset: -1px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pal,
+    .scrim,
+    .panel,
+    .opt::before {
+      transition: none;
+    }
+    .opt[data-palette-done] .hint {
+      animation: none;
+    }
+    .opt[data-palette-done] .hint path {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
+  }
+</style>

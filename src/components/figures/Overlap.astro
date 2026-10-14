@@ -1,0 +1,395 @@
+---
+// Fig: "The tree repeats its own work". Three measurements of a delegation
+// tree's added work at increasing granularity, from the NeurIPS 2026 workshop
+// paper "Verifying the Second Agent":
+//   (a) compute: where the tokens beyond the single-agent baseline went,
+//   (b) files:   sibling file overlap above a task-conditioned null,
+//   (c) lines:   165 refused patches replayed with a three-way merge.
+// They are separate measurements, not a causal chain. The plot is rendered in
+// two layouts (panels side by side, or stacked for narrow plates) and a
+// container query shows one. Geometry is computed here; the script reveals it.
+// Every mark that encodes a measurement (a bar and its split, a dot, an
+// interval, the clearance to zero, the grid of 165 cells) appears whole, at its
+// measured extent or count: the script may open it across its own scale (a
+// bar's thickness, a dot's radius, the height of an end cap, the size of a
+// cell) and never along it, and all 165 cells are on the plot from the first
+// frame any of them is. Structure is drawn on: the frames, the scales, the
+// leader. The script never prints a number of its own.
+import Figure from "../Figure.astro";
+
+interface Props { n?: number }
+const { n = 1 } = Astro.props;
+
+const f = (v: number) => Math.round(v * 100) / 100;
+const sg = (v: number) => `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(1)}`;
+
+// (a) Share of the tokens beyond the single-agent baseline, in percent.
+const COMPUTE = [
+  { k: "7 nodes", keep: 58.7, lost: 41.2, orch: 0.17 },
+  { k: "15 nodes", keep: 68.2, lost: 31.6, orch: 0.17 },
+];
+// (b) Observed sibling file overlap minus a task-conditioned null, in
+// percentage points, with 95% intervals.
+const FILES = [
+  { k: "7 nodes", v: 9.8, lo: 5.0, hi: 15.1 },
+  { k: "15 nodes", v: 7.4, lo: 3.5, hi: 11.7 },
+];
+// (c) Refused patches that could be replayed with a three-way merge.
+const N = 165, HIT = 149, COLS = 15, ROWS = 11, PCT = "90.3";
+const FMAX = 20; // (b) axis, 0 to 20 pp
+
+// The plate readout's lines as the scroll story plays. The script shows a line
+// with a number in it only once the mark for that number is fully shown, and
+// it never computes a number of its own.
+const STORY = {
+  idle: "compute, files, lines",
+  a: "tokens beyond one agent",
+  aDone: `${COMPUTE[0].lost}% and ${COMPUTE[1].lost}% unapplied`,
+  bBoth: `${sg(FILES[0].v)} and ${sg(FILES[1].v)} pp over the null`,
+  cDone: `${HIT} / ${N} collide`,
+};
+
+function view(wide: boolean) {
+  const W = wide ? 640 : 400;
+
+  // ---------- (a) compute: two 100% bars ----------
+  const A = wide ? { x0: 0, x1: 204, hy: 9 } : { x0: 0, x1: 392, hy: 9 };
+  const aw = A.x1 - A.x0;
+  const aRows = COMPUTE.map((d, i) => {
+    const ly = wide ? 69 + i * 64 : 34 + i * 56;
+    const y0 = ly + (wide ? 12 : 10);
+    const h = wide ? 22 : 24;
+    const xk = A.x0 + (aw * d.keep) / 100;
+    const xl = xk + (aw * d.lost) / 100;
+    return { ...d, ly, y0, h, yc: y0 + h / 2, xk: f(xk), xl: f(xl), wk: f(xk - A.x0), wl: f(xl - xk) };
+  });
+  const aAxisY = wide ? 195 : 0;
+  const aLegY = wide ? 232 : 146;
+  // The orchestration share is 0.17% of the bar, far thinner than a pixel, so
+  // it is drawn as a hairline at the bar's end and called out by a leader.
+  const oY = wide ? 181 : aLegY;
+  const oX = A.x1 + (wide ? 7 : 6);
+  const oLead = `M${A.x1 + 1.5} ${aRows[0].yc}H${oX}V${oY}H${A.x1 + 1}M${A.x1 + 1.5} ${aRows[1].yc}H${oX}`;
+  const oLen = f(oX - A.x1 - 1.5 + (oY - aRows[0].yc) + (oX - A.x1 - 1));
+
+  // ---------- (b) files: dot and whisker on 0 to 20 pp ----------
+  const B = wide ? { x0: 234, zero: 242, x1: 394, right: 404, y0: 0 } : { x0: 0, zero: 6, x1: 386, right: 392, y0: 174 };
+  const bk = (B.x1 - B.zero) / FMAX;
+  const bx = (v: number) => f(B.zero + v * bk);
+  const bRows = FILES.map((d, i) => {
+    const ly = B.y0 + (wide ? 69 + i * 64 : 34 + i * 62);
+    const y = ly + (wide ? 23 : 20);
+    return { ...d, ly, y, ciY: y + (wide ? 18 : 19), x: bx(d.v), xlo: bx(d.lo), xhi: bx(d.hi) };
+  });
+  const bTop = B.y0 + (wide ? 50 : 22);
+  const bAxisY = B.y0 + (wide ? 195 : 152);
+  const bNoteY = wide ? 232 : 0;
+
+  // ---------- (c) lines: one cell per replayed patch ----------
+  const C = wide ? { x0: 440, top: 52, pitch: 13, cell: 10, y0: 0 } : { x0: 5, top: 392, pitch: 26, cell: 21, y0: 366 };
+  const cRight = C.x0 + (COLS - 1) * C.pitch + C.cell;
+  const cBottom = C.top + (ROWS - 1) * C.pitch + C.cell;
+  const cells = Array.from({ length: N }, (_, i) => {
+    const r = Math.floor(i / COLS), c = i % COLS;
+    return {
+      i,
+      x: C.x0 + c * C.pitch,
+      y: C.top + r * C.pitch,
+      // Cells fill in reading order, so the 16 disjoint patches are the last 16.
+      hit: i < HIT,
+      // The replay's highlight crosses the colliding cells along a diagonal from the top left.
+      key: c + r * 1.35 + ((c * 7 + r * 13) % 5) * 0.18,
+    };
+  });
+  const cellD = (c: { x: number; y: number }) => `M${c.x} ${c.y}h${C.cell}v${C.cell}h-${C.cell}z`;
+  const swept = cells.filter((c) => c.hit).sort((a, b) => a.key - b.key);
+  const cStatY = wide ? 207 : 0;
+  const cLegY = wide ? 232 : 704; // stacked: low enough that the legend's padded hit areas clear the grid
+
+  const H = wide ? 250 : 734;
+  const heads = [
+    { k: "a", name: "Compute", sub: "tokens beyond one agent", x: A.x0, y: A.hy },
+    { k: "b", name: "Files", sub: "overlap above a task null", x: B.x0, y: B.y0 + 9 },
+    { k: "c", name: "Lines", sub: "165 refused patches, replayed", x: wide ? C.x0 : 0, y: C.y0 + 9 },
+  ];
+
+  // The two scales, as the script rules them: a baseline, then a tick as the pen passes it ([x, length]).
+  const aTicks = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => [f(A.x0 + (aw * k) / 10), k % 5 ? 2.5 : 5]);
+  const bTicks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20].map((k) => [bx(k), k % 10 ? 2.5 : 5]);
+  const ticksD = (ticks: number[][], y: number) => ticks.map(([x, l]) => `M${x} ${y}v${l}`).join("");
+
+  const G = {
+    H,
+    lead: oLen, // the orchestration leader
+    // Heights in the drawing the script times its story by: a part is drawn
+    // once the plate has let that much of its sheet out.
+    a: {
+      axis: wide ? { y: aAxisY, x0: A.x0, x1: A.x1, ticks: aTicks } : null,
+      rows: aRows.map((r) => ({ ly: r.ly, y0: r.y0, h: r.h })), oY, leg: aLegY,
+    },
+    b: {
+      axis: { y: bAxisY, x0: B.zero, x1: B.x1, ticks: bTicks }, top: bTop, note: bNoteY,
+      rows: bRows.map((r) => ({ ly: r.ly, y: r.y, ciY: r.ciY, lo: r.xlo, hi: r.xhi })), cap: wide ? 4 : 6,
+    },
+    c: {
+      hit: HIT, n: N, cell: C.cell, x0: C.x0, top: C.top, pitch: C.pitch, cols: COLS, rows: ROWS,
+      // The colliding cells in the order the server listed them in their path.
+      order: swept.map((s) => s.i), bottom: cBottom, stat: cStatY, leg: cLegY, head: C.y0 + 9,
+    },
+    story: STORY,
+  };
+
+  return {
+    wide, W, H, heads, G,
+    A, aw, aRows, aAxisY, aLegY, oY, oX, oLead, oLen,
+    B, bx, bRows, bTop, bAxisY, bNoteY, cap: wide ? 4 : 6,
+    C, cRight, cBottom, cStatY, cLegY,
+    aTicksD: ticksD(aTicks, aAxisY), bTicksD: ticksD(bTicks, bAxisY),
+    bg: cells.map(cellD).join(""),
+    off: cells.filter((c) => !c.hit).map(cellD).join(""),
+    on: swept.map(cellD).join(""),
+  };
+}
+
+const views = [view(true), view(false)];
+const label =
+  "Three measurements of repeated work in a delegation tree: token accounting, sibling file overlap, and line-level collisions among refused patches";
+const aria =
+  `Three panels at increasing granularity. (a) Compute: of the tokens beyond the single-agent baseline, ` +
+  COMPUTE.map((d) => `the ${d.k.replace(" nodes", "-node")} tree spent ${d.keep}% in workers with at least one applied patch, ${d.lost}% in workers whose every patch was refused, and ${d.orch}% on explicit orchestration`).join("; ") +
+  `. (b) Files: sibling agents touch the same files more often than a task-conditioned null predicts, by ` +
+  FILES.map((d) => `${sg(d.v)} percentage points at ${d.k} (95% interval ${sg(d.lo)} to ${sg(d.hi)})`).join(" and ") +
+  `. (c) Lines: of ${N} refused patches that could be replayed with a three-way merge, ${HIT} (${PCT}%) collide at the line level and ${N - HIT} are disjoint.`;
+
+// Every inspectable part is also a button a keyboard can reach. Its label
+// carries, in words, the numbers the plate readout shows for it.
+const spokenA = (d: (typeof COMPUTE)[number]) =>
+  `Compute, ${d.k}: of the tokens beyond the single-agent baseline, ${d.keep}% retained-class, ${d.lost}% unapplied, ${d.orch}% orchestration.`;
+const spokenB = (d: (typeof FILES)[number]) =>
+  `Files, ${d.k}: sibling file overlap is ${d.v.toFixed(1)} points above the task-conditioned null, 95% interval ${d.lo.toFixed(1)} to ${d.hi.toFixed(1)}.`;
+const spokenC = [
+  `Lines: ${HIT} of ${N} replayed refused patches collide at the line level, ${PCT}%.`,
+  `Lines: ${N - HIT} of ${N} replayed refused patches are disjoint.`,
+];
+const PLOT = "Plot. Tab through its parts for exact values.";
+// What the plate readout shows for a picked part.
+const saidA = (d: (typeof COMPUTE)[number]) => `${d.k}: ${d.keep}% retained-class, ${d.lost}% unapplied`;
+const saidB = (d: (typeof FILES)[number]) => `${d.k}: ${sg(d.v)} pp over the null [${sg(d.lo)}, ${sg(d.hi)}]`;
+const saidC = [`${HIT} of ${N} collide at line level (${PCT}%)`, `${N - HIT} of ${N} are disjoint`];
+---
+
+<Figure name="overlap" n={n} title="The tree repeats its own work" label={label} readout={`${HIT} / ${N} collide`}>
+  <div class="ov-box">
+    {views.map((v) => (
+      <svg class:list={["ov", v.wide ? "ov-w" : "ov-n"]} viewBox={`0 0 ${v.W} ${v.H}`} role="group" data-g={JSON.stringify(v.G)} aria-label={PLOT} aria-describedby={`ov-${v.wide ? "w" : "n"}-desc`}>
+        <desc id={`ov-${v.wide ? "w" : "n"}-desc`}>{aria}</desc>
+        <g aria-hidden="true">
+          {/* Panel heads. Wide: descriptor on a second line. Narrow: on the same line. */}
+          {v.heads.map((h) => (
+            <>
+              <text class="plab" x={h.x} y={h.y} dominant-baseline="central">
+                <tspan class="pl">({h.k})</tspan><tspan class="k" dx="6">{h.name}</tspan>{!v.wide && <tspan class="sub" dx="9">{h.sub}</tspan>}
+              </text>
+              {v.wide && <text class="sub" x={h.x} y={h.y + 18} dominant-baseline="central">{h.sub}</text>}
+            </>
+          ))}
+          {v.wide && <path class="hair sep" d={`M219 0V${v.H}M422 0V${v.H}`} />}
+
+          {/* ===== (a) compute ===== */}
+          <g class="pa">
+            {/* The scale is two strokes, so the script can rule the baseline and then set each tick as the pen passes it. */}
+            {v.wide && (
+              <g class="scale">
+                <path class="faint ax-b" d={`M${v.A.x0} ${v.aAxisY}H${v.A.x1}`} />
+                <path class="faint ax-t" d={v.aTicksD} />
+                <text class="cm tk" data-x={v.A.x0} x={v.A.x0} y={v.aAxisY + 8} dominant-baseline="hanging">0</text>
+                <text class="cm tk" data-x={f(v.A.x0 + v.aw / 2)} x={f(v.A.x0 + v.aw / 2)} y={v.aAxisY + 8} text-anchor="middle" dominant-baseline="hanging">50</text>
+                <text class="cm tk" data-x={v.A.x1} x={v.A.x1} y={v.aAxisY + 8} text-anchor="end" dominant-baseline="hanging">100%</text>
+              </g>
+            )}
+            {v.aRows.map((r, i) => (
+              <g class="arow row" data-p="a" data-i={i}>
+                <text class="rk" x={v.A.x0} y={r.ly} dominant-baseline="central">{r.k}</text>
+                <rect class="frame" x={v.A.x0} y={r.y0} width={v.aw} height={r.h} />
+                {/* the bar and its split are one mark: both shares appear together, at full length */}
+                <g class="seg">
+                  <rect class="keep" x={v.A.x0} y={r.y0} width={r.wk} height={r.h} />
+                  <rect class="lost" x={r.xk} y={r.y0} width={r.wl} height={r.h} />
+                </g>
+                <text class="cm kv" x={f((v.A.x0 + r.xk) / 2)} y={r.yc} text-anchor="middle" dominant-baseline="central">{r.keep}%</text>
+                <text class="cm lv" x={f((r.xk + r.xl) / 2)} y={r.yc} text-anchor="middle" dominant-baseline="central">{r.lost}%</text>
+                <line class="orch" x1={v.A.x1} x2={v.A.x1} y1={r.y0 - 4} y2={r.y0 + r.h + 4} />
+              </g>
+            ))}
+            <g class="ocall">
+              <path class="lead" d={v.oLead} />
+              <text class="ol" x={v.A.x1 - 4} y={v.oY} text-anchor="end" dominant-baseline="central">orchestration <tspan class="cmn">{COMPUTE[0].orch}%</tspan></text>
+            </g>
+            <g class="aleg">
+              <rect class="sw keep" x={v.A.x0 + 0.5} y={v.aLegY - 5} width="10" height="10" />
+              <text x={v.A.x0 + 16} y={v.aLegY} dominant-baseline="central">retained-class</text>
+              <rect class="sw lost" x={v.A.x0 + (v.wide ? 112.5 : 126.5)} y={v.aLegY - 5} width="10" height="10" />
+              <text x={v.A.x0 + (v.wide ? 128 : 142)} y={v.aLegY} dominant-baseline="central">unapplied</text>
+            </g>
+          </g>
+
+          {/* ===== (b) files ===== */}
+          <g class="pb">
+            <path class="hair bgrid" d={`M${v.bx(10)} ${v.bTop}V${v.bAxisY}M${v.bx(20)} ${v.bTop}V${v.bAxisY}`} />
+            {/* Zero, the null every estimate is measured from; then the scale along the foot. */}
+            <path class="faint ax-z" d={`M${v.B.zero} ${v.bTop}V${v.bAxisY}`} />
+            <g class="scale">
+              <path class="faint ax-b" d={`M${v.B.zero} ${v.bAxisY}H${v.B.x1}`} />
+              <path class="faint ax-t" d={v.bTicksD} />
+              <text class="cm tk" data-x={v.B.zero} x={v.B.zero} y={v.bAxisY + 8} dominant-baseline="hanging">0</text>
+              <text class="cm tk" data-x={v.bx(10)} x={v.bx(10)} y={v.bAxisY + 8} text-anchor="middle" dominant-baseline="hanging">+10</text>
+              <text class="cm tk" data-x={v.bx(20)} x={v.B.right} y={v.bAxisY + 8} text-anchor="end" dominant-baseline="hanging">+20 pp</text>
+            </g>
+            {v.bRows.map((r, i) => (
+              <g class="brow row" data-p="b" data-i={i}>
+                <text class="rk" x={v.B.zero + 7} y={r.ly} dominant-baseline="central">{r.k}</text>
+                <text class="cm strong bv" x={v.B.right} y={r.ly} text-anchor="end" dominant-baseline="central">{sg(r.v)} pp</text>
+                <line class="clr" x1={v.B.zero} x2={r.xlo} y1={r.y} y2={r.y} />
+                {/* the interval is one mark: it is shown whole, never stretched */}
+                <g class="iv">
+                  <line class="wh" x1={r.xlo} x2={r.xhi} y1={r.y} y2={r.y} />
+                  <path class="caps" d={`M${r.xlo} ${r.y - v.cap}v${v.cap * 2}M${r.xhi} ${r.y - v.cap}v${v.cap * 2}`} />
+                </g>
+                <circle class="pt" cx={r.x} cy={r.y} r={v.wide ? 4 : 5.5} />
+                <text class="bci" x={v.B.zero + 7} y={r.ciY} dominant-baseline="central">95% CI <tspan class="cmn">[{sg(r.lo)}, {sg(r.hi)}]</tspan></text>
+              </g>
+            ))}
+            {v.wide && <text class="bnote" x={v.B.zero} y={v.bNoteY} dominant-baseline="central">both intervals clear zero</text>}
+          </g>
+
+          {/* ===== (c) lines ===== */}
+          <g class="pc">
+            <text class="cm strong count" x={v.cRight} y={v.C.y0 + 9} text-anchor="end" dominant-baseline="central">{HIT} / {N}</text>
+            {/* The 165 cells are one mark: they arrive together, each already in its colour, so the grid
+                never shows a count that was not measured. The colliding cells are listed in the order the
+                replay's highlight crosses them. */}
+            <g class="cells">
+              <path class="cells-bg" d={v.bg} />
+              <g class="grp-off"><path class="cells-off" d={v.off} /></g>
+              <g class="grp-on"><path class="cells-on" d={v.on} /></g>
+            </g>
+            {v.wide && <text class="cstat" x={v.C.x0} y={v.cStatY} dominant-baseline="central"><tspan class="cmn strong">{PCT}%</tspan> collide at line level</text>}
+            <g class="cleg">
+              <g class="lg-hit">
+                <rect class="sw on" x={v.C.x0 + 0.5} y={v.cLegY - 5} width="10" height="10" />
+                <text x={v.C.x0 + 16} y={v.cLegY} dominant-baseline="central"><tspan class="cmn acc">{HIT}</tspan> collide</text>
+              </g>
+              <g class="lg-off">
+                <rect class="sw off" x={v.C.x0 + (v.wide ? 96.5 : 122.5)} y={v.cLegY - 5} width="10" height="10" />
+                <text x={v.C.x0 + (v.wide ? 112 : 138)} y={v.cLegY} dominant-baseline="central"><tspan class="cmn">{N - HIT}</tspan> disjoint</text>
+              </g>
+              {!v.wide && <text class="cm strong cpct" x={v.cRight} y={v.cLegY} text-anchor="end" dominant-baseline="central">{PCT}%</text>}
+            </g>
+          </g>
+        </g>
+
+        {/* The parts a reader can inspect, by pointer or by keyboard, in reading order.
+            Each part has two rectangles: a padded, invisible hit area sized for a
+            fingertip, and a ring that hugs the visible part and shows keyboard focus.
+            Parts are served as labelled, focusable graphics with a native tooltip; the
+            script turns them into buttons that write to the plate readout instead.
+            The grid itself answers to the pointer; its two groups are reached through the legend. */}
+        <g class="hits">
+          {v.aRows.map((r, i) => (
+            <>
+              <rect class="hit" data-p="a" data-i={i} data-say={saidA(r)} tabindex="0" role="img" aria-label={spokenA(r)}
+                x={v.A.x0 - 4} y={r.ly - 10} width={v.wide ? 222.5 : v.aw + 14} height={v.wide ? 64 : 56}><title>{saidA(r)}</title></rect>
+              <rect class="ring" x={v.A.x0 - 4} y={r.ly - 10} width={v.aw + 14} height={r.y0 + r.h + 6 - (r.ly - 10)} rx="4" />
+            </>
+          ))}
+          {v.bRows.map((r, i) => (
+            <>
+              <rect class="hit" data-p="b" data-i={i} data-say={saidB(r)} tabindex="0" role="img" aria-label={spokenB(r)}
+                x={v.wide ? 219.5 : v.B.x0 - 2} y={r.ly - 10} width={v.wide ? 202 : v.B.right - v.B.x0 + 6} height={v.wide ? 64 : 62}><title>{saidB(r)}</title></rect>
+              <rect class="ring" x={v.B.x0 - 2} y={r.ly - 10} width={v.B.right - v.B.x0 + 6} height={r.ciY + 9 - (r.ly - 10)} rx="4" />
+            </>
+          ))}
+          <rect class="hit grid" aria-hidden="true" x={v.wide ? 422.5 : v.C.x0 - 3} y={v.C.top - 3} width={v.wide ? v.W - 422.5 : v.cRight - v.C.x0 + 6} height={v.cBottom - v.C.top + 6} />
+          {[0, 1].map((i) => {
+            // The legend entries are small, so each gets a padded hit area.
+            const x = v.C.x0 + (i ? (v.wide ? 91 : 118) : -4), w = i ? (v.wide ? 96 : 112) : (v.wide ? 93 : 116);
+            const pad = v.wide ? 15 : 26, hug = v.wide ? 10 : 12;
+            return (
+              <>
+                <rect class="hit" data-p="c" data-i={i} data-say={saidC[i]} tabindex="0" role="img" aria-label={spokenC[i]}
+                  x={x} y={v.cLegY - pad} width={w} height={pad * 2}><title>{saidC[i]}</title></rect>
+                <rect class="ring" x={x} y={v.cLegY - hug} width={w} height={hug * 2} rx="4" />
+              </>
+            );
+          })}
+        </g>
+      </svg>
+    ))}
+  </div>
+  <Fragment slot="caption">
+    Three measurements at increasing granularity, not a causal chain. Retained-class in (a) counts all of a worker's tokens if any
+    of its patches was applied, so it is an upper bound. Each cell in (c) is one refused patch, replayed with a three-way merge.
+  </Fragment>
+</Figure>
+
+<style is:global>
+  /* The plate picks its layout from its own width, not the viewport's, so the
+     figure reads the same in a narrow column as on a phone. --tu is one user
+     unit of text: it grows as the plate shrinks, keeping labels near 10.5px.
+     (Not --u: the page's stylesheet registers that name as a number, for its
+     hover lines, and a length written to it would be thrown away.) */
+  .fig .ov-box { container-type: inline-size; }
+  .fig svg.ov-w { --tu: clamp(1px, calc(2.209px - 0.196cqw), 1.15px); }
+  .fig .plot svg.ov-n { --tu: clamp(0.8px, calc(1.983px - 0.2362cqw), 1.24px); display: none; }
+  @container (max-width: 539.98px) {
+    .fig .plot svg.ov-w { display: none; }
+    .fig .plot svg.ov-n { display: block; }
+  }
+
+  .fig svg.ov text { font-size: calc(11 * var(--tu)); }
+  .fig svg.ov text.cm, .fig svg.ov tspan.cmn { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); letter-spacing: 0; }
+  .fig svg.ov tspan.pl { font-family: var(--cm); font-size: calc(11.5 * var(--tu)); fill: var(--ink); letter-spacing: 0; }
+  .fig svg.ov tspan.k { fill: var(--ink); font-weight: 500; }
+  .fig svg.ov tspan.strong { fill: var(--ink); }
+  .fig svg.ov tspan.acc { fill: var(--accent); }
+  .fig svg.ov text.rk, .fig svg.ov text.ol, .fig svg.ov text.bnote, .fig svg.ov text.cstat { fill: var(--ink-2); }
+  .fig svg.ov text.count { font-size: calc(12.5 * var(--tu)); }
+  .fig svg.ov text.cpct { font-size: calc(12.5 * var(--tu)); }
+
+  /* (a) */
+  .fig svg.ov .frame { fill: none; stroke: var(--hair); stroke-width: 1; }
+  .fig svg.ov .keep { fill: rgb(var(--ink-rgb) / 0.14); }
+  .fig svg.ov .lost { fill: var(--accent); fill-opacity: 0.86; }
+  .fig svg.ov text.kv { fill: var(--ink); }
+  .fig svg.ov text.lv { fill: var(--panel); }
+  .fig svg.ov .orch { stroke: var(--ink); stroke-width: 1.25; }
+  .fig svg.ov .lead { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.ov .sw.keep { stroke: var(--ink-4); stroke-width: 1; }
+
+  /* (b) */
+  .fig svg.ov .pb text { paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+  .fig svg.ov .clr { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 1 3; stroke-linecap: round; }
+  .fig svg.ov .wh, .fig svg.ov .caps { fill: none; stroke: var(--ink); stroke-width: 1.25; stroke-linecap: round; }
+  .fig svg.ov .pt { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+
+  /* (c) */
+  .fig svg.ov .cells-bg { fill: none; stroke: var(--ink); stroke-opacity: 0.16; stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.ov .cells-off { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1; stroke-linejoin: round; }
+  .fig svg.ov .cells-on { fill: var(--accent); fill-opacity: 0.8; stroke: var(--accent); stroke-opacity: 0.8; stroke-width: 1; stroke-linejoin: round; }
+  /* The replay's light, made by the script: over a colliding cell it brings the fill up to full
+     strength, over a disjoint one it inks the outline. Neither changes which kind a cell is. */
+  .fig svg.ov .rp { fill: var(--accent); stroke: var(--accent); stroke-width: 1; stroke-linejoin: round; pointer-events: none; }
+  .fig svg.ov .rp.off { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+  /* The line an estimate drops to the scale while its row is being read (made by the script). */
+  .fig svg.ov .drop { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 3; pointer-events: none; }
+  .fig svg.ov .sw.on { fill: var(--accent); fill-opacity: 0.8; stroke: var(--accent); stroke-opacity: 0.8; stroke-width: 1; }
+  .fig svg.ov .sw.off { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1; }
+
+  /* Pointer or keyboard: a row, or one group of cells, reads out its exact numbers. */
+  .fig svg.ov .hit { fill: transparent; stroke: none; pointer-events: all; }
+  .fig svg.ov[data-live] .hit { touch-action: pan-y; cursor: crosshair; }
+  .fig svg.ov .hit:focus { outline: none; }
+  .fig svg.ov .ring { fill: none; stroke: none; pointer-events: none; }
+  .fig svg.ov .hit:focus-visible + .ring { stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  /* (What is not being read steps back. The script sets that, on the page's own clock and curve.) */
+</style>

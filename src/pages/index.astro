@@ -4,11 +4,14 @@ import Header from "../components/Header.astro";
 import Section from "../components/Section.astro";
 import Entry from "../components/Entry.astro";
 import Hero from "../components/Hero.astro";
+import Cosmos from "../components/Cosmos.astro";
+import About from "../components/About.astro";
 import Footer from "../components/Footer.astro";
+import Palette from "../components/Palette.astro";
 import Submissions from "../components/figures/Submissions.astro";
 import TopsojMap from "../components/figures/TopsojMap.astro";
 import TopsojGA from "../components/figures/TopsojGA.astro";
-import MathosLogo from "../components/figures/MathosLogo.astro";
+import Export from "../components/figures/Export.astro";
 import Quoted from "../components/figures/Quoted.astro";
 import Ratings from "../components/figures/Ratings.astro";
 import Drift from "../components/figures/Drift.astro";
@@ -17,41 +20,89 @@ import Research from "../components/figures/Research.astro";
 import Contests from "../components/figures/Contests.astro";
 import Cockpit from "../components/figures/Cockpit.astro";
 import Daedalus from "../components/figures/Daedalus.astro";
+import Intercept from "../components/figures/Intercept.astro";
+import Delegation from "../components/figures/Delegation.astro";
+import Landscape from "../components/figures/Landscape.astro";
 import topsoj from "../data/topsoj.json";
+import { paper } from "../data/paper";
 
 const fmt = (n: number) => n.toLocaleString("en-US");
+
+// Distinctions, most recent first; contest results follow in the figure beside them.
+const record = [
+  { what: "Schulich Leader Scholarship", detail: "$100K+, to study computer science at the University of Waterloo", when: "2026" },
+  { what: "NeurIPS 2026 workshops", detail: "Sole author; accepted at both workshops it was sent to", when: "2026" },
+  { what: "Best Manuscript", detail: "Journal of High School Science, for the second binary-star paper", when: "2026" },
+  { what: "Best Non-GenAI Hack", detail: "JAMHacks 10, for Daedalus", when: "2026" },
+  { what: "Featured", detail: "Chrome Web Store, for Drift", when: "2026" },
+  { what: "USACO", detail: "Platinum, with a perfect 1,000 on Gold" },
+  { what: "AAPT PhysicsBowl", detail: "1st in Canada, 7th in the world" },
+  { what: "Sir Isaac Newton Exam", detail: "4th in Canada, 9th in the world" },
+  { what: "AIME", detail: "Qualified three times" },
+];
 ---
 
-<Base>
-  <Header />
+<Base
+  jsonld={[
+    {
+      "@context": "https://schema.org",
+      "@type": "ScholarlyArticle",
+      headline: `${paper.title}: ${paper.subtitle}`,
+      author: { "@id": "https://yuzeli.ca/#jerry" },
+      datePublished: "2026",
+      url: `https://yuzeli.ca${paper.href}`,
+      isPartOf: { "@type": "Event", name: `NeurIPS 2026 workshops: ${paper.workshops[0].full}; ${paper.workshops[1].full}` },
+    },
+  ]}
+>
+  <Cosmos cover />
+  <Header cover />
 
   <main id="top">
     <Hero />
 
-    <Section id="work" title="Work" lede="Production systems for AI video, and the contest platform I run.">
+    <About />
+
+    <Section id="work" title="Work" lede="Shipped software: AI video at a YC startup, fire control for a counter-drone turret, and a math judge used in 182 countries.">
       <Entry title="Mathos AI" href="https://mathos.ai" role="Software engineering intern" period="2026 to now" tags="Python, Celery, Remotion, AWS Fargate, SES, Next.js, OAuth 2.0, MCP">
         <p>
-          Mathos (YC W24) turns math questions into narrated video lessons. I shipped MP4 export, where
-          every render runs in its own locked-down AWS Fargate sandbox, and the lifecycle email pipeline on SES.
+          At Mathos (YC W24), which turns math questions into narrated video lessons, I shipped MP4
+          export in Python and Remotion, with every render in its own locked-down AWS Fargate sandbox
+          behind a Celery queue.
         </p>
         <p>
-          I built an OAuth and MCP server so people can make Mathos videos from inside ChatGPT and Claude,
-          and rebuilt how the AI tutor grades each step of a student's work.
+          I also built the lifecycle email pipeline on SES, an OAuth and MCP server so people can make
+          Mathos videos from inside ChatGPT and Claude, and rebuilt how the AI tutor grades each step of
+          a student's work.
         </p>
-        <MathosLogo slot="figure" />
+        <Export slot="figure" n={2} />
+      </Entry>
+
+      <Entry feature title="Waterloo Defence" href="https://waterloodefence.ca" role="Software Lead" period="2026 to now" tags="Computer vision, tracking, ballistics, MuJoCo">
+        <p>
+          I lead the software for a University of Waterloo student team building an autonomous
+          counter-drone turret: the vision that finds and tracks a small drone, the solver that works out
+          where it will be when the shot arrives, and the MuJoCo simulator we test both in.
+        </p>
+        <p>
+          A round takes time to arrive, slows in the air and falls on the way, so the mount has to aim
+          ahead of the drone and above it. We are building toward the Department of National Defence's
+          2027 CUAS Urban Sandbox.
+        </p>
+        <Intercept slot="figure" n={3} />
       </Entry>
 
       <Entry feature title="TopsOJ" href="https://topsoj.com" role="Founder" period="2023 to now" tags="Python, Flask, SQLite, EloMMR">
         <p>
-          A judge for competitive math that I started in high school. Google Analytics counts over 100,000
-          users from 180+ countries. It holds {fmt(topsoj.totals.publicProblems)} problems from the AMC, AIME, CEMC
-          contests, HMMT and our own setters, and has taken over 120,000 submissions.
+          A judge for competitive math that I started in high school and built in Python and Flask.
+          Google Analytics counts over 100,000 users from 182 countries. It holds {fmt(topsoj.totals.publicProblems)} problems
+          from the AMC, AIME, CEMC contests, HMMT and our own setters, and has taken over 120,000 submissions.
         </p>
         <p>
           I designed its EloMMR ratings and led a team of 30 setters, developers and organizers,
           with partners including 3Blue1Brown.
         </p>
-        <div slot="figure" class="topsoj-figs">
+        <div slot="figure" class="stack">
           <TopsojMap />
           <TopsojGA />
           <div class="pair">
@@ -63,19 +114,36 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
       <Entry title="Quoted Tech Computers" role="Software engineering intern" period="Summer 2025" tags="Node.js, Express, CUPS, Playwright">
         <p>
-          I automated barcode label generation and printing, which cut manual processing time by 70%,
-          and wrote scrapers that turned competitor catalogs into pricing data.
+          I automated barcode label generation and printing in Node.js, which cut manual processing time
+          by 70%, and wrote Playwright scrapers that turned competitor catalogs into pricing data.
         </p>
         <Quoted slot="figure" />
       </Entry>
     </Section>
 
-    <Section id="research" title="Research" lede="Three sole-authored papers on how binary stars trade mass.">
-      <Entry title="Mass transfer in binary stars" role="Sole author, supervised by Dr. Alexander Mushtukov, Oxford" period="2024 to 2026">
+    <Section id="research" title="Research" lede="Four papers. One measures when a coding agent should hand work to other agents; three are on how binary stars trade mass.">
+      <Entry feature title={paper.title} href={paper.href} role="Sole author. NeurIPS 2026 workshops, Sydney" period="2026" tags="Controlled experiments, agent harnesses, DeepSWE, program verifiers">
         <p>
-          When one star in a close pair spills gas onto its companion, the textbook answer is that the
-          orbit usually widens. I showed that if the gas keeps the velocity it left with, the orbit loses
-          angular momentum and shrinks, for every mass ratio.
+          In two controlled experiments on DeepSWE repository repairs, comparing arms on the same task
+          and grading every fix with an external verifier, trees of 7 and 15 coding agents spent about
+          6 and 12 times the tokens of one agent with no resolved gain: every 95% interval includes
+          zero or favours the single agent. A coding agent can now spawn other agents, which spawn
+          more; I tested whether that buys more correct work, with one model (gpt-5.6-luna) held fixed.
+        </p>
+        <p>
+          The traces show where the work went: sibling agents converged on the same files, and 90% of
+          the patches a parent refused collided line for line. Accepted at both workshops it was sent
+          to, {paper.workshops[0].short} and {paper.workshops[1].short}.{" "}
+          <a class="ln" href={paper.href}>Read the four-minute version</a>.
+        </p>
+        <Delegation slot="figure" n={9} />
+      </Entry>
+
+      <Entry feature title="Mass transfer in binary stars" role="Sole author, supervised by Dr. Alexander Mushtukov, Oxford" period="2024 to 2026" tags="Closed-form analysis, Python simulation">
+        <p>
+          Three sole-authored papers show, in closed form and in simulation, that when gas spilling
+          from one star onto its companion keeps the velocity it left with, the orbit loses angular
+          momentum and shrinks, for every mass ratio. The textbook answer is that it usually widens.
         </p>
         <ol class="papers">
           <li>
@@ -91,7 +159,10 @@ const fmt = (n: number) => n.toLocaleString("en-US");
             <span>arXiv, under review at Astronomische Nachrichten</span>
           </li>
         </ol>
-        <Research slot="figure" />
+        <div slot="figure" class="stack">
+          <Landscape n={10} />
+          <div class="solo"><Research /></div>
+        </div>
       </Entry>
     </Section>
 
@@ -116,31 +187,65 @@ const fmt = (n: number) => n.toLocaleString("en-US");
       </Entry>
       <Entry title="Worldline Engine" href="https://github.com/fireheartjerry/worldline-engine" role="Simulation" period="2026" tags="C++, raylib, CMake">
         <p>
-          A seeded universe simulator. The same seed always produces the same universe, down to the
-          last particle, so any run can be saved, replayed and scrubbed through.
+          A seeded universe simulator in C++. The same seed always produces the same universe, down to
+          the last particle, so any run can be saved, replayed and scrubbed through. The cover of this
+          page grows from a seed the same way.
         </p>
         <Worldline slot="figure" />
       </Entry>
+
+      <div class="also">
+        <h3>Also</h3>
+        <ul data-reveal="rows">
+          <li>
+            <a class="ln" href="https://github.com/fireheartjerry/porchlight" target="_blank" rel="noopener">Porchlight</a>
+            <p>
+              A multi-agent aid dispatcher on Strands Agents and Bedrock AgentCore. Deterministic safety,
+              money and confidence gates send sensitive requests to a person, as decision cards that persist.
+            </p>
+            <span>Python, React, Strands Agents, Bedrock AgentCore</span>
+          </li>
+          <li>
+            <a class="ln" href="https://github.com/fireheartjerry/PolyTwist" target="_blank" rel="noopener">PolyTwist</a>
+            <p>
+              A deterministic engine for twisty puzzles it has never seen: exact rational geometry,
+              WebGL2 and CPU rendering, and benchmarks across 16 task families.
+            </p>
+            <span>JavaScript, Node.js, WebGL2</span>
+          </li>
+        </ul>
+      </div>
     </Section>
 
-    <Section id="contests" title="Contests" lede="Results from programming, physics and math competitions.">
-      <div class="contest-grid">
-        <ul class="results">
-          <li><span>USACO</span><span>Platinum, with a perfect score on Gold</span></li>
-          <li><span>AAPT PhysicsBowl</span><span class="num">1st in Canada, 7th in the world</span></li>
-          <li><span>Sir Isaac Newton Exam</span><span class="num">4th in Canada, 9th in the world</span></li>
-          <li><span>AIME</span><span>Qualified three times</span></li>
-        </ul>
+    <Section id="record" title="Record" lede="Scholarships, papers and contest results.">
+      <div class="record-grid">
+        <dl class="record" data-reveal="rows">
+          {record.map((r) => (
+            <div>
+              <dt>{r.what}</dt>
+              <dd>{r.detail}</dd>
+              {r.when && <dd class="when cm">{r.when}</dd>}
+            </div>
+          ))}
+          <div class="reach">
+            <dt>Elsewhere</dt>
+            <dd>
+              9,000+ followers on <a class="ln" href="https://www.linkedin.com/in/fireheartjerry/" target="_blank" rel="noopener">LinkedIn</a>.
+              First on Tokenboard's worldwide ranking in August 2026. Over 100 billion tokens used with coding agents to date.
+            </dd>
+          </div>
+        </dl>
         <Contests />
       </div>
     </Section>
   </main>
 
   <Footer />
+  <Palette />
 
   <script>
-    import "../scripts/figures";
     import "../scripts/page";
+    import "../scripts/figures";
   </script>
 </Base>
 
@@ -153,6 +258,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
   }
   .papers a {
     color: var(--ink);
+    padding-block: 6px;
   }
   .papers span {
     display: block;
@@ -160,22 +266,81 @@ const fmt = (n: number) => n.toLocaleString("en-US");
     font-size: 13.5px;
     color: var(--ink-3);
   }
-  .topsoj-figs {
+  .stack {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 20px;
   }
   .pair {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 20px;
     align-items: stretch;
   }
+  /* A default-width plate inside a full-width figure row sits on the figure column. */
+  .solo {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: clamp(32px, 6vw, 96px);
+  }
+  .solo > :global(*) {
+    grid-column: 2;
+  }
   @media (max-width: 980px) {
     .pair {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .solo {
+      display: block;
     }
   }
-  .contest-grid {
+
+  /* Smaller projects: two columns of plain text under the figures. */
+  .also {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: clamp(32px, 6vw, 96px);
+    padding-block: clamp(40px, 5.5vw, 80px) 0;
+    border-top: 1px solid var(--hair);
+  }
+  .also h3 {
+    font-size: 21px;
+    line-height: 1.25;
+    letter-spacing: -0.012em;
+  }
+  .also ul {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 28px clamp(24px, 4vw, 56px);
+  }
+  .also li > a {
+    font-size: 17px;
+    padding-block: 8px;
+  }
+  .also p {
+    margin-top: 8px;
+    font-size: 15px;
+    color: var(--ink-2);
+  }
+  .also span {
+    display: block;
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--ink-3);
+  }
+  @media (max-width: 880px) {
+    .also {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 20px;
+    }
+  }
+  @media (max-width: 560px) {
+    .also ul {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .record-grid {
     display: grid;
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     column-gap: clamp(32px, 6vw, 96px);
@@ -183,32 +348,58 @@ const fmt = (n: number) => n.toLocaleString("en-US");
     border-top: 1px solid var(--hair);
     padding-top: clamp(32px, 5vw, 64px);
   }
-  .results {
+  .record {
     position: sticky;
     top: 96px;
+    margin: 0;
   }
-  .results li {
+  .record > div {
+    position: relative;
     display: grid;
-    gap: 2px;
-    padding-block: 16px;
-    border-bottom: 1px solid var(--hair);
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    padding-block: 13px;
   }
-  .results li:first-child {
+  /* The rule under each row is a line that can be drawn. */
+  .record > div::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 1px;
+    background: var(--hair);
+    transform: scaleX(var(--rule, 1));
+    transform-origin: left;
+  }
+  .record > div:first-child {
     padding-top: 0;
   }
-  .results li span:first-child {
+  .record dt {
+    grid-column: 1;
     font-size: 17px;
   }
-  .results li span:last-child {
-    color: var(--ink-3);
+  .record dd {
+    grid-column: 1;
     font-size: 15px;
+    color: var(--ink-3);
+  }
+  .record .when {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 15px;
+    color: var(--ink-3);
+  }
+  .record .reach::after {
+    content: none;
+  }
+  .record .reach dd :global(a) {
+    padding-block: 6px;
   }
   @media (max-width: 880px) {
-  .contest-grid {
-      grid-template-columns: 1fr;
+    .record-grid {
+      grid-template-columns: minmax(0, 1fr);
       row-gap: 36px;
     }
-    .results {
+    .record {
       position: static;
     }
   }

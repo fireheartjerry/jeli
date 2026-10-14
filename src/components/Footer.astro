@@ -1,101 +1,302 @@
 ---
 import CopyEmail from "./CopyEmail.astro";
-import { masses, aBallistic, roche, toPath, F_MAX } from "../scripts/binary";
 
-// The binary after the transfer: the hero's end state, now simply orbiting.
-const { md, ma } = masses(F_MAX);
-const a = aBallistic(F_MAX) * 70;
-const R = roche(md, ma);
-const map = (x: number, y: number): [number, number] => [100 + x * a, 100 + y * a];
-const donor = toPath(R.donor(), map);
-const acc = toPath(R.accretor(), map);
+interface Props {
+  /** Figure number for the closing image. */
+  n?: number;
+}
+const { n = 17 } = Astro.props;
 // Bump when the content changes; a build timestamp would claim updates that never happened.
-const updated = "September 2026";
+const updated = "October 2026";
 ---
 
-<footer class="wrap foot">
-  <div class="big">
-    <p class="k">Get in touch</p>
-    <CopyEmail label="fireheartjerry@gmail.com" class="mail" />
-    <p class="hint">Click to copy, or press <kbd>e</kbd> anywhere.</p>
-  </div>
-  <svg class="coda" viewBox="0 0 200 200" aria-hidden="true" data-coda>
-    <g class="spin">
-      <circle class="ring" cx="100" cy="100" r={a * ma} />
-      <circle class="ring" cx="100" cy="100" r={a * md} />
-      <path class="lobe" d={acc} />
-      <path class="donor" d={donor} />
-      <circle class="acc" cx={100 + a * md} cy="100" r="3.5" />
-    </g>
-  </svg>
-  <div class="meta">
-    <p>Toronto and Waterloo, Canada</p>
-    <nav aria-label="Elsewhere">
-      <a class="q" href="/resume.pdf">Résumé</a>
-      <a class="q" href="https://github.com/fireheartjerry" rel="me noopener" target="_blank">GitHub</a>
-      <a class="q" href="https://www.linkedin.com/in/fireheartjerry/" rel="me noopener" target="_blank">LinkedIn</a>
-      <a class="q" href="https://topsoj.com" target="_blank" rel="noopener">TopsOJ</a>
-    </nav>
-    <p class="num">Updated {updated}</p>
+{/* The page ends where it began, at night: the same system, with the sphere closed. */}
+<footer id="contact" class="foot" data-night data-foot>
+  <img class="end" src="/cover-end.webp" alt="" width="1600" height="1000" loading="lazy" decoding="async" data-end />
+  <div class="wrap inner">
+    <p class="cap" data-reveal="lines">
+      <span class="n num">Fig. {n}</span>
+      The same system with the sphere closed: 60,000 collectors, and all of the Sun's output leaving
+      through the pole.
+    </p>
+    <div class="big">
+      <p class="k" data-reveal="lines">Get in touch</p>
+      <CopyEmail label="fireheartjerry@gmail.com" class="mail" wire />
+      <p class="hint" data-reveal="lines">Click to copy, or press <kbd>e</kbd> anywhere.</p>
+    </div>
+    <div class="meta" data-reveal="ruled">
+      <p>Toronto and Waterloo, Canada</p>
+      <nav aria-label="Elsewhere">
+        {/* Each label rolls over under the pointer: .roll, in global.css. */}
+        <a class="q" href="/resume.pdf"><span class="roll"><span>Résumé</span></span></a>
+        <a class="q" href="https://github.com/fireheartjerry" rel="me noopener" target="_blank"><span class="roll"><span>GitHub</span></span></a>
+        <a class="q" href="https://www.linkedin.com/in/fireheartjerry/" rel="me noopener" target="_blank"><span class="roll"><span>LinkedIn</span></span></a>
+        <a class="q" href="https://topsoj.com" target="_blank" rel="noopener"><span class="roll"><span>TopsOJ</span></span></a>
+        <a class="q" href="https://waterloodefence.ca" target="_blank" rel="noopener"><span class="roll"><span>Waterloo Defence</span></span></a>
+      </nav>
+      <p class="num">Updated {updated}</p>
+    </div>
   </div>
 </footer>
 
 <script>
-  // A slow, real-time orbit that only runs while the footer is on screen.
-  const svg = document.querySelector<SVGSVGElement>("[data-coda]");
-  const g = svg?.querySelector<SVGGElement>(".spin");
-  if (svg && g && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    let on = false;
-    let raf = 0;
-    let angle = 0;
-    let last = 0;
-    const tick = (t: number) => {
-      angle = (angle + ((t - (last || t)) / 1000) * 14) % 360;
-      last = t;
-      g.setAttribute("transform", `rotate(${angle.toFixed(2)} 100 100)`);
-      if (on) raf = requestAnimationFrame(tick);
+  import { gsap, ScrollTrigger, reducedMotion } from "../scripts/motion";
+  import { letters } from "../scripts/reveal";
+  import { step, mover, type Spring } from "../scripts/spring";
+
+  // The closing image drifts a little against the scroll, and only then.
+  const foot = document.querySelector<HTMLElement>("[data-foot]");
+  const end = foot?.querySelector<HTMLElement>("[data-end]");
+  if (foot && end && !reducedMotion()) {
+    gsap.fromTo(end, { yPercent: -7 }, { yPercent: 5, ease: "none", scrollTrigger: { trigger: foot, start: "top bottom", end: "bottom bottom", scrub: 0.4 } });
+  }
+
+  const mail = foot?.querySelector<HTMLElement>(".mail");
+  const idle = mail?.querySelector<HTMLElement>(".idle");
+  if (mail && idle && !reducedMotion()) address(mail, idle);
+
+  /**
+   * The address is set by the letter. It rises by the letter when it comes on
+   * screen, as the name does on the cover, and under the pointer its letters
+   * take on weight.
+   */
+  function address(mail: HTMLElement, idle: HTMLElement) {
+    const text = idle.textContent!.trim();
+    const play = letters(idle, { keep: true });
+    const chars = [...idle.querySelectorAll<HTMLElement>(".rise-c")];
+    // (Clear of the slot's room for descenders as well as of the slot, so no tall letter shows its tip before its turn.)
+    gsap.set(chars, { yPercent: 130 });
+    mail.toggleAttribute("data-set", true);
+
+    // It rises when its own line comes into the window. (The footer's top is
+    // most of a screen above it: by the time that arrives the address is not
+    // yet in sight, and it would have risen unseen.) Once the letters have
+    // landed they are let go of: a letter that is being moved is drawn on the
+    // pixel grid, and one that is not can sit between pixels, which is what
+    // lets the wave below shift them smoothly.
+    const LINE = 0.92;
+    // (Only those that have in fact landed: a copy made while they were rising has since sent them elsewhere.)
+    const release = () => {
+      const landed = chars.filter((c) => !gsap.isTweening(c) && gsap.getProperty(c, "yPercent") === 0);
+      if (landed.length) gsap.set(landed, { clearProps: "transform,translate,rotate,scale" });
     };
-    new IntersectionObserver(([e]) => {
-      on = e.isIntersecting;
-      last = 0;
-      cancelAnimationFrame(raf);
-      if (on) raf = requestAnimationFrame(tick);
-    }).observe(svg);
+    const rise = (delay = 0) => play(delay).eventCallback("onComplete", release);
+    if (mail.getBoundingClientRect().top < innerHeight * LINE) rise(0.1);
+    else ScrollTrigger.create({ trigger: mail, start: `top ${LINE * 100}%`, once: true, onEnter: () => rise() });
+
+    // ---------- what the type measures ----------
+    //
+    // Letters set one by one lose the kerning between them, and here that is
+    // not small: the stop before "com" alone is pulled in by a twentieth of an
+    // em. So the address is measured as it was written, and each letter is
+    // given back the kerning it had. The same measuring says how much wider
+    // each letter grows with weight, which the wave below needs. Everything is
+    // kept in ems, so it holds when the window (and the type with it) changes size.
+    const REST = 500, LIGHT = 400, HEAVY = 700;
+    type Glyph = { el: HTMLElement; at: number; grow: number; w: Spring; shown: number };
+    let glyphs: Glyph[] = [];
+    const measure = () => {
+      const probe = document.createElement("span");
+      probe.setAttribute("aria-hidden", "true");
+      probe.style.cssText = "position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;white-space:pre";
+      // The address as written, then each letter standing alone at each of three weights. One layout measures the lot.
+      const whole = document.createElement("div");
+      whole.textContent = text;
+      const [light, rest, heavy] = [LIGHT, REST, HEAVY].map((weight) => {
+        const row = document.createElement("div");
+        row.style.fontWeight = String(weight);
+        for (const c of text) {
+          const one = document.createElement("span");
+          one.style.display = "inline-block";
+          one.textContent = c;
+          row.append(one);
+        }
+        return row;
+      });
+      probe.append(whole, light, rest, heavy);
+      mail.append(probe);
+      const em = parseFloat(getComputedStyle(probe).fontSize) || 1;
+      const alone = (row: HTMLElement, i: number) => row.children[i].getBoundingClientRect().width / em;
+      // Where each letter begins in the address as written, em from its left edge; and, last, where the address ends.
+      const range = document.createRange();
+      const edge = (i: number, side: "left" | "right") => {
+        range.setStart(whole.firstChild!, i);
+        range.setEnd(whole.firstChild!, i + 1);
+        return range.getBoundingClientRect()[side];
+      };
+      const from = edge(0, "left");
+      const starts = chars.map((_, i) => (edge(i, "left") - from) / em);
+      starts.push((edge(chars.length - 1, "right") - from) / em);
+      // What each letter is given back: the advance it had where it stood, less the advance it has alone.
+      const kern = chars.map((_, i) => starts[i + 1] - starts[i] - alone(rest, i));
+      glyphs = chars.map((el, i) => ({ el, at: starts[i] + alone(rest, i) / 2, grow: (alone(heavy, i) - alone(light, i)) / (HEAVY - LIGHT), w: { x: REST, v: 0 }, shown: REST }));
+      probe.remove();
+      const write = () => chars.forEach((el, i) => el.style.setProperty("--k", `${kern[i].toFixed(5)}em`));
+      write();
+      // Each letter's box is rounded to the layout's grid as it is set, and two dozen roundings add up to
+      // half a pixel by the end of the line. A second look takes that out, and puts each letter on the
+      // nearest whole pixel of the screen to where it was written (never more than half a pixel off): that
+      // is where a moving letter is drawn, so nothing shifts when one lands and is let go of.
+      const grid = devicePixelRatio || 1;
+      const lefts = chars.map((el) => el.getBoundingClientRect().left);
+      const out = lefts.map((x, i) => (i ? x - Math.round((lefts[0] + starts[i] * em) * grid) / grid : 0) / em);
+      for (let i = 1; i < chars.length; i++) kern[i - 1] -= out[i] - out[i - 1];
+      write();
+    };
+    // (One box to a letter is what all of this counts on. If the split ever gives anything else, the address still rises; it just goes unmeasured.)
+    if (chars.length === text.length) document.fonts.ready.then(measure);
+
+    // ---------- the weight wave ----------
+    //
+    // Under the pointer each letter's weight rises toward the heaviest cut,
+    // by how near it is along the line, and falls back behind it: quick to
+    // gather, slow to let go, so the pointer leaves a wake. A heavier letter is
+    // a wider one, so the line would grow and its end would wander. It does
+    // not: what the heavy letters gain is taken back, evenly, from the gaps
+    // between all of them (a fraction of a pixel each), and both ends of the
+    // address stay exactly where they are. Mouse only; a finger has no hover.
+    const NEAR = 0.95; // the wave's reach, em: a letter this far off has 1/e of the pointer's weight
+    let on = false; // the pointer is on the address
+    let px = 0; // where, in ems from the address's left edge
+    let left = 0, em = 1; // the address's left edge in the window, and its type size, read as the pointer arrives
+    let given = "";
+    const wake = mover((dt) => {
+      let moving = false;
+      let gained = 0;
+      for (const g of glyphs) {
+        const far = (g.at - px) / NEAR;
+        const to = on ? REST + (HEAVY - REST) * Math.exp(-far * far) : REST;
+        step(g.w, to, to > g.w.x ? 18 : 7, dt);
+        if (Math.abs(g.w.x - to) > 0.4 || Math.abs(g.w.v) > 3) moving = true;
+        else {
+          g.w.x = to;
+          g.w.v = 0;
+        }
+        // Whole numbers: 300 weights are more than the eye can tell apart, and each is a face the browser draws once and keeps.
+        const weight = Math.round(g.w.x);
+        if (weight !== g.shown) g.el.style.fontWeight = (g.shown = weight) === REST ? "" : String(weight);
+        gained += g.grow * (weight - REST);
+      }
+      const give = (-gained / Math.max(1, glyphs.length - 1)).toFixed(5);
+      if (give !== given) idle.style.setProperty("--give", `${(given = give)}em`);
+      return moving;
+    });
+    const point = (e: PointerEvent) => {
+      px = (e.clientX - left) / em;
+      wake();
+    };
+    mail.addEventListener("pointerenter", (e) => {
+      if (e.pointerType !== "mouse" || !glyphs.length) return;
+      left = idle.getBoundingClientRect().left;
+      em = parseFloat(getComputedStyle(idle).fontSize) || 1;
+      on = true;
+      point(e);
+    });
+    mail.addEventListener("pointermove", (e) => on && point(e));
+    mail.addEventListener("pointerleave", () => {
+      on = false;
+      wake();
+    });
   }
 </script>
 
 <style>
   .foot {
+    position: relative;
+    background: var(--paper);
+    color: var(--ink);
+    overflow: clip;
+    isolation: isolate;
+  }
+  /* With the scene running behind the page the footer is a window onto it: the
+     camera comes home here, and a drag on the open sky swings it. */
+  :global(html[data-voyage]) .foot {
+    background: none;
+    cursor: grab;
+    touch-action: pan-y;
+  }
+  :global(html[data-voyage]) .foot:active {
+    cursor: grabbing;
+  }
+  :global(html[data-voyage]) .end {
+    display: none;
+  }
+  :global(html[data-voyage]) .inner {
+    pointer-events: none;
+  }
+  :global(html[data-voyage]) .inner > * {
+    pointer-events: auto;
+    cursor: auto;
+  }
+  .end {
+    position: absolute;
+    z-index: -1;
+    right: 0;
+    top: -6%;
+    width: min(100%, 1500px);
+    height: 112%;
+    object-fit: cover;
+    object-position: 68% 50%;
+    /* Hold the left down so the type reads. */
+    -webkit-mask-image: linear-gradient(90deg, transparent 4%, #000 58%);
+    mask-image: linear-gradient(90deg, transparent 4%, #000 58%);
+  }
+  .inner {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "big coda" "meta meta";
-    align-items: end;
-    gap: 48px 32px;
-    padding-top: clamp(120px, 16vw, 220px);
-    padding-bottom: 40px;
+    grid-template-rows: auto 1fr auto;
+    /* Under the bar and no further, so nothing of the page above is left as a sliver over it. */
+    min-height: min(calc(100svh - var(--bar)), 860px);
+    padding-top: clamp(40px, 6vw, 72px);
+    padding-bottom: 36px;
+  }
+  .cap {
+    max-width: 300px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-3);
+  }
+  .cap .n {
+    color: var(--ink);
+    margin-right: 0.5em;
   }
   .big {
-    grid-area: big;
+    align-self: end;
+    padding-bottom: clamp(40px, 7vw, 88px);
   }
   .k {
     font-size: 15px;
     color: var(--ink-3);
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
   .big :global(.mail) {
-    font-size: clamp(24px, 3.6vw, 48px);
+    /* Room in its slot for the descenders of type set solid (CopyEmail.astro). */
+    --slot-room: 0.24em;
+    font-size: clamp(28px, 6.4vw, 96px);
     font-weight: 500;
-    letter-spacing: -0.035em;
-    line-height: 1.05;
-    background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
-    transition: background-size 0.5s var(--ease-out);
+    letter-spacing: -0.045em;
+    line-height: 1;
+    padding-block: 6px;
   }
-  .big :global(.mail:hover) {
-    background-size: 100% 1px;
+  /* Its hairline ([data-wire], in global.css) draws clear of the descenders, not through their feet. */
+  .big :global(.mail)::before {
+    bottom: -0.07em;
+  }
+  /* Set by the letter (the script above): each letter keeps the kerning it was
+     written with (--k), and gives back a hair of its gap while its neighbours
+     are heavy (--give), so the address is always exactly as long as it is at rest. */
+  .big :global(.mail .rise-c) {
+    margin-right: calc(var(--k, 0em) + var(--give, 0em));
+  }
+  .big :global(.mail .rise-c:last-child) {
+    margin-right: var(--k, 0em);
+  }
+  /* On a page that opens down here, the address is not shown and then taken away to rise: it waits for its script, as every arrival does (global.css). */
+  :global(html[data-motion]:not([data-revealed])) .big :global(.mail:not([data-set]) .idle) {
+    visibility: hidden;
   }
   .hint {
-    margin-top: 14px;
-    font-size: 14px;
+    margin-top: 16px;
+    font-size: 15px;
     color: var(--ink-3);
   }
   @media (hover: none) {
@@ -103,51 +304,49 @@ const updated = "September 2026";
       display: none;
     }
   }
-  kbd {
-    font: 12px var(--sans);
-    padding: 1px 6px;
-    border: 1px solid var(--hair);
-    border-bottom-width: 2px;
-    border-radius: 5px;
-    background: var(--panel);
-    color: var(--ink-2);
-  }
-  .coda {
-    grid-area: coda;
-    width: clamp(120px, 14vw, 180px);
-    height: auto;
-    overflow: visible;
-  }
-  .ring { fill: none; stroke: var(--ink-4); stroke-width: 1; }
-  .lobe { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 2 3; }
-  .donor { fill: var(--paper); stroke: var(--ink); stroke-width: 1.25; }
-  .acc { fill: var(--accent); }
   .meta {
-    grid-area: meta;
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    gap: 12px 32px;
-    padding-top: 24px;
-    border-top: 1px solid var(--hair);
-    font-size: 14px;
+    align-items: center;
+    gap: 8px 32px;
+    position: relative;
+    padding-top: 15px;
+    font-size: 15px;
     color: var(--ink-3);
+  }
+  /* The rule over the last line is one that can be drawn (scripts/reveal.ts, "ruled"). */
+  .meta::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 1px;
+    background: var(--hair);
+    transform: scaleX(var(--rule, 1));
+    transform-origin: left;
   }
   nav {
     display: flex;
-    gap: 22px;
+    flex-wrap: wrap;
+    gap: 0 22px;
   }
-  .q:hover {
-    color: var(--ink);
+  .q {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
   }
-  @media (max-width: 640px) {
-    .foot {
-      grid-template-columns: 1fr auto;
-      grid-template-areas: "big coda" "meta meta";
-      gap: 32px 16px;
+  @media (max-width: 880px) {
+    /* On a narrow screen the whole sphere sits under the caption, and the type under the sphere. */
+    .end {
+      width: 100%;
+      height: 56%;
+      top: 76px;
+      object-position: 79% 50%;
+      -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 62%, transparent);
+      mask-image: linear-gradient(transparent, #000 14%, #000 62%, transparent);
     }
-    .coda {
-      width: 72px;
+    .inner {
+      min-height: min(calc(100svh - var(--bar)), 760px);
     }
   }
 </style>

@@ -1,6 +1,6 @@
 @import "@fontsource-variable/instrument-sans/wght.css";
 
-/* KaTeX's Computer Modern cuts, used only for math in figure labels. */
+/* KaTeX's Computer Modern cuts: math in figure labels, and every numeral that matters. */
 @font-face {
   font-family: "CM Math";
   src: url("/fonts/cm-math-italic.woff2") format("woff2");
@@ -13,16 +13,33 @@
   font-display: swap;
 }
 
-:root {
+/*
+  Two themes share one set of names. Day is ink on paper; night is paper on
+  ink. Colours that need an alpha are built from the -rgb triplets, so a
+  figure never hardcodes a colour and works in both.
+
+  Derived tokens resolve where they are declared, so the night block restates
+  all of them. It applies to the whole page in the dark theme, and to any
+  element marked [data-night] (the cover is always night). [data-day] is the
+  reverse: a printed thing inside a figure (a label, a marker) stays ink on
+  white paper at night.
+*/
+:root,
+[data-day] {
+  --ink-rgb: 20 20 19;
+  --paper-rgb: 244 243 238;
+  --accent-rgb: 39 67 214;
+
   --paper: #f4f3ee;
   --panel: #fdfdfb;
+  --panel-2: #f7f6f2; /* inset surfaces inside a plate */
   --ink: #141413;
-  --ink-2: rgb(20 20 19 / 0.68); /* body copy, 7.4:1 */
-  --ink-3: rgb(20 20 19 / 0.56); /* meta, 5.1:1 */
-  --ink-4: rgb(20 20 19 / 0.3); /* strokes only, never text */
-  --hair: rgb(20 20 19 / 0.12);
+  --ink-2: rgb(var(--ink-rgb) / 0.68); /* body copy, 7.4:1 */
+  --ink-3: rgb(var(--ink-rgb) / 0.64); /* meta, 5.2:1 */
+  --ink-4: rgb(var(--ink-rgb) / 0.3); /* strokes only, never text */
+  --hair: rgb(var(--ink-rgb) / 0.12);
   --accent: #2743d6;
-  --accent-soft: rgb(39 67 214 / 0.1);
+  --accent-soft: rgb(var(--accent-rgb) / 0.1);
   /* Data-series palette. Accent stays the hero colour; these separate series
      and states. Each has a soft tint for fills. Muted enough to sit on paper. */
   --s-blue: #2743d6;
@@ -35,7 +52,11 @@
   --s-green-t: rgb(46 138 92 / 0.1);
   --s-violet-t: rgb(118 87 201 / 0.1);
   --s-amber-t: rgb(199 144 28 / 0.12);
-  --panel-2: #f7f6f2; /* inset surfaces inside a plate */
+  --plate-shadow:
+    0 1px 0 rgb(255 255 255 / 0.8) inset,
+    0 1px 2px rgb(var(--ink-rgb) / 0.03),
+    0 12px 32px -18px rgb(var(--ink-rgb) / 0.12);
+  --grid-dot: rgb(var(--ink-rgb) / 0.09);
 
   --sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --math: "CM Math", "Latin Modern Math", "Times New Roman", serif;
@@ -43,10 +64,110 @@
 
   --gutter: clamp(20px, 4vw, 56px);
   --measure: 1180px;
+  --bar: 60px;
+  /* Two curves for everything that moves: arriving, and changing state. scripts/motion.ts names the same two. */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+  /* And three lengths: a press, a change of state, a block arriving. */
+  --t-press: 0.18s;
+  --t-state: 0.32s;
+  --t-arrive: 0.9s;
 
   color-scheme: light;
+
+  /* Figures: the few values that must not simply flip with the theme.
+     A flat-shaded solid (the mesh in Fig. "daedalus") runs from --solid-lit, a
+     face turned to the light, toward --solid-shade as the face turns away;
+     --solid-depth scales how far it goes. By day that is paper shaded with ink;
+     by night the light still has to fall on the lit side. */
+  --solid-lit: var(--panel);
+  --solid-shade: var(--ink);
+  --solid-depth: 1;
+  /* A label that steps back but is still read (an option not picked), as an
+     opacity. Paper forgives a fainter one than the dark does. */
+  --dim: 0.55;
+}
+
+:root[data-theme="dark"],
+[data-night] {
+  --ink-rgb: 240 238 230;
+  --paper-rgb: 10 11 14;
+  --accent-rgb: 124 148 255;
+
+  --paper: #0a0b0e;
+  --panel: #111217;
+  --panel-2: #16181e;
+  --ink: #f0eee6;
+  --ink-2: rgb(var(--ink-rgb) / 0.74);
+  --ink-3: rgb(var(--ink-rgb) / 0.58);
+  --ink-4: rgb(var(--ink-rgb) / 0.32);
+  --hair: rgb(var(--ink-rgb) / 0.13);
+  --accent: #7c94ff;
+  --accent-soft: rgb(var(--accent-rgb) / 0.16);
+  --s-blue: #7c94ff;
+  --s-red: #f08560;
+  --s-green: #56c492;
+  --s-violet: #a993f2;
+  --s-amber: #e3b455;
+  --s-blue-t: rgb(124 148 255 / 0.15);
+  --s-red-t: rgb(240 133 96 / 0.15);
+  --s-green-t: rgb(86 196 146 / 0.14);
+  --s-violet-t: rgb(169 147 242 / 0.15);
+  --s-amber-t: rgb(227 180 85 / 0.15);
+  --plate-shadow:
+    0 1px 0 rgb(255 255 255 / 0.045) inset,
+    0 24px 48px -28px rgb(0 0 0 / 0.7);
+  --grid-dot: rgb(var(--ink-rgb) / 0.1);
+
+  color-scheme: dark;
+
+  /* Figures: the few values that must not simply flip with the theme. */
+  --solid-lit: #b4b2ab;
+  --solid-shade: #1a1c22;
+  --solid-depth: 2;
+  --dim: 0.78;
+}
+
+/* Without JS there is no data-theme, and the page is still night. */
+@media all {
+  :root:not([data-theme]) {
+    --ink-rgb: 240 238 230;
+    --paper-rgb: 10 11 14;
+    --accent-rgb: 124 148 255;
+
+    --paper: #0a0b0e;
+    --panel: #111217;
+    --panel-2: #16181e;
+    --ink: #f0eee6;
+    --ink-2: rgb(var(--ink-rgb) / 0.74);
+    --ink-3: rgb(var(--ink-rgb) / 0.58);
+    --ink-4: rgb(var(--ink-rgb) / 0.32);
+    --hair: rgb(var(--ink-rgb) / 0.13);
+    --accent: #7c94ff;
+    --accent-soft: rgb(var(--accent-rgb) / 0.16);
+    --s-blue: #7c94ff;
+    --s-red: #f08560;
+    --s-green: #56c492;
+    --s-violet: #a993f2;
+    --s-amber: #e3b455;
+    --s-blue-t: rgb(124 148 255 / 0.15);
+    --s-red-t: rgb(240 133 96 / 0.15);
+    --s-green-t: rgb(86 196 146 / 0.14);
+    --s-violet-t: rgb(169 147 242 / 0.15);
+    --s-amber-t: rgb(227 180 85 / 0.15);
+    --plate-shadow:
+      0 1px 0 rgb(255 255 255 / 0.045) inset,
+      0 24px 48px -28px rgb(0 0 0 / 0.7);
+    --grid-dot: rgb(var(--ink-rgb) / 0.1);
+
+    color-scheme: dark;
+
+    /* Figures: the few values that must not simply flip with the theme. */
+    --solid-lit: #b4b2ab;
+    --solid-shade: #1a1c22;
+    --solid-depth: 2;
+    --dim: 0.78;
+  }
 }
 
 *,
@@ -55,10 +176,27 @@
   box-sizing: border-box;
 }
 
+/*
+  On a narrow screen the scene is a band across the top of the cover and the
+  footer. Its height is said once, here, as a length the scripts can read back
+  in pixels (scripts/voyage.ts), so the page is laid out the same before and
+  after the scene starts. It is in small-viewport units: a phone's toolbar
+  sliding away does not change it.
+*/
+@property --sky-h {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 240px;
+}
+:root {
+  --sky-h: min(80vw, 46svh);
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  scroll-padding-top: 24px;
+  scroll-padding-top: calc(var(--bar) + 12px);
+  background: var(--paper);
 }
 
 body {
@@ -72,6 +210,32 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/*
+  By night, where things move, the ground is the sky's own black from the first
+  paint: the scene behind the page (Cosmos.astro) is then put up on the colour
+  that is already there, and nothing steps. A page that turns out to have no
+  scene (data-flat) goes back to its paper.
+*/
+html[data-motion]:not([data-theme="light"]):not([data-flat]) {
+  background: #06080d;
+}
+html[data-motion]:not([data-theme="light"]):not([data-flat]) body {
+  background: transparent;
+}
+
+/* Switching themes by hand eases between them; first paint never does. */
+html[data-theme-switching] body,
+html[data-theme-switching] .fig {
+  transition:
+    background-color 0.45s ease,
+    color 0.45s ease,
+    border-color 0.45s ease;
+}
+
+[data-night] {
+  color: var(--ink);
 }
 
 h1,
@@ -111,6 +275,15 @@ a {
   text-decoration: none;
 }
 
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
 ::selection {
   background: var(--accent);
   color: var(--paper);
@@ -124,6 +297,13 @@ a {
 
 .num {
   font-variant-numeric: tabular-nums;
+}
+
+/* Computer Modern for the numerals that carry weight. */
+.cm {
+  font-family: var(--cm);
+  font-feature-settings: normal;
+  letter-spacing: 0;
 }
 
 .wrap {
@@ -142,17 +322,269 @@ a {
   white-space: nowrap;
 }
 
-/* An inline link: hairline underline that thickens and takes the accent on hover. */
+/*
+  An inline link. At rest a hairline sits under it. Under the pointer that
+  hairline leaves to the right and one in the accent draws in from the left
+  behind it. The two are painted on one strip, three lengths of the link long,
+  that slides along under it; --u says how far (see "Under the hand" at the
+  foot of this file). A link that wraps is still one strip, so its line runs
+  off the end of one row and on along the next.
+*/
 .ln {
-  text-decoration: underline;
+  --u: 0;
+  text-decoration: none;
+  /* The hairline's row can lie a pixel under the letters' own box. An inline box's padding makes room and moves nothing. */
+  padding-bottom: 0.15em;
+  /* Each stretch of line is a little longer than the link, so its ends never fall a pixel short. */
+  background-image: linear-gradient(90deg, var(--ink-4) 0 calc(100% / 3 + 2px), transparent 0 50%, var(--accent) 0 calc(250% / 3 + 2px), transparent 0);
+  background-size: 300% 1px;
+  background-repeat: repeat-x;
+  background-origin: content-box;
+  background-position-x: calc(var(--u) * -75% - 1px);
+  /* 0.22em under the baseline on a whole pixel, the row an underline would take, whatever size the text is set at. */
+  background-position-y: calc(100% + 1px);
+  background-position-y: calc(100% - (round(0.25em, 1px) - round(0.22em, 1px) - 1px));
+  transition:
+    --u var(--t-press) var(--ease-io),
+    color var(--t-press) var(--ease-io);
+}
+/* A button that reads as a link is a box, not a run of text: its letters stand in the middle of its line. */
+button.ln {
+  padding-bottom: 0;
+  background-position-y: calc(100% - 2px);
+  background-position-y: calc(100% - ((1lh - round(0.97em, 1px) + round(0.25em, 1px)) / 2 - round(0.22em, 1px) - 1px));
+}
+@media (hover: hover) {
+  .ln:hover {
+    --u: 1;
+    color: var(--accent);
+  }
+}
+.ln:focus-visible {
+  --u: 1;
+  color: var(--accent);
+}
+/*
+  While a link on a line of its own rises into place (scripts/reveal.ts) its
+  text is in a slot, and the strip would be left standing outside it. For that
+  long the hairline is the text's own, on the same row.
+*/
+.ln:has(> .rise-mask) {
+  background-image: none;
+  text-decoration-line: underline;
   text-decoration-thickness: 1px;
   text-decoration-color: var(--ink-4);
+  text-decoration-skip-ink: none;
   text-underline-offset: 0.22em;
-  transition:
-    text-decoration-color 0.2s ease,
-    color 0.2s ease;
 }
-.ln:hover {
-  color: var(--accent);
-  text-decoration-color: currentColor;
+/* Paper, and a screen that sets its own colours, draw no backgrounds. */
+@media print, (forced-colors: active) {
+  .ln {
+    background-image: none;
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.22em;
+  }
+}
+
+kbd {
+  font: 12.5px var(--sans);
+  padding: 1px 6px;
+  border: 1px solid var(--hair);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink-2);
+}
+
+/*
+  Arrivals (scripts/reveal.ts). A block marked [data-reveal] is held back
+  until the script has taken it over, and only where there is a script to do
+  it: the attribute on <html> is set by the inline script in Base.astro.
+*/
+html[data-motion]:not([data-revealed]) [data-reveal] {
+  visibility: hidden;
+}
+/* The slot a line of type rises through. Room below for descenders, taken back so nothing moves. */
+.rise-mask {
+  padding-bottom: 0.16em;
+  margin-bottom: -0.16em;
+}
+.rise-w-mask {
+  padding: 0 0.05em 0.24em;
+  margin: 0 -0.05em -0.24em;
+}
+
+/* A far jump is a cut (scripts/scroll.ts): two blades close over the page while it changes place, and open again. */
+.shutter {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: auto;
+}
+.shutter i {
+  position: absolute;
+  inset: 0 0 50% 0;
+  background: var(--paper);
+  transform: scaleY(0);
+  transform-origin: top;
+}
+.shutter i + i {
+  inset: 50% 0 0 0;
+  transform-origin: bottom;
+}
+html[data-voyage]:not([data-theme="light"]) .shutter i {
+  background: #06080d;
+}
+
+/* On paper nothing is waiting to arrive. */
+@media print {
+  [data-reveal],
+  [data-reveal] * {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    clip-path: none !important;
+  }
+  .cosmos {
+    display: none !important;
+  }
+}
+
+/* The footer is night; the ground above it ends with room to spare. */
+main > [data-ground]:last-child,
+main[data-ground] {
+  padding-bottom: clamp(96px, 12vw, 176px);
+}
+
+/* Poster mode: tools/cover.mjs photographs the cover scene with nothing over it. */
+html[data-poster] [data-bar],
+html[data-poster] [data-index] {
+  visibility: hidden;
+}
+
+/*
+  ==========================================================================
+  Under the hand: what answers the pointer and the keyboard.
+
+  Everything above this line is the page at rest; none of it changes here.
+  There are two moves, a label rolling over and a hairline drawing, and both
+  take the length of a press (--t-press) on the curve for one state changing
+  into another (--ease-io).
+  ==========================================================================
+*/
+
+/*
+  --u places a hairline that answers the pointer: 0 at rest, 1 under it. The
+  stylesheet takes it from one to the other and back again. Where
+  scripts/hover.ts runs it keeps counting instead (2, 3, 4): every even number
+  looks like 0 and every odd one like 1, so a line that came in from the left
+  goes out to the right. Registered as a number so that it can be transitioned.
+*/
+@property --u {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/*
+  A hairline that draws: [data-wire] on a link or a button. The line comes in
+  from the left as --u goes from 0 to 1 and leaves to the right from 1 to 2.
+  It lies along the foot of its box unless the box says otherwise.
+*/
+[data-wire] {
+  --u: 0;
+  position: relative;
+  transition: --u var(--t-press) var(--ease-io);
+}
+[data-wire]::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: var(--accent);
+  pointer-events: none;
+  transform-origin: 0 50%;
+  /* Where mod() is not understood: in from the left, and back the same way. */
+  transform: scaleX(var(--u));
+}
+@supports (width: calc(mod(3, 2) * 1px)) {
+  [data-wire]::before {
+    /* The line's two ends, each 0 to 1 along the box. The right end leads it in; the left end follows it out. */
+    --at: mod(var(--u), 2);
+    --from: max(var(--at) - 1, 0);
+    --to: min(var(--at), 1);
+    transform: translateX(calc(var(--from) * 100%)) scaleX(calc(var(--to) - var(--from)));
+  }
+}
+@media (hover: hover) {
+  [data-wire]:hover {
+    --u: 1;
+  }
+}
+[data-wire]:focus-visible {
+  --u: 1;
+}
+
+/*
+  The roll. A label stands in a slot one line tall. Under the pointer it rolls
+  up and out through the top of the slot while its twin comes up from below in
+  the stronger ink. The twin is the label's own shadow, cast one slot down: the
+  same letters to the pixel, and nothing a screen reader could meet twice.
+
+    <a href="..."><span class="roll"><span>Label</span></span></a>
+
+  --roll-ink is the colour the twin arrives in. --roll-room is room in the
+  slot, above and below, for type set tighter than its own ink; it is taken
+  back with a margin, so a slot never moves anything.
+*/
+.roll {
+  --roll-room: 0px;
+  --roll-by: 2em;
+  display: inline-block;
+  vertical-align: top;
+  /* Cut above and below only: a letter that hangs over the side of its box is left whole. */
+  overflow: hidden;
+  overflow: visible clip;
+  padding-block: var(--roll-room);
+  margin-block: calc(-1 * var(--roll-room));
+}
+/* One slot, in whole pixels, so the twin lands exactly where the label stood. */
+@supports (top: round(up, 1lh, 1px)) {
+  .roll {
+    --roll-by: round(up, 1lh + 2 * var(--roll-room), 1px);
+  }
+}
+.roll > span {
+  display: block;
+  text-shadow: 0 var(--roll-by) 0 var(--roll-ink, var(--ink));
+  transition: transform var(--t-press) var(--ease-io);
+}
+@media (hover: hover) {
+  :is(a, button):hover .roll > span {
+    transform: translateY(calc(-1 * var(--roll-by)));
+  }
+}
+:is(a, button):focus-visible .roll > span {
+  transform: translateY(calc(-1 * var(--roll-by)));
+}
+
+/*
+  Reduced motion, and a screen that sets its own colours (which casts no
+  shadows): nothing rolls and nothing draws. A label takes its stronger ink
+  where it stands, and a line is simply there.
+*/
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .roll > span {
+    text-shadow: none;
+    transition: none;
+  }
+  :is(a, button):is(:hover, :focus-visible) .roll > span {
+    transform: none;
+    color: var(--roll-ink, var(--ink));
+  }
+  .ln,
+  [data-wire] {
+    transition: none;
+  }
 }

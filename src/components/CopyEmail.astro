@@ -2,33 +2,121 @@
 interface Props {
   label?: string;
   class?: string;
+  /** Draw a hairline under it while the pointer is on it ([data-wire], in global.css). */
+  wire?: boolean;
 }
-const { label = "Email", class: cls } = Astro.props;
+const { label = "Email", class: cls, wire = false } = Astro.props;
 const address = "fireheartjerry@gmail.com";
 ---
 
 <!--
   Without JS this is a plain mailto link. With JS a click copies the address
-  instead; Cmd/Ctrl/Shift-click still opens the mail client. Both labels share
-  one grid cell so swapping them never shifts the layout.
+  instead; Cmd/Ctrl/Shift-click still opens the mail client. Both labels stand
+  in one slot, so swapping them never shifts the layout.
 -->
-<a class:list={["copy", cls]} href={`mailto:${address}`} data-copy={address} title={address}>
-  <span class="face idle">{label}</span>
-  <span class="face done" aria-hidden="true">
-    <svg viewBox="0 0 12 12" width="0.7em" height="0.7em" aria-hidden="true"><path d="M2 6.4 4.7 9 10 3" pathLength="1" /></svg>
-    Copied
+<a class:list={["copy", cls]} href={`mailto:${address}`} data-copy={address} data-wire={wire ? "" : undefined} title={address}>
+  <span class="slot">
+    <span class="face idle">{label}</span>
+    <span class="face done" aria-hidden="true">
+      <svg viewBox="0 0 12 12" width="0.7em" height="0.7em" aria-hidden="true"><path d="M2 6.4 4.7 9 10 3" pathLength="1" /></svg>
+      Copied
+    </span>
   </span>
 </a>
 
 <script>
+  import { gsap, reducedMotion, T } from "../scripts/motion";
+
   const live = document.createElement("div");
   live.className = "sr-only";
   live.setAttribute("aria-live", "polite");
   document.body.append(live);
 
+  const HELD = 1800; // how long "Copied" stands, ms
   const timers = new WeakMap<HTMLElement, number>();
+  const all = () => [...document.querySelectorAll<HTMLAnchorElement>("a[data-copy]")];
 
-  async function copy(el: HTMLAnchorElement) {
+  // ---------- the swap ----------
+  //
+  // One label for another is a roll, always upward: the one leaving goes out
+  // through the top of the slot, the one arriving comes up from below. A label
+  // set by the letter (the footer's address, scripts/reveal.ts) goes and comes
+  // by the letter. Positions are in percent of a label's own height: 0 is in
+  // the slot, and ABOVE and BELOW are clear of it (the slot keeps room under
+  // the line for descenders, so below is further off than above).
+  const ABOVE = -112;
+  const BELOW = 130;
+  const EACH = 0.012; // between one letter and the next, s
+
+  const rolls = !reducedMotion();
+  const face = (el: HTMLElement, name: "idle" | "done") => el.querySelector<HTMLElement>(`.${name}`)!;
+  const parts = (label: HTMLElement) => {
+    const letters = [...label.querySelectorAll<HTMLElement>(".rise-c")];
+    return letters.length ? letters : [label];
+  };
+  const y = (el: HTMLElement) => gsap.getProperty(el, "yPercent") as number;
+  const run = (els: HTMLElement[], from: number | "start") => (els.length > 1 ? { each: EACH, from } : 0);
+
+  // A swap asked for while another is still in the air answers at once and all together: every part turns
+  // round (or carries on) from where it is, and none stands waiting for its turn in a new run.
+  const flying = (label: HTMLElement) => parts(label).some((part) => gsap.isTweening(part));
+
+  /** Roll a label out. A part still on its way up from below goes back down rather than through the slot. */
+  function leave(label: HTMLElement, from: number | "start", then?: () => void) {
+    const els = parts(label);
+    gsap.to(els, { yPercent: (_i, el) => (y(el) > 1 ? BELOW : ABOVE), duration: T.state, ease: "swap", stagger: flying(label) ? 0 : run(els, from), overwrite: true, onComplete: then });
+  }
+  /**
+   * Roll a label in, after `wait` seconds. A part that left through the top comes back from below; one caught
+   * part-way turns round where it is. Once it stands in the slot it is let go of, and is again exactly the
+   * type that was written.
+   */
+  function arrive(label: HTMLElement, from: number | "start", wait = 0) {
+    const els = parts(label);
+    const now = flying(label);
+    for (const el of els) if (y(el) <= ABOVE + 1) gsap.set(el, { yPercent: BELOW });
+    gsap.to(els, { yPercent: 0, duration: T.state, ease: "swap", delay: now ? 0 : wait, stagger: now ? 0 : run(els, from), overwrite: true, onComplete: () => release(els) });
+  }
+  // (Only what has in fact come to rest in the slot. A run that was overtaken by a later one still reports
+  // in when its time is up, and by then its parts may be anywhere.)
+  function release(els: HTMLElement[]) {
+    const still = els.filter((el) => !gsap.isTweening(el) && y(el) === 0);
+    if (still.length) gsap.set(still, { clearProps: "transform,translate,rotate,scale" });
+  }
+
+  if (rolls) {
+    for (const el of all()) {
+      gsap.set(face(el, "done"), { yPercent: BELOW });
+      el.toggleAttribute("data-roll", true);
+    }
+  }
+
+  /** Show "Copied" on a button, or (`on` false) put its label back. `at` is where along the label it starts from, 0 to 1. */
+  function say(el: HTMLElement, on: boolean, at = 0) {
+    const idle = face(el, "idle"), done = face(el, "done");
+    if (!on) {
+      if (!rolls) return el.classList.remove("is-done");
+      // The check is undrawn only once "Copied" has left, and not at all if it has been asked back meanwhile.
+      leave(done, "start", () => timers.has(el) || el.classList.remove("is-done"));
+      return arrive(idle, "start");
+    }
+    // Asked again while "Copied" is standing there: it stays, and only its check is drawn again.
+    const stays = !rolls || (el.classList.contains("is-done") && y(done) === 0);
+    const els = parts(idle);
+    const from = Math.round(at * (els.length - 1));
+    // "Copied" comes up into room the letters have left: it waits for the last of those standing where it will.
+    const wide = done.offsetWidth;
+    const wait = stays || els.length < 2 || flying(idle) || flying(done) ? 0 : EACH * Math.max(...els.map((part, i) => (part.offsetLeft < wide ? Math.abs(i - from) : 0)));
+    el.style.setProperty("--wait", `${wait.toFixed(3)}s`);
+    el.classList.remove("is-done");
+    void el.offsetWidth; // restart the check-mark draw on repeat clicks
+    el.classList.add("is-done");
+    if (stays) return;
+    leave(idle, from);
+    arrive(done, "start", wait);
+  }
+
+  async function copy(el: HTMLAnchorElement, at = 0) {
     const address = el.dataset.copy!;
     try {
       await navigator.clipboard.writeText(address);
@@ -36,19 +124,27 @@ const address = "fireheartjerry@gmail.com";
       window.location.href = el.href; // clipboard blocked: fall back to mail client
       return;
     }
-    el.classList.remove("is-done");
-    void el.offsetWidth; // restart the check-mark draw on repeat clicks
-    el.classList.add("is-done");
+    // The page answers too: a pulse of light goes up the sphere's beam (scripts/voyage.ts).
+    document.dispatchEvent(new CustomEvent("cosmos:pulse"));
     live.textContent = `Copied ${address}`;
     clearTimeout(timers.get(el));
-    timers.set(el, window.setTimeout(() => el.classList.remove("is-done"), 1800));
+    say(el, true, at);
+    timers.set(
+      el,
+      window.setTimeout(() => {
+        timers.delete(el);
+        say(el, false);
+      }, HELD),
+    );
   }
 
-  document.querySelectorAll<HTMLAnchorElement>("a[data-copy]").forEach((el) => {
+  all().forEach((el) => {
     el.addEventListener("click", (e) => {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
       e.preventDefault();
-      copy(el);
+      // The letters leave from under the pointer outward. (A click made by the keyboard has no place: they leave from the start.)
+      const box = el.getBoundingClientRect();
+      copy(el, e.detail ? Math.min(1, Math.max(0, (e.clientX - box.left) / Math.max(1, box.width))) : 0);
     });
   });
 
@@ -59,12 +155,11 @@ const address = "fireheartjerry@gmail.com";
     const t = e.target as HTMLElement;
     if (t.closest("input, textarea, select, [contenteditable]")) return;
     // Confirm on whichever copy button the reader can currently see.
-    const all = [...document.querySelectorAll<HTMLAnchorElement>("a[data-copy]")];
-    const seen = all.filter((a) => {
+    const seen = all().filter((a) => {
       const r = a.getBoundingClientRect();
       return r.bottom > 0 && r.top < window.innerHeight;
     });
-    const el = seen[seen.length - 1] ?? all[0];
+    const el = seen[seen.length - 1] ?? all()[0];
     if (el) copy(el);
   });
 </script>
@@ -73,32 +168,39 @@ const address = "fireheartjerry@gmail.com";
   .copy {
     display: inline-grid;
     cursor: pointer;
+    /* A tap is answered by the label itself; the browser's own flash over it would only be in the way. */
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* The slot both labels stand in. Whoever sets --slot-room gets that much room under the line for descenders, taken back so nothing moves. */
+  .slot {
+    display: inline-grid;
+    /* Cut above and below only: a letter that hangs over the side of its box is left whole. */
+    overflow: hidden;
+    overflow: visible clip;
+    padding-bottom: var(--slot-room, 0px);
+    margin-bottom: calc(-1 * var(--slot-room, 0px));
   }
   .face {
     grid-area: 1 / 1;
     display: inline-flex;
     align-items: center;
     gap: 0.35em;
-    transition:
-      opacity 0.22s var(--ease-out),
-      transform 0.32s var(--ease-out),
-      filter 0.22s ease;
   }
+  /* At rest one label is there and the other is not. */
   .done {
     color: var(--accent);
-    opacity: 0;
-    transform: translateY(0.45em);
-    filter: blur(2px);
+    visibility: hidden;
   }
   .copy.is-done .idle {
-    opacity: 0;
-    transform: translateY(-0.45em);
-    filter: blur(2px);
+    visibility: hidden;
   }
   .copy.is-done .done {
-    opacity: 1;
-    transform: none;
-    filter: none;
+    visibility: inherit;
+  }
+  /* Where the script rolls them, both are always there, and the one not wanted is out of the slot.
+     (Inherit, not visible: whatever hides the button from above, poster mode for one, still hides its labels.) */
+  .copy[data-roll] .face {
+    visibility: inherit;
   }
   path {
     fill: none;
@@ -109,16 +211,14 @@ const address = "fireheartjerry@gmail.com";
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
   }
+  /* The check is drawn as "Copied" lands (--wait: how long the script held it back for the label to clear). */
   .copy.is-done path {
-    transition: stroke-dashoffset 0.34s 0.08s var(--ease-out);
+    transition: stroke-dashoffset var(--t-state) calc(var(--wait, 0s) + 0.14s) var(--ease-out);
     stroke-dashoffset: 0;
   }
   @media (prefers-reduced-motion: reduce) {
-    .face,
     path {
       transition: none !important;
-      transform: none !important;
-      filter: none !important;
     }
   }
 </style>

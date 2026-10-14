@@ -9,13 +9,18 @@ interface Props {
   feature?: boolean;
 }
 const { title, href, role, period, tags, feature = false } = Astro.props;
+// Links within the site stay in this tab.
+const external = !!href && /^https?:/.test(href);
 ---
 
-<article class:list={["entry", { feature }]}>
+<article class:list={["entry", { feature }]} data-reveal="entry">
+  {/* The rule above the entry, and the pen that draws it across as the entry arrives (scripts/reveal.ts). */}
+  <span class="rule" aria-hidden="true"></span>
+  <span class="rule-pen" aria-hidden="true"></span>
   <div class="text">
     <header>
       <h3>
-        {href ? <a class="ln" href={href} target="_blank" rel="noopener">{title}</a> : title}
+        {href ? <a class="ln" href={href} target={external ? "_blank" : undefined} rel={external ? "noopener" : undefined}>{title}</a> : title}
       </h3>
       <p class="meta">
         {role && <span>{role}</span>}
@@ -35,7 +40,6 @@ const { title, href, role, period, tags, feature = false } = Astro.props;
     column-gap: clamp(32px, 6vw, 96px);
     align-items: start;
     padding-block: clamp(40px, 5.5vw, 80px);
-    border-top: 1px solid var(--hair);
   }
   .entry.no-fig {
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
@@ -46,32 +50,47 @@ const { title, href, role, period, tags, feature = false } = Astro.props;
   }
   .figure {
     display: grid;
+    /* A track that may be narrower than its content: a long unbreakable line in a figure must not widen the page. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 20px;
   }
   /* The rule above each entry draws itself in as the entry arrives. */
   .entry {
     position: relative;
   }
-  .entry::before {
-    content: "";
+  .rule {
     position: absolute;
-    inset: -1px 0 auto;
+    inset: 0 0 auto;
     height: 1px;
     background: var(--ink-4);
-    transform: scaleX(var(--rule, 1));
     transform-origin: left;
+  }
+  /* A short bright stroke that runs at the head of the rule while it is drawn; --k is how far along it is. */
+  .rule-pen {
+    --k: 0;
+    position: absolute;
+    top: -0.5px;
+    left: calc(var(--k) * (100% - 26px));
+    width: 26px;
+    height: 1.5px;
+    border-radius: 1px;
+    background: var(--accent);
+    opacity: 0;
   }
   h3 {
     font-size: 21px;
     line-height: 1.25;
     letter-spacing: -0.012em;
   }
+  h3 a {
+    padding-block: 8px;
+  }
   .meta {
     display: flex;
     flex-wrap: wrap;
     gap: 0 0.9em;
     margin-top: 4px;
-    font-size: 14.5px;
+    font-size: 15px;
     color: var(--ink-3);
   }
   .body {
@@ -81,6 +100,9 @@ const { title, href, role, period, tags, feature = false } = Astro.props;
   }
   .body :global(p + p) {
     margin-top: 0.8em;
+  }
+  .body :global(a.ln) {
+    padding-block: 10px;
   }
   .tags {
     margin-top: 18px;
@@ -105,10 +127,10 @@ const { title, href, role, period, tags, feature = false } = Astro.props;
   .entry.feature .tags { grid-column: 2; }
   .entry.feature .figure { grid-column: 1 / -1; }
   @media (max-width: 880px) {
-    .entry.feature .text { grid-template-columns: 1fr; }
+    .entry.feature .text { grid-template-columns: minmax(0, 1fr); }
     .entry.feature .body, .entry.feature .tags { grid-column: 1; margin-top: 18px; }
     .entry {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       row-gap: 36px;
     }
     .text {

@@ -6,7 +6,7 @@
 import Figure from "../Figure.astro";
 import {
   VIEW, CAM0, PIP, ICO, TOOLS, GESTURES, captionOpacity,
-  gesture, mesh, floor, gizmo, pip, dimension, bonesPath, fmt, readout,
+  gesture, mesh, floor, gizmo, pip, dimension, tipLabels, bonesPath, fmt, readout,
 } from "../../scripts/geo/daedalus";
 
 const g = gesture(1);
@@ -14,6 +14,7 @@ const m = mesh(CAM0, g.S, g.clayAt, g.sculpt);
 const fl = floor(CAM0);
 const gz = gizmo(CAM0);
 const dim = dimension(g.lm);
+const tipAt = tipLabels(g.lm);
 const bones = bonesPath(g.lm);
 const plm = pip(g.lm);
 const tips = new Set([4, 8]);
@@ -35,7 +36,7 @@ const vf = (x: number, y: number, w: number, h: number, i: number, a: number) =>
   `M${x + i} ${y + i + a}V${y + i}H${x + i + a}M${x + w - i - a} ${y + i}H${x + w - i}V${y + i + a}M${x + w - i} ${y + h - i - a}V${y + h - i}H${x + w - i - a}M${x + i + a} ${y + h - i}H${x + i}V${y + h - i - a}`;
 ---
 
-<Figure name="daedalus" n={10} title="Sculpting by hand" label="A tracked hand pinching, pulling and scaling a flat-shaded mesh in a 3D viewport" readout={readout(g.pinch, g.S)}>
+<Figure name="daedalus" n={13} title="Sculpting by hand" label="A tracked hand pinching, pulling and scaling a flat-shaded mesh in a 3D viewport" readout={readout(g.pinch, g.S)}>
   <svg class="dd" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} role="img" aria-label={`A 3D viewport with a flat-shaded icosphere of ${ICO.v.length} vertices over a ground grid. The 21 MediaPipe hand landmarks, joined into a skeleton, pinch its side and pull a lump out of it like clay, then spread thumb and index apart to scale the mesh up to ${g.S.toFixed(2)} times. A toolbar highlights the active tool, and a small webcam inset shows the same landmarks.`}>
     <defs>
       <clipPath id="dd-clip"><rect x="1" y="1" width={VIEW.w - 2} height={VIEW.h - 2} rx="8" /></clipPath>
@@ -54,7 +55,7 @@ const vf = (x: number, y: number, w: number, h: number, i: number, a: number) =>
 
       <!-- The mesh: front faces only, far to near, lit from the upper left. -->
       <g class="dd-mesh">
-        {m.faces.map((f) => <path class="dd-f" d={f.d} fill={f.fill} stroke={f.stroke} />)}
+        {m.faces.map((f) => <path class="dd-f" d={f.d} style={`--shade:${f.shade}` + (f.tint === "0%" ? "" : `;--tint:${f.tint}`) + (f.edge === "0%" ? "" : `;--edge:${f.edge}`)} />)}
       </g>
     </g>
 
@@ -92,6 +93,9 @@ const vf = (x: number, y: number, w: number, h: number, i: number, a: number) =>
       {g.lm.map(([x, y], i) => (
         <circle class:list={["dd-lm", tips.has(i) ? "dot-accent" : "dot"]} cx={r1(x)} cy={r1(y)} r={tips.has(i) ? 3.25 : 2.25} />
       ))}
+      {[4, 8].map((n, j) => (
+        <text class="cm dd-idx dd-sec" x={tipAt[j][0]} y={tipAt[j][1]} text-anchor="middle" dominant-baseline="central">{n}</text>
+      ))}
       <g class="dd-dim" opacity={Math.round(dim.on * (1 - g.relax) * 100) / 100}>
         <path class="dd-ext" d={dim.ext} />
         <path class="dd-line" d={dim.line} />
@@ -118,7 +122,7 @@ const vf = (x: number, y: number, w: number, h: number, i: number, a: number) =>
     <g class="dd-cap">
       <circle class="dot-accent" cx={VIEW.w - 150} cy={VIEW.h - 17} r="2.5" />
       {GESTURES.map((c, i) => (
-        <text class="dd-capt" x={VIEW.w - 142} y={VIEW.h - 13} opacity={captionOpacity(i, 1)}>{c}</text>
+        <text class="dd-capt" x={VIEW.w - 142} y={VIEW.h - 13} opacity={captionOpacity(i, g.beat)}>{c}</text>
       ))}
     </g>
 
@@ -136,7 +140,16 @@ const vf = (x: number, y: number, w: number, h: number, i: number, a: number) =>
   .dd-ax-x { stroke: var(--s-red); }
   .dd-ax-z { stroke: var(--accent); }
   .dd-ht { paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
-  .dd-f { stroke-width: 0.6; stroke-linejoin: round; }
+  /* A face says how far it turns from the light (--shade) and how much of the
+     accent the pulled clay takes (--tint); the theme supplies the colours. */
+  .dd-f {
+    --face: color-mix(in srgb, var(--solid-shade) calc(var(--shade, 0%) * var(--solid-depth)), var(--solid-lit));
+    fill: color-mix(in srgb, var(--accent) var(--tint, 0%), var(--face));
+    /* The clay's edges go over to the accent with it (--edge), rather than switching. */
+    stroke: color-mix(in srgb, rgb(var(--accent-rgb) / 0.55) var(--edge, 0%), rgb(var(--ink-rgb) / 0.2));
+    stroke-width: 0.6;
+    stroke-linejoin: round;
+  }
 
   .dd-tbar { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
   .dd-tool rect { fill: transparent; stroke: none; }
@@ -144,6 +157,10 @@ const vf = (x: number, y: number, w: number, h: number, i: number, a: number) =>
   .dd-tool.on rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
   .dd-tool.on path { stroke: var(--accent); }
   .dd .dd-tname { fill: var(--accent); paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
+  /* Live, the highlight is one box that travels from tool to tool, and each glyph takes the accent as it is covered (--sel). */
+  .dd-tools[data-live] .dd-tool.on rect { fill: transparent; stroke: none; }
+  .dd-tools[data-live] .dd-tool path { stroke: color-mix(in srgb, var(--accent) calc(var(--sel, 0) * 100%), var(--ink-3)); }
+  .dd-sel { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
 
   .dd-gz-ring { fill: var(--panel); stroke: var(--hair); stroke-width: 1; }
   .dd-gz { stroke-width: 1.5; stroke-linecap: round; }
@@ -158,6 +175,9 @@ const vf = (x: number, y: number, w: number, h: number, i: number, a: number) =>
   .dd-halo { stroke: var(--panel); stroke-width: 5; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
   .dd-bones { stroke: var(--ink); stroke-width: 1.1; fill: none; stroke-linecap: round; stroke-linejoin: round; }
   .dd-lm.dot { stroke: var(--panel); stroke-width: 1.25; }
+  .dd .dd-idx { font-size: 11px; fill: var(--accent); paint-order: stroke; stroke: var(--panel-2); stroke-width: 3px; stroke-linejoin: round; }
+  /* A pinch that takes hold: one ring opening from the two tips. */
+  .dd-touch { fill: none; stroke: var(--accent); stroke-width: 1; }
   .dd-ext { stroke: var(--ink-4); stroke-width: 1; fill: none; }
   .dd-line { stroke: var(--ink-2); stroke-width: 1; fill: none; stroke-linecap: round; }
   .dd-val { paint-order: stroke; stroke: var(--panel-2); stroke-width: 3px; stroke-linejoin: round; fill: var(--ink-2); }

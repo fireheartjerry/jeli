@@ -9,7 +9,7 @@ where your brief explicitly allows a package.
 - src/components/Figure.astro: the plate chrome + shared SVG stroke classes (.ink .faint .hair .dash .accent .dot .dot-accent .fill-accent-soft .paper, text / text.m / text.cm / text.strong / text.acc)
 - src/scripts/motion.ts: helpers `gsap`, `ScrollTrigger`, `undraw`, `draw`, `scrubbed(trigger, vars)`, `q`, `qa`, `reducedMotion`
 - src/scripts/figures.ts: lazy loader. An element with `data-fig="<name>"` loads `src/scripts/figures/<name>.ts` (default export `(root: HTMLElement) => void`) when it nears the viewport; never under prefers-reduced-motion.
-- Reference implementations: src/components/figures/Submissions.astro + src/scripts/figures/submissions.ts, and src/components/Hero.astro + src/scripts/hero.ts (+ src/scripts/binary.ts).
+- Reference implementations: src/components/figures/Submissions.astro + src/scripts/figures/submissions.ts, and src/components/figures/Landscape.astro + src/scripts/figures/landscape.ts (+ src/scripts/binary.ts).
 
 ## Contract
 1. Component: `src/components/figures/<Pascal>.astro`, wrapping `<Figure name="<name>" n={N} title="..." label="accessible description" readout="initial readout">`. Slot content is ONE `<svg viewBox="0 0 640 H" role="img" aria-label="...">` (or a `<canvas>` where your brief says so) plus optionally `<Fragment slot="caption">...</Fragment>`.
@@ -27,7 +27,7 @@ where your brief explicitly allows a package.
 9. Only create/modify YOUR files: the component(s), the script(s), and a lab page per figure. Don't touch shared files (Figure.astro, motion.ts, figures.ts, global.css, index.astro, Hero, other figures). If you need a shared change, describe it in your report.
 
 ## Lab page and verification (required)
-Create `src/pages/lab/<name>.astro`:
+Create `src/pages/lab/<name>.astro` (a scratch page: it carries `noindex`, and it is deleted once the figure is on the page it was built for):
 ```astro
 ---
 import Base from "../../layouts/Base.astro";
@@ -84,3 +84,22 @@ Linear and Vercel launch pages, and sarsa.app's hero), while staying honest to t
 5. Budget: up to ~700 SVG nodes, or use canvas. No per-frame allocations. 60fps on a laptop.
 6. The server-rendered SVG is still the finished state (no-JS / reduced motion).
 7. Mobile (390px): must remain legible and uncluttered; hide secondary annotations under 560px if needed.
+
+---
+
+# v3: the plate arrives too, and motion is checked frame by frame
+
+- The plate itself is plotted in (`src/scripts/reveal.ts`, kind "plate"), following the scroll: its
+  top edge is ruled as it enters the window, then two pens run down its sides at about 94% of the
+  window's height with the sheet let out between them, and the bottom edge closes it. Nothing below
+  that line is visible yet, so a figure's own story should start once its top is above it (the
+  default `scrubbed()` start, "top 82%", is).
+- A figure's own `svg` must come before the plate's edge in the markup (it does: the edge is the
+  plate's last child), so `q(root, "svg")` still finds the figure.
+- The page glides under a wheel now. Write any literal scrub lag as `scrub: trail(0.5)`
+  (`scrubbed()` already does); `trail` shortens it while the glide is on.
+- Use the two house curves by name: `ease: "arrive"` for anything coming to rest, `ease: "swap"`
+  for one state changing to another. Data is still drawn linear.
+- Verify with the frame-by-frame tools, not with a handful of screenshots:
+  `npx astro build --outDir .qa/dist-me && QA_DIST=.qa/dist-me QA_OUT=.qa/me node tools/qa/run.mjs home.fig.<name> phone.fig.<name>`
+  and look at every sheet in `.qa/me/seq/`.

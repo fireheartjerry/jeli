@@ -6,8 +6,8 @@
 // The server renders the last frame of the scroll timeline.
 import Figure from "../Figure.astro";
 import {
-  VIEW, CAMV, THR, BADGE, LOG, PFD, ADI, SPD, ALT, HDG, MAP, FLIGHT,
-  flight, scene, throttleCard, thrY, trend, horizon, pointer, spdTape, altTape, hdgTape,
+  VIEW, CAMV, THR, BADGE, LOG, PFD, ADI, SPD, ALT, HDG, HDG_SPAN, MAP, FLIGHT,
+  flight, scene, throttleCard, thrY, trend, horizon, pointer, spdTape, altTape, hdgTape, hdgBase,
   hdgText, hdgName, speedOf, frame, readout, turbulence, fadeTape, fadeHdg, fadeRung,
 } from "../../scripts/geo/cockpit";
 
@@ -56,14 +56,16 @@ const bytes = (v: readonly string[]) => `{"roll":${v[0]},"pitch":${v[1]},"thrott
 // Instrument furniture.
 const bank = [-60, -45, -30, -20, -10, 10, 20, 30, 45, 60];
 const rungs = [-20, -15, -10, -5, 5, 10, 15, 20];
-const spdVals: number[] = [], altVals: number[] = [], hdgVals: number[] = [];
+const spdVals: number[] = [], altVals: number[] = [], hdgOffs: number[] = [];
 for (let v = 60; v <= 220; v += 5) spdVals.push(v);
 for (let v = 1200; v <= 2300; v += 50) altVals.push(v);
-for (let v = Math.floor(FLIGHT.hdgRange[0] / 5) * 5 - 60; v <= FLIGHT.hdgRange[1] + 60; v += 5) hdgVals.push(v);
+// The heading strip is drawn round the nearest 30 degrees and slid by the rest (see hdgTape).
+for (let d = HDG_SPAN[0]; d <= HDG_SPAN[HDG_SPAN.length - 1]; d += 5) hdgOffs.push(d);
+const hbase = hdgBase(f.hdg);
 const spdTicks = spdVals.map((v) => `M${SPD.x1 - (v % 10 ? 4 : 7)} ${r1(cy - v * SPD.k)}H${SPD.x1}`).join("");
 const altTicks = altVals.map((v) => `M${ALT.x0} ${r1(cy - v * ALT.k)}h${v % 100 ? 4 : 7}`).join("");
 const hmid = (HDG.x0 + HDG.x1) / 2;
-const hdgTicks = hdgVals.map((v) => `M${r1(hmid + v * HDG.k)} ${HDG.y0}v${v % 10 ? 3 : 6}`).join("");
+const hdgTicks = hdgOffs.map((d) => `M${r1(hmid + d * HDG.k)} ${HDG.y0}v${d % 10 ? 3 : 6}`).join("");
 
 // The map: a generic street grid, one avenue, a shoreline and a park.
 const M = MAP;
@@ -82,7 +84,7 @@ const plane = "M0 -7.5L1.3 -2.2L7.5 1.2V2.8L1.3 1.4L1 5.2L3.2 6.8V7.8L0 7L-3.2 7
 const start = FLIGHT.pts[0];
 ---
 
-<Figure name="cockpit" n={9} title="Cardboard Cockpit" label="Webcam marker tracking and a badge button, bridged over a WebSocket to a flight sim" readout={readout(roll, pitch, thr)}>
+<Figure name="cockpit" n={12} title="Cardboard Cockpit" label="Webcam marker tracking and a badge button, bridged over a WebSocket to a flight sim" readout={readout(roll, pitch, thr)}>
   <svg class="ck" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} role="img" aria-label="Three panels. A webcam frame shows a cardboard card with ArUco marker id 23 held in two hands, with its detected corners and pose axes, and a smaller throttle marker on a rail. A Python bridge log streams JSON frames with roll, pitch, throttle and fire over a local WebSocket, next to a Bluetooth badge whose button sets fire. The Godot sim shows the same roll and pitch on an attitude display with speed and altitude tapes and a heading strip, and a map traces the aircraft's path.">
     <defs>
       <pattern id="ck-scan" width="6" height="5" patternUnits="userSpaceOnUse">
@@ -104,13 +106,16 @@ const start = FLIGHT.pts[0];
       <text class="ck-rec" x="26" y="31">REC <tspan class="ck-recdot">●</tspan> 30 fps</text>
       <text class="ck-sec" x={CAMV.w - 26} y="31" text-anchor="end">ArUco DICT_4X4_50</text>
 
-      <!-- The stick: a card held in two hands. -->
+      <!-- The stick: a card held in two hands. The card is printed, so it keeps the
+           day tokens at night; the hands and the detector's overlay follow the theme. -->
       <g class="card" clip-path="url(#ck-cam)">
         <path class="ck-palm" d={s.palms} />
         <path class="ck-back" d={s.back} />
-        <path class="ck-card" d={s.card} />
-        <path class="ck-ink" d={s.ink} />
-        <path class="ck-grid" d={s.grid} />
+        <g data-day>
+          <path class="ck-card" d={s.card} />
+          <path class="ck-ink" d={s.ink} />
+          <path class="ck-grid" d={s.grid} />
+        </g>
         <path class="ck-palm ck-thumb" d={s.thumbs} />
       </g>
 
@@ -119,8 +124,10 @@ const start = FLIGHT.pts[0];
         <rect class="ck-rail" x={THR.x - 7} y={THR.y0 - 26} width="14" height={THR.y1 - THR.y0 + 52} rx="7" />
         <path class="hair" d={`M${THR.x} ${THR.y0 - 16}V${THR.y1 + 16}`} />
         <path class="faint" d={railTicks} />
-        <path class="ck-card ck-tcard" d={tc.card} />
-        <path class="ck-ink ck-tink" d={tc.ink} />
+        <g data-day>
+          <path class="ck-card ck-tcard" d={tc.card} />
+          <path class="ck-ink ck-tink" d={tc.ink} />
+        </g>
         <path class="accent ck-tquad" d={tc.quad} />
         <text class="cm ck-tval ck-sec" x={THR.x + 22} y={r1(thrY(thr))} dominant-baseline="central">{thr.toFixed(2)}</text>
         <text x={THR.x} y={CAMV.h - 14} text-anchor="middle">throttle</text>
@@ -271,8 +278,8 @@ const start = FLIGHT.pts[0];
       <g clip-path="url(#ck-hdg)">
         <g class="ck-hdg" transform={hdgTape(f.hdg)}>
           <path class="faint" d={hdgTicks} />
-          {hdgVals.filter((v) => v % 30 === 0).map((v) => (
-            <text class="cm ck-hl" data-v={v} opacity={fadeHdg((v - f.hdg) * HDG.k)} x={r1(hmid + v * HDG.k)} y={HDG.y1 - 5} text-anchor="middle">{hdgName(v)}</text>
+          {HDG_SPAN.map((d) => (
+            <text class="cm ck-hl" data-d={d} opacity={fadeHdg((hbase + d - f.hdg) * HDG.k)} x={r1(hmid + d * HDG.k)} y={HDG.y1 - 5} text-anchor="middle">{hdgName(hbase + d)}</text>
           ))}
         </g>
       </g>
@@ -332,13 +339,19 @@ const start = FLIGHT.pts[0];
   .ck-hit.dragging { cursor: grabbing; }
 
   .ck-body { fill: var(--panel); stroke: var(--ink); stroke-width: 1.25; }
-  .ck-led { fill: var(--ink-4); }
+  /* A press is a press: the button, its light and the radio take the accent on the page's own curve, not in one frame. */
+  .ck-led { fill: var(--ink-4); transition: fill var(--t-press) var(--ease-out); }
   .ck-led.on { fill: var(--accent); }
-  .ck-fire { fill: var(--panel-2); stroke: var(--ink); stroke-width: 1.25; }
+  .ck-fire { fill: var(--panel-2); stroke: var(--ink); stroke-width: 1.25; transition: fill var(--t-press) var(--ease-out), stroke var(--t-press) var(--ease-out); }
   .ck-fire.on { fill: var(--accent); stroke: var(--accent); }
-  .ck-fire-ring { fill: none; stroke: var(--accent); stroke-width: 1; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .ck-fire-ring { fill: none; stroke: var(--accent); stroke-width: 1; opacity: 0; }
   .ck-btn { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1; }
+  .ck-arcs { transition: stroke var(--t-press) var(--ease-out); }
   .ck-arcs.on { stroke: var(--accent); }
+  /* Live, the badge's button is one you can hold. */
+  .ck-press { fill: transparent; cursor: pointer; }
+  /* Where the detector samples a bit: a point in the middle of its cell (on the printed card, so in the card's own colours). */
+  .ck-bit { fill: var(--accent); stroke: var(--panel); stroke-width: 1; }
 
   .ck .ck-mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; fill: var(--ink-3); letter-spacing: 0; }
   .ck .ck-json .v { fill: var(--ink-2); }
@@ -347,7 +360,7 @@ const start = FLIGHT.pts[0];
   .ck .ck-json .v.acc { fill: var(--accent); }
 
   .ck-sky { fill: var(--panel); }
-  .ck-ground { fill: rgb(20 20 19 / 0.05); }
+  .ck-ground { fill: rgb(var(--ink-rgb) / 0.05); }
   .ck-rung { stroke: var(--ink-4); stroke-width: 1; }
   .ck .ck-rl { font-size: 11px; }
   .ck-tick { stroke: var(--ink-4); stroke-width: 1; }

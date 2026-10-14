@@ -39,9 +39,9 @@
 \setlength{\parindent}{0pt}
 
 % ---- Rhythm: every gap on the page comes from these four lengths ----
-\newlength{\sectionabove}\setlength{\sectionabove}{12pt}  % before a section rule
+\newlength{\sectionabove}\setlength{\sectionabove}{10pt}  % before a section rule
 \newlength{\sectionbelow}\setlength{\sectionbelow}{5pt}  % rule to first entry
-\newlength{\entrygap}\setlength{\entrygap}{7.5pt}        % between entries
+\newlength{\entrygap}\setlength{\entrygap}{6.5pt}        % between entries
 \newlength{\bulletgap}\setlength{\bulletgap}{2.5pt}        % heading to bullets
 
 \titleformat{\section}{\scshape\raggedright\large}{}{0em}{}[\vspace{-3pt}\titlerule]
@@ -85,7 +85,7 @@
 
 \begin{center}
   {\Huge\textbf{Jerry (Yuze) Li}}\\[3pt]
-  \small Toronto, Canada\hspace{0.5em}$|$\hspace{0.5em}%
+  \small Waterloo, Canada\hspace{0.5em}$|$\hspace{0.5em}%
   \link{mailto:fireheartjerry@gmail.com}{fireheartjerry@gmail.com}\hspace{0.5em}$|$\hspace{0.5em}%
   \link{https://yuzeli.ca}{yuzeli.ca}\hspace{0.5em}$|$\hspace{0.5em}%
   \link{https://linkedin.com/in/fireheartjerry}{linkedin.com/in/fireheartjerry}\hspace{0.5em}$|$\hspace{0.5em}%
@@ -96,7 +96,7 @@
 \section{Education}
 \begin{entries}
   \entry{University of Waterloo}{Expected 2029}
-        {Bachelor of Computer Science $|$ Schulich Leader Scholarship (\$100,000)}{Waterloo, Canada}
+        {Bachelor of Computer Science $|$ Schulich Leader Scholarship (\$100,000+)}{Waterloo, Canada}
 \end{entries}
 
 \section{Experience}
@@ -109,9 +109,15 @@
     \item Rebuilt the AI tutor's step grading on a fast judge model plus SymPy checks, sharply improving accuracy and speed.
   \end{bullets}
 
+  \role{Waterloo Defence}{Software Lead}{Sept.\ 2026 -- Present}
+  \begin{bullets}
+    \item Lead software for a counter-drone perception system; built a detector (C motion front end, 3 MB CNN, tracker) that picks out distant drones in 4K video at 0.81 F1 on LRDDv3, 4$\times$ the classical baseline.
+    \item Trained it on AWS GPUs over 370 GB of 4K video with fault-tolerant spot jobs; the 3 MB model scores within 2 AP50 of the best published RGB result on the FRED benchmark.
+  \end{bullets}
+
   \role{TopsOJ}{Founder \& Lead Developer}{July 2023 -- Present}
   \begin{bullets}
-    \item Built a competitive-math judge with 100,000+ users in 180+ countries (Google Analytics) and 128,000+ submissions.
+    \item Built a competitive-math judge with 100,000+ all-time active users (Google Analytics), 180+ countries, and 128,000+ submissions.
     \item Designed EloMMR ratings; led a 30-person team across engineering, contest ops, and sponsors like 3Blue1Brown.
   \end{bullets}
 
@@ -124,30 +130,25 @@
 
 \section{Research}
 \begin{entries}
-  \entry{Computational Astrophysics}{Nov.\ 2024 -- Mar.\ 2026}
-        {Sole author of three papers, supervised by Dr.\ Alexander Mushtukov (University of Oxford)}{Remote}
+  \role{Recursive Delegation in Coding Agents}{Independent Research, Sole Author}{2026}
   \begin{bullets}
-    \item \href{https://doi.org/10.3847/2515-5172/ae4513}{``Ballistic Mass Transfer Necessarily Contracts Orbits in Binary Star Systems,''} \textit{Research Notes of the AAS} (2026). Showed the orbit loses angular momentum as $1-f$ and shrinks at every mass ratio.
-    \item \href{https://doi.org/10.64336/001c.159153}{``On the Conditions Under Which Instantaneous Mass-Transfer Mappings Reproduce Conservative Limits,''} \textit{Journal of High School Science} (2026), \textbf{Best Manuscript}. A velocity-rescaling closure cut orbit error from 22\% to under $10^{-4}$\%.
-    \item \href{https://arxiv.org/abs/2608.19107}{``The Effective Velocity of Transferred Mass,''} arXiv:2608.19107, under review at \textit{Astronomische Nachrichten}. Unified transfer models under one parameter $\eta$ that decides whether orbits widen or shrink.
+    \item \textbf{Accepted at two NeurIPS 2026 workshops:} \href{https://meta-agents-workshop.github.io/}{Meta-Agents} and \href{https://verify-agents-workshop.github.io/}{Who Verifies the Agents?} (unpublished).
+    \item Ran controlled experiments on recursive coding-agent delegation, measuring verified task success, token cost, and overlapping code edits across 1--15-agent configurations.
+  \end{bullets}
+
+  \entry{Computational Astrophysics}{Nov.\ 2024 -- Mar.\ 2026}
+        {Supervised by Dr.\ Alexander Mushtukov (University of Oxford)}{Remote}
+  \begin{bullets}
+    \item Sole-authored papers in \href{https://doi.org/10.3847/2515-5172/ae4513}{\textit{Research Notes of the AAS}} and \href{https://doi.org/10.64336/001c.159153}{\textit{Journal of High School Science}} (\textbf{Best Manuscript}), plus an \href{https://arxiv.org/abs/2608.19107}{arXiv preprint} on binary-star mass transfer.
+    \item Developed a velocity-rescaling closure that reduced orbit error from 22\% to under $10^{-4}$\%.
   \end{bullets}
 \end{entries}
 
 \section{Projects}
 \begin{entries}
-  \project{\link{https://devpost.com/software/wad}{\textbf{Cardboard Cockpit}}}{Godot, Python/OpenCV, ArUco, WebSockets, BLE}{Hack the North 2026}
-  \begin{bullets}
-    \item Built most of the Godot flight sim (21 of 22 PRs): map, weapons, HUD, BLE badge cockpit, landing, and tutorial.
-  \end{bullets}
-
   \project{\link{https://devpost.com/software/glebber-stometric}{\textbf{Daedalus}}}{TypeScript, Three.js/WebGL, MediaPipe}{JAMHacks 10}
   \begin{bullets}
     \item Co-built a webcam-gesture 3D modeling app with MediaPipe hand tracking and Three.js; won Best Non-GenAI Hack.
-  \end{bullets}
-
-  \project{\link{https://chromewebstore.google.com/detail/drift/agihdlojchhjpflceecmfknffggofdhf}{\textbf{Drift}}}{JavaScript, Chrome Extensions API}{2026}
-  \begin{bullets}
-    \item Built a Chrome extension that opens a focused feed while ChatGPT, Claude, or Gemini think; Featured on the Web Store.
   \end{bullets}
 
   \project{\link{https://github.com/fireheartjerry/worldline-engine}{\textbf{Worldline Engine}}}{C++, raylib, CMake}{2026}
@@ -167,8 +168,8 @@
 \begin{entries}
   \item\small
   \textbf{Languages:} C/C++, Python, TypeScript, JavaScript, SQL\\[1pt]
-  \textbf{Frameworks:} Node.js, Express, React, Next.js, Celery, NumPy, SciPy, Godot, raylib, Three.js\\[1pt]
-  \textbf{Tools:} AWS (Fargate, SES, S3), Git, Linux, SQLite, CMake, OpenCV, MediaPipe, Playwright, WebSockets
+  \textbf{Frameworks:} Node.js, Express, React, Next.js, Celery, PyTorch, ONNX Runtime, NumPy, SciPy, raylib, Three.js\\[1pt]
+  \textbf{Tools:} AWS (EC2, Fargate, SES, S3), Git, Linux, SQLite, CMake, OpenCV, MediaPipe, Playwright, WebSockets
 \end{entries}
 
 \end{document}

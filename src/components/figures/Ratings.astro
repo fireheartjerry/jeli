@@ -62,10 +62,11 @@ const trajs = [...ratings.trajectories.filter((t) => t !== lead).sort((a, b) => 
 const payload = JSON.stringify({
   lines: lines.map((p, k) => p.map((q, i) => [q[0], q[1], trajs[k].ratings[i], `${MON[+trajs[k].dates[i].slice(5, 7) - 1]} ${trajs[k].dates[i].slice(0, 4)}`])),
   b: B, t: T, l: L, r: R, min: rMin, max: rMax,
+  hx: HX, d0, d1,
 });
 ---
 
-<Figure name="ratings" n={6} title="TopsOJ ratings" label="TopsOJ rating histories of eight contestants, with the rating distribution" readout={readout}>
+<Figure name="ratings" n={7} title="TopsOJ ratings" label="TopsOJ rating histories of eight contestants, with the rating distribution" readout={readout}>
   <svg class="rt" viewBox={`0 0 ${W} ${H}`} role="img" data-g={payload} aria-label={`Ratings of eight anonymous TopsOJ contestants after each contest from October 2023 to January 2026, as step lines across the rating tiers from Bronze to Amethyst. The top-rated contestant finished at ${end.r}. Beside it, the current ratings of all ${ratings.ratedUsers} rated users in bins of 100, with the median at ${median}.`}>
     <g class="tiers">
       {thresholds.map((v) => <line class="rule" x1={L} x2={HX + HW + 20} y1={f(y(v))} y2={f(y(v))} />)}
@@ -89,15 +90,15 @@ const payload = JSON.stringify({
       <line class="med" x1={HX - 8} x2={HX - 1} y1={f(medY)} y2={f(medY)} />
     </g>
 
-    <line class="faint" x1={L} x2={R} y1={B} y2={B} />
+    <line class="faint ax" x1={L} x2={R} y1={B} y2={B} />
     {years.map((t) => (
       <>
-        <line class="faint" x1={f(t.x)} x2={f(t.x)} y1={B} y2={B + 5} />
+        <line class="faint yt" x1={f(t.x)} x2={f(t.x)} y1={B} y2={B + 5} />
         <text class="cm yr" x={f(t.x)} y={B + 22} text-anchor="middle">{t.yr}</text>
       </>
     ))}
     <line class="med hk-med" x1={HX - 8} x2={HX - 1} y1={B + 18} y2={B + 18} />
-    <text class="hk" x={HX + 2} y={B + 22}>median {median}</text>
+    <text class="hk hk-key" x={HX + 2} y={B + 22}>median {median}</text>
 
     <g class="lines">
       {others.map((o) => (
@@ -133,6 +134,14 @@ const payload = JSON.stringify({
   .rt .traj .step { fill: none; stroke: var(--ink-4); stroke-width: 1; stroke-linejoin: round; }
   .rt .traj .dots { fill: var(--ink); fill-opacity: 0.32; stroke: none; }
   .rt .traj { transition: opacity 0.25s ease; }
+  .rt .traj .step { transition: stroke 0.2s ease, stroke-width 0.2s ease; }
+  .rt .traj .dots { transition: fill-opacity 0.2s ease; }
+  /* Drawn by the script: the date cursor, the contests it has just passed, and one marker per contestant on it. */
+  .rt :global(.cur) { stroke: var(--ink); stroke-width: 1; }
+  .rt :global(.flash) { fill: none; stroke: var(--ink); stroke-width: 1; }
+  .rt :global(.tip) { fill: var(--ink-2); stroke: var(--ink-2); stroke-width: 1.25; }
+  .rt :global(.tip.lead) { fill: var(--accent); stroke: var(--accent); }
+  .rt :global(.tip.held) { fill: var(--panel); }
   .rt .lead .step { stroke: var(--accent); stroke-width: 1.75; }
   .rt .lead .dots { fill: var(--accent); fill-opacity: 1; }
   .rt .ring { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
@@ -163,5 +172,7 @@ const payload = JSON.stringify({
     .rt .tag-v { font-size: 24px; }
     .rt .traj .step { stroke-width: 1.5; }
     .rt .lead .step { stroke-width: 2.5; }
+    .rt :global(.tip) { r: 3.2px; stroke-width: 2; }
+    .rt :global(.tip.lead) { r: 4.4px; }
   }
 </style>

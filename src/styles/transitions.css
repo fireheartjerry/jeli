@@ -1,0 +1,404 @@
+/*
+  Transitions between whole views: day to night, and one page to the next.
+  Both are view transitions. A browser without them changes theme with the old
+  colour fade (global.css) and simply loads the next page; with reduced motion
+  both are instant.
+
+  The scripts beside this are scripts/theme.ts and scripts/transit.ts.
+*/
+
+/* ---------- day and night: the terminator ---------- */
+
+/*
+  The new sky is laid over a photograph of the old one and uncovered through a
+  mask: whole inside a circle, nothing outside it, and twilight between. The
+  circle is the terminator of a turning planet on a stereographic chart, and
+  theme.ts works out where it is; these four lengths are all it hands over.
+*/
+@property --term-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --term-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+/* The radius inside which the new sky is whole, and the width of twilight outside it. */
+@property --term-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --term-w {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* For this transition the page is one sheet: nothing is lifted out of it to move on its own. */
+html[data-theme-sweep] * {
+  view-transition-name: none !important;
+}
+html[data-theme-sweep]::view-transition-old(root),
+html[data-theme-sweep]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* Light does not stop at a line. Across the band it comes up on a smooth step, so neither edge of twilight shows as a crease. */
+html[data-theme-sweep]::view-transition-new(root) {
+  --r: var(--term-r);
+  --w: var(--term-w);
+  -webkit-mask-image: radial-gradient(
+    circle calc(var(--r) + var(--w)) at var(--term-x) var(--term-y),
+    #000 var(--r),
+    rgb(0 0 0 / 0.972) calc(var(--r) + 0.1 * var(--w)),
+    rgb(0 0 0 / 0.896) calc(var(--r) + 0.2 * var(--w)),
+    rgb(0 0 0 / 0.784) calc(var(--r) + 0.3 * var(--w)),
+    rgb(0 0 0 / 0.648) calc(var(--r) + 0.4 * var(--w)),
+    rgb(0 0 0 / 0.5) calc(var(--r) + 0.5 * var(--w)),
+    rgb(0 0 0 / 0.352) calc(var(--r) + 0.6 * var(--w)),
+    rgb(0 0 0 / 0.216) calc(var(--r) + 0.7 * var(--w)),
+    rgb(0 0 0 / 0.104) calc(var(--r) + 0.8 * var(--w)),
+    rgb(0 0 0 / 0.028) calc(var(--r) + 0.9 * var(--w)),
+    transparent calc(var(--r) + var(--w))
+  );
+  mask-image: radial-gradient(
+    circle calc(var(--r) + var(--w)) at var(--term-x) var(--term-y),
+    #000 var(--r),
+    rgb(0 0 0 / 0.972) calc(var(--r) + 0.1 * var(--w)),
+    rgb(0 0 0 / 0.896) calc(var(--r) + 0.2 * var(--w)),
+    rgb(0 0 0 / 0.784) calc(var(--r) + 0.3 * var(--w)),
+    rgb(0 0 0 / 0.648) calc(var(--r) + 0.4 * var(--w)),
+    rgb(0 0 0 / 0.5) calc(var(--r) + 0.5 * var(--w)),
+    rgb(0 0 0 / 0.352) calc(var(--r) + 0.6 * var(--w)),
+    rgb(0 0 0 / 0.216) calc(var(--r) + 0.7 * var(--w)),
+    rgb(0 0 0 / 0.104) calc(var(--r) + 0.8 * var(--w)),
+    rgb(0 0 0 / 0.028) calc(var(--r) + 0.9 * var(--w)),
+    transparent calc(var(--r) + var(--w))
+  );
+}
+/*
+  While the tokens change, nothing eases: what the edge uncovers is already in
+  its new colours. The toggle's own glyph is let off, and turns over as usual.
+*/
+html[data-theme-cut] *:not([data-theme-toggle] *),
+html[data-theme-cut] *::before,
+html[data-theme-cut] *::after {
+  transition: none !important;
+}
+
+/* ---------- page to page ---------- */
+
+/*
+  One page gives way to the next: the bar holds still, the page that is left
+  goes up a short way and out, and the next comes up from under it. The
+  paper's title is carried across, from the heading in the list of research
+  to the head of its own page and back.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+
+  /* The bar is the same bar on every page. */
+  [data-bar] {
+    view-transition-name: bar;
+  }
+  /*
+    The title is one thing in two places. Which way it is going is told by
+    where it lands. On the home page it is the heading that is named and not
+    the link inside it: the reveals rebuild the link when they set the heading
+    line by line, and a transition whose element has gone is abandoned.
+  */
+  .entry h3:has(a[href$="verifying-the-second-agent"]) {
+    view-transition-name: paper-title;
+    view-transition-class: to-entry;
+  }
+  main > .head h1 {
+    view-transition-name: paper-title;
+    view-transition-class: to-title;
+  }
+}
+
+/*
+  By night the sky behind the page is carried as well. Left in the page it
+  would go out with it in a fifth of a second and take a second and a half to
+  come back, on every change of page. On its own it stays where it is while the
+  page over it is changed, and is let down slowly as the next page's sky comes
+  up beneath it.
+
+  For the sky to stay under the page, the page has to be carried apart from its
+  ground: what is left to the root is the ground alone, the sky lies on that,
+  and the page (its body and its foot) lies on the sky, as they always do. The
+  page being left and the page arriving go under different names
+  (scripts/transit.ts renames the one being left), so neither is ever stretched
+  into the other's place. And the scene hands over a still of itself to be
+  carried: scripts/voyage.ts says why.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  html[data-voyage]:not([data-theme="light"]) .cosmos {
+    view-transition-name: sky;
+  }
+  html[data-motion]:not([data-theme="light"]) main {
+    view-transition-name: page-in;
+    view-transition-class: page;
+  }
+  html[data-motion]:not([data-theme="light"]) body > footer {
+    view-transition-name: foot-in;
+    view-transition-class: page;
+  }
+}
+::view-transition-old(sky),
+::view-transition-new(sky) {
+  mix-blend-mode: normal;
+  animation: none;
+}
+::view-transition-old(sky) {
+  z-index: 1;
+  animation: sky-set 800ms linear both;
+}
+@keyframes sky-set {
+  to {
+    opacity: 0;
+  }
+}
+/* Should a page ever meet itself under one name (its script did not run), it changes place between the going and the coming, unseen. */
+::view-transition-group(.page) {
+  animation-duration: 240ms;
+  animation-timing-function: step-end;
+}
+::view-transition-old(.page) {
+  animation: page-leave 220ms var(--ease-io) both;
+  mix-blend-mode: normal;
+}
+::view-transition-new(.page) {
+  animation: page-arrive 420ms var(--ease-out) 260ms both;
+  mix-blend-mode: normal;
+}
+
+/* Under both pages while one is going and the other not yet here: the ground they stand on, never the bare window. */
+::view-transition {
+  background: var(--paper);
+}
+html[data-motion]:not([data-theme="light"]):not([data-flat])::view-transition {
+  background: #06080d;
+}
+
+html:not([data-theme-sweep])::view-transition-old(root) {
+  animation: page-leave 220ms var(--ease-io) both;
+  mix-blend-mode: normal;
+}
+/* One after the other: two pages of type are never read through each other, and the title has the ground to itself as it sets off. */
+html:not([data-theme-sweep])::view-transition-new(root) {
+  animation: page-arrive 420ms var(--ease-out) 260ms both;
+  mix-blend-mode: normal;
+}
+@keyframes page-leave {
+  to {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+}
+@keyframes page-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+/* The bar's two states (over the cover it is clear, a section's name may differ) change in the time of any change of state. */
+::view-transition-old(bar),
+::view-transition-new(bar) {
+  animation-duration: var(--t-state);
+  animation-timing-function: var(--ease-io);
+}
+
+/*
+  The title, carried.
+
+  It is the same words in the same face at two sizes, so it is moved as type
+  and not as a picture: both images are kept at one size of type the whole
+  way, growing together from the heading's 21px to the title's size, and they
+  are laid so that the first line of each sits on the other. What the eye
+  follows, "Verifying the", is then a single line that grows; the rest of the
+  heading lets go of the end of that line and comes in under it. The trade is
+  made while the type is small.
+
+  A few numbers of the type are needed to lay one image on the other:
+    --k      how many times larger the title is set, its size over the heading's;
+    --drop   the heading stands on a line 1.25 high and the title on one 0.98
+             high, so the first baseline sits lower in the heading's box by
+             half the difference, 0.135 of the type size;
+    --track  the title is spaced 0.03em tighter than the heading; over the 13
+             characters of its first line that makes the line 6.7% shorter, so
+             the line is drawn in a little as it grows.
+  They restate the pages' own CSS (Entry.astro, the paper page). If either is
+  restyled they want restating too; nothing breaks, the two lines only part by
+  a pixel or two while they trade.
+*/
+::view-transition-group(paper-title) {
+  --head: 21px;
+  --title: clamp(40px, 6.4vw, 96px);
+  --k: tan(atan2(var(--title), var(--head)));
+  --drop: 0.135;
+  --track: 0.933;
+  animation-duration: 560ms;
+  animation-delay: 200ms;
+  animation-timing-function: var(--ease-io);
+}
+/*
+  The place of the title is the browser's to animate, and it does so in step
+  with the page's scripts: while one of them holds the page up (the sky's scene
+  takes a moment to start) the title's place waits. Its size and its trade are
+  ours, and left alone they would run on regardless, so the title would swell
+  where it stood and then jump. Three things keep it in one piece. The title
+  does not set off until the old page has cleared, by when the new one's
+  scripts have often run. Each of its animations carries a property that
+  cannot be animated ahead of the page (--title-step), which puts them all on
+  the one clock. And transit.ts stops that clock for as long as the page is
+  held up, so the title waits and then flies its whole way, rather than
+  arriving half-way there.
+*/
+@property --title-step {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+@supports (scale: tan(atan2(2px, 1px))) {
+  ::view-transition-old(paper-title),
+  ::view-transition-new(paper-title) {
+    inline-size: auto;
+    block-size: auto;
+    transform-origin: 0 0;
+    mix-blend-mode: plus-lighter;
+  }
+
+  /*
+    Heading to title. Each image has two scales, multiplied: `scale` is the
+    size of the type, the same for both; `transform` is the drawing-in of the
+    spacing, which starts where the heading's is and ends where the title's is.
+  */
+  ::view-transition-old(.to-title) {
+    animation:
+      title-grow-old 560ms var(--ease-io) 200ms both,
+      title-trade-out 560ms linear 200ms both;
+  }
+  ::view-transition-new(.to-title) {
+    animation:
+      title-grow-new 560ms var(--ease-io) 200ms both,
+      title-trade-in 560ms linear 200ms both;
+  }
+  @keyframes title-grow-old {
+    to {
+      scale: var(--k);
+      transform: scaleX(var(--track));
+      translate: 0 calc(-1 * var(--drop) * var(--title));
+      --title-step: 1;
+    }
+  }
+  @keyframes title-grow-new {
+    from {
+      scale: calc(1 / var(--k));
+      transform: scaleX(calc(1 / var(--track)));
+      translate: 0 calc(var(--drop) * var(--head));
+      --title-step: 1;
+    }
+  }
+  @keyframes title-trade-out {
+    0% { opacity: 1; --title-step: 0; }
+    6% { opacity: 1; }
+    38% { opacity: 0; }
+    100% { opacity: 0; --title-step: 1; }
+  }
+  @keyframes title-trade-in {
+    0% { opacity: 0; --title-step: 0; }
+    6% { opacity: 0; }
+    38% { opacity: 1; }
+    100% { opacity: 1; --title-step: 1; }
+  }
+
+  /* Title to heading: the same, run the other way, and the trade made at the end. */
+  ::view-transition-old(.to-entry) {
+    animation:
+      title-shrink-old 560ms var(--ease-io) 200ms both,
+      title-trade-in 560ms linear 200ms reverse both;
+  }
+  ::view-transition-new(.to-entry) {
+    animation:
+      title-shrink-new 560ms var(--ease-io) 200ms both,
+      title-trade-out 560ms linear 200ms reverse both;
+  }
+  @keyframes title-shrink-old {
+    to {
+      scale: calc(1 / var(--k));
+      transform: scaleX(calc(1 / var(--track)));
+      translate: 0 calc(var(--drop) * var(--head));
+      --title-step: 1;
+    }
+  }
+  @keyframes title-shrink-new {
+    from {
+      scale: var(--k);
+      transform: scaleX(var(--track));
+      translate: 0 calc(-1 * var(--drop) * var(--title));
+      --title-step: 1;
+    }
+  }
+}
+
+/*
+  With the title at one end only it goes or comes with its page. (transit.ts
+  sees to it that an end which is out of the window is no end at all, so the
+  title never flies off the screen to find a heading that cannot be seen.)
+*/
+::view-transition-old(paper-title):only-child,
+::view-transition-new(paper-title):only-child {
+  inline-size: 100%;
+  transform-origin: 50% 50%;
+  mix-blend-mode: normal;
+}
+::view-transition-old(paper-title):only-child {
+  animation: page-leave 220ms var(--ease-io) both;
+}
+::view-transition-new(paper-title):only-child {
+  animation: page-arrive 420ms var(--ease-out) 260ms both;
+}
+
+/*
+  The page's own arrivals (scripts/reveal.ts) hold type back and then raise it.
+  The carried title is not theirs to raise: it is on the page from the first
+  frame, in one piece. While the transition runs that is said here; from then
+  on scripts/transit.ts says it, with [data-arrived] and [data-landed]. The
+  wait between the two, if a script is slow to come, is covered by letting the
+  title be hidden again only after a long delay.
+*/
+html:active-view-transition:not([data-theme-sweep]) main > .head h1,
+html[data-arrived] main > .head h1,
+html:active-view-transition:not([data-theme-sweep]) .entry h3:has(a[href$="verifying-the-second-agent"]) {
+  visibility: visible;
+}
+html[data-motion]:not([data-revealed]) main > .head h1,
+html[data-motion]:not([data-revealed]) .entry h3:has(a[href$="verifying-the-second-agent"]) {
+  transition: visibility 0s linear 6s;
+}
+html[data-arrived] main > .head h1 .rise-c,
+.entry h3[data-landed] .rise {
+  transform: none !important;
+}
+/*
+  A heading the reveals have been through is left set letter by letter, and
+  letters set singly are not kerned. So that nothing shifts when that happens
+  to a title already on show, and so that the two images of it are spaced
+  alike while they trade, it is set unkerned for as long as it is carried.
+*/
+html:active-view-transition:not([data-theme-sweep]) main > .head h1,
+html[data-arrived] main > .head h1,
+html:active-view-transition:not([data-theme-sweep]) .entry h3:has(a[href$="verifying-the-second-agent"]) {
+  font-kerning: none;
+}
+.entry h3[data-landed] {
+  opacity: 1 !important;
+  visibility: visible !important;
+}

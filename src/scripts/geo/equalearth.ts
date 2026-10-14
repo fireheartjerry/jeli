@@ -16,6 +16,13 @@ export function project(lon: number, lat: number): [number, number] {
   return [x, y];
 }
 
+/** The height of a parallel alone (it does not depend on longitude), with nothing made to hold it. */
+export function northing(lat: number) {
+  const t = Math.asin(M * Math.sin(lat * RAD));
+  const t2 = t * t, t6 = t2 * t2 * t2;
+  return t * (A1 + A2 * t2 + t6 * (A3 + A4 * t2));
+}
+
 /** Horizontal scale of the parallel at `lat`: x = lon (radians) * rowScale(lat). */
 export function rowScale(lat: number) {
   const t = Math.asin(M * Math.sin(lat * RAD));

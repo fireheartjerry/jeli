@@ -176,6 +176,18 @@ const radius = (m: number) => 0.75 + 10.5 * Math.cbrt(m);
 
 /** Generate and fully simulate the universe for a seed, into `u`. */
 export function generate(seed: string, u: Universe): Universe {
+  const next = generator(seed, u);
+  while (!next(Infinity)) {}
+  return u;
+}
+
+/**
+ * The same simulation in resumable pieces: each call works for about `budget`
+ * milliseconds and returns true once `u` is complete. A page uses this so the
+ * 900 frames never hold up a frame of its own. Only one may be in progress at
+ * a time, because they share the integrator's scratch arrays.
+ */
+export function generator(seed: string, u: Universe): (budget: number) => boolean {
   const rnd = mulberry32(fingerprint(seed));
   const gauss = () => (rnd() + rnd() + rnd() - 1.5) * 1.41; // ~N(0, 1)
   const n = 1 + 52 + Math.floor(rnd() * 29); // 52 to 80 orbiters
@@ -263,7 +275,12 @@ export function generate(seed: string, u: Universe): Universe {
   u.energy[0] = e0;
   u.dE[0] = 0;
   let dmax = 0, dmaxF = 0;
-  for (let f = 1; f < FRAMES; f++) {
+  let f = 1;
+  return (budget: number) => {
+  const t0 = performance.now();
+  for (; f < FRAMES; f++) {
+    // Checked every frame: before the engine has optimised this loop, one frame alone can take milliseconds.
+    if (performance.now() - t0 > budget) return false;
     for (let s = 0; s < SUBSTEPS; s++) {
       for (let i = 0; i < n; i++) {
         VX[i] += 0.5 * AX[i] * dt; VY[i] += 0.5 * AY[i] * dt; VZ[i] += 0.5 * AZ[i] * dt;
@@ -283,7 +300,8 @@ export function generate(seed: string, u: Universe): Universe {
   }
   u.dEmax = dmax;
   u.dEmaxFrame = dmaxF;
-  return u;
+  return true;
+  };
 }
 
 /**
@@ -306,8 +324,9 @@ export function sciParts(v: number, digits = 1): { m: string; e: string } {
   return { m: m.toFixed(digits), e: e < 0 ? `−${-e}` : String(e) };
 }
 
-/** a×10^b as HTML, e.g. 3.2×10<sup>−5</sup>. */
+/** a×10^b as HTML, e.g. 3.2×10<sup>−5</sup>. Exactly nothing is written as 0. */
 export function sci(v: number, digits = 1): string {
+  if (!(v > 0)) return "0";
   const { m, e } = sciParts(v, digits);
   return `${m}×10<sup>${e}</sup>`;
 }
@@ -331,6 +350,33 @@ export function sparkPath(u: Universe, w: number, h: number, cols = 120, pad = 2
     d += `${c ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
   }
   return d;
+}
+
+/** Height of that sparkline over frame `f`: where a mark riding the drawn trace sits. */
+export function sparkY(u: Universe, f: number, w: number, h: number, cols = 120, pad = 2): [number, number] {
+  const max = u.dEmax || 1;
+  const pooled = (c: number) => {
+    const a = Math.floor((c * FRAMES) / cols), b = Math.floor(((c + 1) * FRAMES) / cols);
+    let m = 0;
+    for (let k = a; k < b; k++) if (u.dE[k] > m) m = u.dE[k];
+    return h - pad - (m / max) * (h - 2 * pad);
+  };
+  // The trace is straight between column centres; read it there.
+  const x = (f / (FRAMES - 1)) * w;
+  const at = (x / w) * (cols - 1), c = Math.min(cols - 2, Math.floor(at)), t = at - c;
+  const y0 = pooled(c), y1 = pooled(c + 1);
+  return [x, y0 + (y1 - y0) * t];
+}
+
+/** The largest drift met up to each frame: what "max" reads while the timeline is part-way. */
+export function runningMax(u: Universe): Float32Array {
+  const out = new Float32Array(FRAMES);
+  let m = 0;
+  for (let f = 0; f < FRAMES; f++) {
+    if (u.dE[f] > m) m = u.dE[f];
+    out[f] = m;
+  }
+  return out;
 }
 
 /** Counts per family, excluding the central body and the accent planet: [ink, inner, outer]. */

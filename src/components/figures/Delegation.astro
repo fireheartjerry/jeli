@@ -1,0 +1,551 @@
+---
+// Fig: the depth campaign of "Verifying the Second Agent" (NeurIPS 2026
+// workshops). One row per arm, read left to right as tree, cost, return.
+//
+// Every number is from the paper. The three effects are separate paired
+// contrasts against one agent, each on its own set of paired tasks, so the
+// dots are never joined into a curve. The server render is the finished
+// figure; the script hides it and replays it against the scroll. Whatever
+// measures something (a bar, a wall-clock line, the refused share, a dot, an
+// interval) is drawn here at its measured size, and the script never changes
+// that along its scale: such a mark arrives whole, and what the script opens
+// on it runs across the scale (a rise into its row, a dot's radius, the height
+// of an end cap).
+//
+// Two layouts are rendered and CSS shows one. "Wide" sets the three columns
+// side by side in one drawing. "Narrow" is three smaller drawings (tree and
+// cost, the cost of a fix, the forest plot) that stack on a phone and sit in
+// two columns on a tablet. Both carry the same class names, so one script
+// drives whichever is showing.
+import Figure from "../Figure.astro";
+
+interface Props { n?: number }
+const { n = 9 } = Astro.props;
+
+const MINUS = "−";
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const pp = (v: number) => `${v < 0 ? MINUS : "+"}${Math.abs(v).toFixed(2)}`;
+const mult = (v: number) => (v === 1 ? "1×" : `${v.toFixed(2)}×`);
+const int = (v: number) => v.toLocaleString("en-US");
+
+// ---------- the data ----------
+interface Arm {
+  nodes: number; depth: number;
+  /** Multiples of the single agent: billable tokens, dollar cost, wall clock. */
+  tok: number; cost: number; wall: number;
+  /** Mean billable tokens. */
+  tokens: number;
+  /** Paired change in verified success against one agent, in percentage points, with its 95% interval. */
+  eff: { d: number; lo: number; hi: number; tasks: number } | null;
+  /** Patches the children handed up, and the share refused for conflicts (%). */
+  ret: { patches: number; refused: number } | null;
+}
+const ARMS: Arm[] = [
+  { nodes: 1, depth: 0, tok: 1, cost: 1, wall: 1, tokens: 252_704, eff: null, ret: null },
+  { nodes: 3, depth: 1, tok: 2.73, cost: 2.43, wall: 1.42, tokens: 621_968, eff: { d: -11.54, lo: -20.93, hi: -2.05, tasks: 78 }, ret: { patches: 194, refused: 40.2 } },
+  { nodes: 7, depth: 2, tok: 5.98, cost: 5.64, wall: 3.43, tokens: 1_427_748, eff: { d: -4.0, lo: -15.09, hi: 8.0, tasks: 50 }, ret: { patches: 516, refused: 36.0 } },
+  { nodes: 15, depth: 3, tok: 12.5, cost: 11.39, wall: 5.08, tokens: 2_603_307, eff: { d: -6.03, lo: -16.96, hi: 5.56, tasks: 58 }, ret: { patches: 1316, refused: 31.9 } },
+];
+/** Cost per verified fix, one agent against the 15-agent tree, on the same tasks. */
+const FIX = { one: "$0.58", tree: "$6.92", tasks: 58 };
+/** The cost axis runs to the largest token multiple. */
+const TOK_MAX = Math.max(...ARMS.map((a) => a.tok));
+const IDLE = "DeepSWE   97 gradable tasks";
+
+const agents = (a: Arm) => (a.nodes === 1 ? "agent" : "agents");
+const depthOf = (a: Arm) => (a.depth ? `depth ${a.depth}` : "no delegation");
+/** A signed number as it should be spoken. */
+const spoken = (v: number) => `${v < 0 ? "minus" : "plus"} ${Math.abs(v).toFixed(2)}`;
+/** One arm in full, in words: the name of the control a keyboard or screen-reader user lands on. */
+const describe = (a: Arm) =>
+  a.eff && a.ret
+    ? `${a.nodes} agents, depth ${a.depth}: ${a.tok.toFixed(2)} times the tokens of one agent, ${a.cost.toFixed(2)} times the cost, ${a.wall.toFixed(2)} times the wall-clock time; verified success ${spoken(a.eff.d)} points, 95% interval ${spoken(a.eff.lo)} to ${spoken(a.eff.hi)}, on ${a.eff.tasks} paired tasks; ${int(a.ret.patches)} patches handed up, ${a.ret.refused.toFixed(1)}% refused`
+    : `1 agent, no delegation: the reference for cost and for verified success, with a mean of ${int(a.tokens)} billable tokens`;
+/** Readout lines, long to short; the script picks the one that fits the plate. */
+const readouts = (a: Arm): [string, string, string] => {
+  const who = `${a.nodes} ${agents(a)}`;
+  if (!a.eff) return [`${who}   1× tokens   reference`, `${who}  1×  reference`, `${who}  1×`];
+  const e = a.eff;
+  const ci = `[${pp(e.lo)}, ${pp(e.hi)}]`;
+  return [
+    `${who}   ${mult(a.tok)} tokens   ${pp(e.d)} pp ${ci}`,
+    `${who}  ${mult(a.tok)}  ${pp(e.d)} pp ${ci}`,
+    `${who}  ${mult(a.tok)}  ${pp(e.d)} pp`,
+  ];
+};
+
+// ---------- tree geometry ----------
+interface TreeSpec { cx: number; LS: number; DY: number; rRoot: number; rRing: number; rIn: number; rLeaf: number; gap: number }
+const disc = (x: number, y: number, r: number) =>
+  `M${r2(x - r)} ${r2(y)}a${r} ${r} 0 1 0 ${r2(2 * r)} 0a${r} ${r} 0 1 0 ${r2(-2 * r)} 0Z`;
+
+/** A balanced binary tree hanging from its root at (cx, y0), leaves LS apart, levels DY apart. */
+function buildTree(depth: number, y0: number, T: TreeSpec) {
+  const lv = Array.from({ length: depth + 1 }, (_, k) => {
+    const cnt = 2 ** k, span = T.LS * 2 ** (depth - k);
+    return {
+      k,
+      kind: k === 0 ? "root" : k === depth ? "leaf" : "inner",
+      r: k === 0 ? T.rRoot : k === depth ? T.rLeaf : T.rIn,
+      y: y0 + k * T.DY,
+      xs: Array.from({ length: cnt }, (_, j) => r2(T.cx + (j - (cnt - 1) / 2) * span)),
+    };
+  });
+  // Edges stop short of the nodes. Every edge of a level has the same length,
+  // so one path per level draws with a single dash offset.
+  const edges: { k: number; d: string; len: number }[] = [];
+  const segs: number[][] = [];
+  for (let k = 1; k <= depth; k++) {
+    const P = lv[k - 1], Cn = lv[k];
+    let d = "", len = 0;
+    Cn.xs.forEach((x, j) => {
+      const px = P.xs[j >> 1];
+      const dx = x - px, dy = Cn.y - P.y, L = Math.hypot(dx, dy);
+      const ux = dx / L, uy = dy / L;
+      const a = (k === 1 ? T.rRing : P.r) + T.gap, b = Cn.r + T.gap;
+      d += `M${r2(px + ux * a)} ${r2(P.y + uy * a)}L${r2(x - ux * b)} ${r2(Cn.y - uy * b)}`;
+      len = L - a - b;
+      segs.push([k, px, P.y, x, Cn.y]);
+    });
+    edges.push({ k, d, len: r2(len) });
+  }
+  return {
+    cx: T.cx, y0, ring: T.rRing,
+    levels: lv.map((l) => ({ k: l.k, kind: l.kind, d: l.xs.map((x) => disc(x, l.y, l.r)).join("") })),
+    edges, segs,
+    lv: lv.map((l) => [l.y, l.r, ...l.xs]),
+    /** The last node of a level, for annotations: [x, y, r]. */
+    last: (k: number) => [lv[k].xs[lv[k].xs.length - 1], lv[k].y, lv[k].r],
+  };
+}
+
+// ---------- layouts ----------
+// Scales, the same idea in both: a cost multiple m sits at C0 + m * KX, and a
+// change of v percentage points at DZ + v * KP.
+/** Tree and cost. H: the drawing's height; R: the row lines; cuts: where one row's box ends and the next begins (each holds all of its row's marks, so the box can be its control and wear the focus ring). */
+interface CostL { H: number; rule: number; PB: number; tick: number; R: number[]; cuts: number[]; T: TreeSpec; B0: number; C0: number; KX: number; barH: number; gapX: number }
+/** The forest plot. H: the drawing's height; ry: one lane per arm. */
+interface RetL { H: number; top: number; bottom: number; tick: number; ry: number[]; D0: number; DZ: number; KP: number; D1: number; NX: number }
+
+const WR = [72, 184, 296, 408];
+const WC: CostL = {
+  H: 584, rule: 24, PB: 554, tick: 572, R: WR, cuts: [50, 162, 274, 386, 550],
+  T: { cx: 298, LS: 42, DY: 40, rRoot: 6, rRing: 10.6, rIn: 5.2, rLeaf: 4.2, gap: 3 },
+  B0: 146, C0: 496, KX: 21.5, barH: 13, gapX: 1.5,
+};
+const WD: RetL = { H: 584, top: 46, bottom: 554, tick: 572, ry: WR, D0: 868, DZ: 1018, KP: 6, D1: 1108, NX: 1200 };
+/** The cost of a fix, as a footer to the cost column: its rule (as wide as the axis), then two baselines. */
+const WF = { x: WC.C0, x1: WC.C0 + TOK_MAX * WC.KX, rule: 469, y: 490, drop: 28 };
+
+const NC: CostL = {
+  H: 492, rule: 24, PB: 462, tick: 479, R: [72, 152, 246, 352], cuts: [32, 112, 206, 316, 456],
+  T: { cx: 88, LS: 22, DY: 30, rRoot: 5, rRing: 9, rIn: 4.4, rLeaf: 3.5, gap: 2.6 },
+  B0: 0, C0: 196, KX: 11, barH: 12, gapX: 1.2,
+};
+const ND: RetL = { H: 320, top: 47, bottom: 292, tick: 309, ry: [76, 130, 184, 238], D0: 76, DZ: 211, KP: 5.4, D1: 292, NX: 400 };
+const NF = { x: 0, x1: 400, rule: 0.5, y: 19, drop: 26 };
+
+function scene(wide: boolean) {
+  const C = wide ? WC : NC;
+  const D = wide ? WD : ND;
+  const X = (v: number) => r2(D.DZ + v * D.KP);
+  const M = (v: number) => r2(C.C0 + v * C.KX);
+  const arms = ARMS.map((a, i) => {
+    const R = C.R[i], ry = D.ry[i];
+    const e = a.eff;
+    // Where this arm's control sits over each drawing, as [top, height] in percent of its height.
+    const pct = (y: number, h: number, H: number) => [r2((y / H) * 100), r2((h / H) * 100)];
+    return {
+      a, i, R, ry,
+      box: pct(C.cuts[i], C.cuts[i + 1] - C.cuts[i], C.H),
+      lane: wide ? null : pct(ry - 27, 54, D.H),
+      tree: buildTree(a.depth, R, C.T),
+      barX: M(a.tok), wallX: M(a.wall), wallY: R + 18,
+      ret: e ? { lo: X(e.lo), hi: X(e.hi), est: X(e.d), res: e.hi < 0 || e.lo > 0 } : null,
+      cap: wide ? 4.5 : 4,
+    };
+  });
+  const F = wide ? WF : NF;
+  const g = {
+    w: wide ? 1 : 0, kx: C.KX,
+    // Which drawing holds what (an index into this layout's drawings), each drawing's height, and
+    // the heights the script times its story by: a part is drawn once the plate has let that much
+    // of its sheet out.
+    in: wide ? { cost: 0, co: 0, ret: 0 } : { cost: 0, co: 1, ret: 2 },
+    hs: wide ? [C.H] : [C.H, 58, D.H],
+    ys: { top: D.top, bottom: D.bottom, co: F.y + F.drop, key: C.tick, sub: wide ? 78 : 46 },
+    fix: `${FIX.one} to ${FIX.tree} per verified fix`,
+    arms: arms.map((A) => ({
+      n: A.a.nodes, d: A.a.depth, tok: A.a.tok, wall: A.a.wall, ref: A.a.ret ? A.a.ret.refused / 100 : 0,
+      ring: A.tree.ring, lv: A.tree.lv, segs: A.tree.segs, el: A.tree.edges.map((e) => e.len),
+      R: A.R, wy: A.wallY, ry: A.ry, cap: A.cap,
+      eff: A.a.eff ? [A.a.eff.d, A.a.eff.lo, A.a.eff.hi] : null,
+      rd: readouts(A.a), who: `${A.a.nodes} ${agents(A.a)}`, tokS: mult(A.a.tok),
+      say: describe(A.a), box: A.box, lane: A.lane,
+    })),
+  };
+  // Which parts each drawing holds.
+  const panels = wide
+    ? [{ cls: "pw", W: 1200, H: C.H, cost: true, ret: true, co: true }]
+    : [
+        { cls: "pa", W: 400, H: C.H, cost: true, ret: false, co: false },
+        { cls: "pc", W: 400, H: 58, cost: false, ret: false, co: true },
+        { cls: "pb", W: 400, H: D.H, cost: false, ret: true, co: false },
+      ];
+  return {
+    wide, C, D, arms, g, M, panels,
+    costGrid: [1, 5, 10].map((v) => ({ v, x: M(v) })),
+    retGrid: [-20, -10, 10].map((v) => ({ v, x: X(v) })),
+    // Ticks under each axis: every agent-multiple and every 5 points, longer where a label sits.
+    costTicks: Array.from({ length: Math.floor(TOK_MAX) }, (_, k) => k + 1).map((v) => `M${M(v)} ${C.PB}v${[1, 5, 10].includes(v) ? 5 : 2.5}`).join(""),
+    retTicks: [-25, -20, -15, -10, -5, 0, 5, 10, 15].map((v) => `M${X(v)} ${D.bottom}v${v % 10 ? 2.5 : 5}`).join(""),
+    mid: (D.DZ + D.D1) / 2,
+  };
+}
+const scenes = [scene(true), scene(false)];
+
+const [, a3, a7, a15] = ARMS;
+const armText = (a: Arm) =>
+  `Depth ${a.depth}, a tree of ${a.nodes} agents: ${mult(a.tok)} the tokens, ${mult(a.cost)} the cost and ${mult(a.wall)} the wall-clock time of one agent, with a mean of ${int(a.tokens)} billable tokens. Verified success changed by ${pp(a.eff!.d)} percentage points, 95% interval ${pp(a.eff!.lo)} to ${pp(a.eff!.hi)}, on ${a.eff!.tasks} paired tasks. Its children handed up ${int(a.ret!.patches)} patches and ${a.ret!.refused.toFixed(1)}% were refused for conflicts.`;
+const ARIA = `The four arms of the depth campaign on DeepSWE, as rows. One agent is the reference, with a mean of ${int(ARMS[0].tokens)} billable tokens. ${armText(a3)} ${armText(a7)} ${armText(a15)} The cost of each verified fix rose from ${FIX.one} with one agent to ${FIX.tree} with 15 agents on the same ${FIX.tasks} tasks. Only the depth 1 interval excludes zero, on the side of a loss. No contrast resolves a gain over one agent.`;
+---
+
+<Figure
+  name="delegation"
+  n={n}
+  size="stage"
+  title="Trees cost 3 to 12 times more, with no resolved gain"
+  label="Recursive delegation in coding agents: trees of 1, 3, 7 and 15 agents, the tokens each spends, and the paired change in verified success against one agent"
+  readout={IDLE}
+>
+  {scenes.map((S) => {
+    const { C, D, wide } = S;
+    const F = wide ? WF : NF;
+    return (
+      <div class:list={["dl", wide ? "dl-w" : "dl-n"]} data-g={JSON.stringify(S.g)}>
+        {S.panels.map((P, k) => (
+          <div class={`pan ${P.cls}`}>
+            {/* Each drawing sits in its own box, so the script can lay a control over every row.
+                The first drawing of a layout carries the description of the whole figure. */}
+          <svg viewBox={`0 0 ${P.W} ${P.H}`} role={k ? undefined : "img"} aria-label={k ? undefined : ARIA} aria-hidden={k ? "true" : undefined}>
+            {/* Tree and cost: column heads, the rule under them, the cost axis. */}
+            {P.cost && (
+              <g class="bg">
+                {wide && <text class="hd" x="0" y="12"><tspan class="k">Arm</tspan></text>}
+                <text class="hd" x={C.B0} y="12"><tspan class="k">Tree</tspan>{wide && <> <tspan dx="6">only the root delivers code</tspan></>}</text>
+                <text class="hd" x={C.C0} y="12"><tspan class="k">Cost</tspan> <tspan dx={wide ? 6 : 4}>relative to one agent</tspan></text>
+                <line class="hair" x1="0" x2={P.W} y1={C.rule} y2={C.rule} />
+                {/* On phones the bars carry their own numbers, so only the scale is kept. */}
+                {S.costGrid.map((t) => (
+                  <>
+                    {wide && <line class="hair" x1={t.x} x2={t.x} y1={C.rule + 10} y2={C.PB} />}
+                    <text class="cm tk" x={t.x} y={C.tick} text-anchor="middle">{t.v}×</text>
+                  </>
+                ))}
+                <path class="faint" d={`M${C.C0} ${wide ? C.rule + 10 : C.PB - 4}V${C.PB}H${S.M(TOK_MAX)}` + S.costTicks} />
+              </g>
+            )}
+
+            {/* Return: its head, the axis in percentage points, one agent at zero, and the side a gain would fall on. */}
+            {P.ret && (
+              <>
+                <g class="bg">
+                  <text class="hd" x={wide ? D.D0 : 0} y="12"><tspan class="k">Return</tspan> <tspan dx={wide ? 6 : 4}><tspan class="xw">paired </tspan>change in verified success</tspan></text>
+                  {!wide && <line class="hair" x1="0" x2={P.W} y1="24" y2="24" />}
+                  {S.retGrid.map((t) => (
+                    <>
+                      <line class="hair" x1={t.x} x2={t.x} y1={D.top} y2={D.bottom} />
+                      <text class="cm tk" x={t.x} y={D.tick} text-anchor="middle">{pp(t.v).replace(".00", "")}{t.v === 10 && <tspan class="un"> pp</tspan>}</text>
+                    </>
+                  ))}
+                  <text class="cm tk" x={D.DZ} y={D.tick} text-anchor="middle">0</text>
+                  <path class="faint" d={`M${D.D0} ${D.bottom}H${D.D1}` + S.retTicks} />
+                </g>
+                <g class="zr">
+                  <rect class="gain" x={D.DZ} y={D.top} width={D.D1 - D.DZ} height={D.bottom - D.top} />
+                  <line class="zero" x1={D.DZ} x2={D.DZ} y1={D.top} y2={D.bottom} data-len={D.bottom - D.top} />
+                  <g class="zt">
+                    <text class="zl-t" x={D.D0} y={D.top - 6}>loss</text>
+                    <text class="zl-t zl-k" x={D.DZ} y={D.top - 6} text-anchor="middle">one agent</text>
+                    <text class="zl-t zl-g" x={D.D1} y={D.top - 6} text-anchor="end">gain</text>
+                  </g>
+                  <text class="verdict s" x={S.mid} y={D.bottom - 10} text-anchor="middle"><tspan x={S.mid} dy="-1.2em">no gain</tspan><tspan x={S.mid} dy="1.2em">resolved</tspan></text>
+                </g>
+              </>
+            )}
+
+            {S.arms.map((A) => {
+              const { a, R, ry } = A;
+              const inner = a.depth > 1 ? A.tree.last(1) : null;
+              const leaf = a.depth > 0 ? A.tree.last(a.depth) : null;
+              return (
+                <>
+                  {P.cost && (
+                    <g class="arm" data-i={A.i}>
+                      {/* Reading line: through the root to the bar, and on to the plot. The second part starts under the bar's label, whose halo hides the join. */}
+                      <line class="rl rl-a" x1={C.B0} x2={C.C0 - 8} y1={R} y2={R} />
+                      {wide && <line class="rl rl-b" x1={A.barX + 12} x2={D.D0 - 10} y1={R} y2={R} />}
+                      {/* Shown only while this arm is being inspected: a drop from the bar's end to the axis, clear of the row's own labels. */}
+                      <line class="fx gd gd-c" x1={A.barX} x2={A.barX} y1={R + (wide ? 58 : 50)} y2={C.PB} />
+
+                      {/* Who this arm is. */}
+                      {wide ? (
+                        <g class="lb">
+                          <text class="l1" x="0" y={R} dominant-baseline="central"><tspan class="n">{a.nodes}</tspan> <tspan dx="2">{agents(a)}</tspan></text>
+                          <text class="l2 dy" style="--dy:21" x="0" y={R} dominant-baseline="central">{depthOf(a)}</text>
+                        </g>
+                      ) : (
+                        <g class="lb">
+                          <text class="l1" x={C.C0} y={R - 25} dominant-baseline="central"><tspan class="n">{a.nodes}</tspan> <tspan dx="1">{agents(a)}</tspan> <tspan class="l2" dx="5">{depthOf(a)}</tspan></text>
+                        </g>
+                      )}
+
+                      {/* The tree: edges, a layer for packets, then nodes. */}
+                      <g class="tr">
+                        {A.tree.edges.map((e) => <path class="eg" d={e.d} />)}
+                        <g class="pk"></g>
+                        <circle class="rr" cx={A.tree.cx} cy={A.tree.y0} r={A.tree.ring} />
+                        {A.tree.levels.map((l) => <path class={`nd nd-${l.kind}`} d={l.d} />)}
+                      </g>
+                      {/* The 7-agent tree has one node of each kind to point at. */}
+                      {wide && inner && leaf && a.depth === 2 && (
+                        <g class="an xw">
+                          <path class="lead" d={`M${inner[0] + inner[2] + 4} ${inner[1]}H${leaf[0] + 22}M${leaf[0] + leaf[2] + 4} ${leaf[1]}H${leaf[0] + 22}`} />
+                          <text class="s" x={leaf[0] + 27} y={inner[1]} dominant-baseline="central">delegates</text>
+                          <text class="s" x={leaf[0] + 27} y={leaf[1]} dominant-baseline="central">returns a patch</text>
+                        </g>
+                      )}
+
+                      {/* What the children returned. */}
+                      {a.ret && (wide ? (
+                        <g class="pt">
+                          <text class="s dy" style="--dy:42" x="0" y={R} dominant-baseline="central"><tspan class="c">{int(a.ret.patches)}</tspan> patches <tspan class="xw">handed </tspan>up</text>
+                          <g class="dy" style="--dy:51">
+                            <rect class="m0" x="0" y={R} width="112" height="4" rx="1" />
+                            <rect class="m1" x={r2(112 * (1 - a.ret.refused / 100))} y={R} width={r2((112 * a.ret.refused) / 100)} height="4" rx="1" />
+                          </g>
+                          <text class="s dy" style="--dy:66" x="0" y={R} dominant-baseline="central"><tspan class="c r">{a.ret.refused.toFixed(1)}%</tspan> refused</text>
+                        </g>
+                      ) : (
+                        <text class="pt s" x={C.C0} y={R + 38} dominant-baseline="central"><tspan class="c">{int(a.ret.patches)}</tspan> patches up, <tspan class="c r">{a.ret.refused.toFixed(1)}%</tspan> refused</text>
+                      ))}
+
+                      {/* Cost: tokens as a bar of one-agent units, wall clock as the thin line under it. */}
+                      <line class="bar" x1={C.C0} x2={A.barX} y1={R} y2={R} stroke-width={C.barH} stroke-dasharray={`${C.KX - C.gapX} ${C.gapX}`} />
+                      <text class="tok cm halo" x={A.barX + (wide ? 9 : 6)} y={R} dominant-baseline="central"><tspan class="v">{mult(a.tok)}</tspan>{a.nodes === 1 && <> <tspan class="w" dx="1">tokens</tspan></>}</text>
+                      <line class="wl" x1={C.C0} x2={A.wallX} y1={A.wallY} y2={A.wallY} />
+                      <line class="wt" x1={A.wallX} x2={A.wallX} y1={A.wallY - 3} y2={A.wallY + 3} />
+                      <text class="wlab cm halo" x={A.wallX + (wide ? 7 : 5)} y={A.wallY} dominant-baseline="central">{mult(a.wall)}{a.nodes === 1 && <> <tspan class="w" dx="1">wall clock</tspan></>}</text>
+                      {/* The class is "dtl", not "mi": another figure styles .fig .mi as math italic for the whole page. */}
+                      {wide && <text class="dtl s halo dy" style="--dy:37" x={C.C0} y={R} dominant-baseline="central"><tspan class="xw">mean </tspan><tspan class="c">{int(a.tokens)}</tspan> <tspan class="xw">billable </tspan>tokens <tspan dx="2" class="sep">·</tspan> <tspan dx="2" class="c">{mult(a.cost)}</tspan> cost</text>}
+                    </g>
+                  )}
+
+                  {/* Return: the paired change against one agent, with its 95% interval. */}
+                  {P.ret && (
+                    <g class:list={["arm", { res: A.ret?.res }]} data-i={A.i}>
+                      <line class="rl rl-d" x1={D.D0} x2={D.D1} y1={ry} y2={ry} />
+                      {A.ret && (
+                        <g class="fx">
+                          <rect class="band" x={A.ret.lo} y={ry} width={r2(A.ret.hi - A.ret.lo)} height={D.bottom - ry} />
+                          <line class="gd gd-d" x1={A.ret.est} x2={A.ret.est} y1={ry + 8} y2={D.bottom} />
+                        </g>
+                      )}
+                      {A.ret ? (
+                        <>
+                          <path class="wh" d={`M${A.ret.lo} ${ry - A.cap}v${A.cap * 2}M${A.ret.lo} ${ry}H${A.ret.hi}M${A.ret.hi} ${ry - A.cap}v${A.cap * 2}`} />
+                          <circle class="est" cx={A.ret.est} cy={ry} r={wide ? 5.5 : 5} />
+                        </>
+                      ) : (
+                        <circle class="ref" cx={D.DZ} cy={ry} r={wide ? 4.5 : 4.2} />
+                      )}
+                      {/* On phones each lane is named at its left. The name comes first; the numbers wait for the interval. */}
+                      {!wide && (
+                        <g class="nl">
+                          <text class:list={["l1", { dy: a.eff }]} style="--dy:-6.5" x="0" y={ry} dominant-baseline="central"><tspan class="n">{a.nodes}</tspan> <tspan dx="1">{agents(a)}</tspan></text>
+                        </g>
+                      )}
+                      <g class="nm">
+                        {a.eff ? (
+                          <>
+                            <text class:list={["ev", "cm", "halo", { dy: !wide }]} style="--dy:-6.5" x={D.NX} y={ry} text-anchor="end" dominant-baseline="central">{pp(a.eff.d)}<tspan class="un"> pp</tspan></text>
+                            <text class="ci cm dy" style={`--dy:${wide ? 20 : 7.5}`} x={D.NX} y={ry} text-anchor="end" dominant-baseline="central">[{pp(a.eff.lo)}, {pp(a.eff.hi)}]</text>
+                            <text class="tk-n s dy" style={`--dy:${wide ? 37 : 7.5}`} x={wide ? D.NX : 0} y={ry} text-anchor={wide ? "end" : "start"} dominant-baseline="central"><tspan class="c">{a.eff.tasks}</tspan> tasks</text>
+                          </>
+                        ) : (
+                          <text class="s rf halo" x={D.NX} y={ry} text-anchor="end" dominant-baseline="central">reference</text>
+                        )}
+                      </g>
+                      {A.ret && wide && <text class:list={["zl", "s", "halo", "dy", { r: A.ret.res }]} style="--dy:22" x={D.DZ - 8} y={ry} text-anchor="end" dominant-baseline="central">{A.ret.res ? "excludes zero" : "includes zero"}</text>}
+                    </g>
+                  )}
+                </>
+              );
+            })}
+
+            {/* What a verified fix costs, one agent against the largest tree: where the cost column ends. */}
+            {P.co && (
+              <g class="co">
+                <line class="hair co-r" x1={F.x} x2={F.x1} y1={F.rule} y2={F.rule} />
+                <text class="co-t co-m halo" x={F.x} y={F.y}>Per verified fix, on the same <tspan class="c">{FIX.tasks}</tspan> tasks</text>
+                {/* One line of text, so the two values keep their distance at any type size. */}
+                <text class="co-t co-v halo" x={F.x} y={F.y + F.drop}><tspan class="co-0"><tspan class="c d">{FIX.one}</tspan> <tspan dx="2">one agent</tspan></tspan> <tspan class="c ar" dx="9">→</tspan> <tspan class="co-1" dx="9"><tspan class="c d acc">{FIX.tree}</tspan> <tspan dx="2">{a15.nodes} agents</tspan></tspan></text>
+              </g>
+            )}
+
+            {/* Key to the moving parts, which only exist once the script runs. */}
+            {P.cost && (
+              <g class="lg" transform={`translate(${C.B0} ${C.tick - 4})`}>
+                <circle class="lg-task" cx="3" cy="0" r={wide ? 2.7 : 2.2} />
+                <text class="s" x="11" y="0" dominant-baseline="central">task</text>
+                <rect class="lg-patch" x={wide ? 74 : 56} y="-2.8" width="5.6" height="5.6" rx="1.1" />
+                <text class="s" x={wide ? 86 : 67} y="0" dominant-baseline="central">patch</text>
+                <rect class="lg-ref" x={wide ? 158 : 120} y="-2.8" width="5.6" height="5.6" rx="1.1" />
+                <text class="s" x={wide ? 170 : 131} y="0" dominant-baseline="central">refused</text>
+              </g>
+            )}
+          </svg>
+          </div>
+        ))}
+      </div>
+    );
+  })}
+  <Fragment slot="caption">
+    One row per arm of the depth campaign: one agent, then balanced trees of 3, 7 and 15. Bars are tokens relative to one
+    agent; the thin line is wall-clock time. Dots are the paired change in verified success with 95% intervals, each on its
+    own paired tasks. No tree resolves a gain; the 3-agent tree resolves a loss.
+  </Fragment>
+</Figure>
+
+<style is:global>
+  /* Selectors carry "div.dl" so they outrank the plate's own text rules
+     whichever stylesheet loads first.
+
+     Two layouts, one showing: three columns from 920px up, the stacked
+     drawings below it (in two columns on a tablet). */
+  .fig .plot .dl-n { display: none; }
+  @media (max-width: 919.98px) {
+    .fig .plot .dl-w { display: none; }
+    .fig .plot .dl-n { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 14px; max-width: 520px; margin-inline: auto; }
+  }
+  @media (min-width: 720px) and (max-width: 919.98px) {
+    .fig .plot .dl-n { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "a b" "a c"; column-gap: 34px; max-width: none; align-items: start; }
+    .fig .plot .dl-n .pa { grid-area: a; }
+    .fig .plot .dl-n .pb { grid-area: b; }
+    .fig .plot .dl-n .pc { grid-area: c; align-self: end; }
+  }
+  /* --tu keeps labels near 11px on screen as the plate shrinks: text grows in
+     user units while the drawing scales down. Type sizes and the offsets of
+     second lines (.dy) are multiples of it.
+     (Not --u: the page's stylesheet registers that name as a number, for its
+     hover lines, and a length written to it would be thrown away.) */
+  .fig .dl-w {
+    --tu: clamp(1px, calc(2.025px - 0.0799vw), 1.3px);
+    --fs: 12.5; --fs-s: 11.5; --fs-n: 22; --fs-k: 19; --fs-c: 12.5; --fs-d: 19;
+  }
+  .fig .dl-n {
+    --tu: clamp(0.82px, calc(2.237px - 0.253vw), 1.45px);
+    --fs: 11; --fs-s: 10; --fs-n: 15; --fs-k: 15; --fs-c: 10.5; --fs-d: 16;
+  }
+  @media (min-width: 720px) and (max-width: 919.98px) {
+    .fig .dl-n { --tu: clamp(1.02px, calc(2.4px - 0.146vw), 1.35px); }
+  }
+  .fig div.dl .dy { transform: translateY(calc(var(--dy) * var(--tu))); }
+
+  /* One control per arm, laid over its row by the script: a button for the
+     row itself, and on phones a plain target over its lane in the forest
+     plot. The focus ring is the site's: a 1.5px accent outline. */
+  .fig div.dl .pan { position: relative; }
+  .fig div.dl .row, .fig div.dl .lane { position: absolute; left: -8px; width: calc(100% + 16px); border-radius: 7px; }
+  .fig div.dl .row { display: block; -webkit-tap-highlight-color: transparent; }
+  .fig div.dl .lane { cursor: pointer; }
+  .fig div.dl .row:focus-visible, .fig div.dl .lane.keys { outline: 1.5px solid var(--accent); outline-offset: -2px; }
+
+  /* type */
+  .fig div.dl text { font-size: calc(var(--fs) * var(--tu)); fill: var(--ink-3); }
+  .fig div.dl text.s { font-size: calc(var(--fs-s) * var(--tu)); }
+  .fig div.dl text.cm { font-size: calc(var(--fs-c) * var(--tu)); }
+  .fig div.dl tspan.k { fill: var(--ink); font-weight: 500; }
+  .fig div.dl tspan.c { font-family: var(--cm); font-size: 1.09em; letter-spacing: 0; fill: var(--ink-2); }
+  .fig div.dl tspan.c.r, .fig div.dl text.zl.r { fill: var(--s-red); }
+  .fig div.dl tspan.sep { fill: var(--ink-4); }
+  .fig div.dl text.halo { paint-order: stroke; stroke: var(--panel); stroke-width: 6px; stroke-linejoin: round; }
+  .fig div.dl text.l1 { fill: var(--ink-2); }
+  .fig div.dl tspan.n { font-family: var(--cm); font-size: calc(var(--fs-n) * var(--tu)); fill: var(--ink); letter-spacing: 0; }
+  .fig div.dl .l2 { fill: var(--ink-3); font-size: calc(var(--fs-s) * var(--tu)); }
+  .fig div.dl text.tok, .fig div.dl text.ev { font-size: calc(var(--fs-k) * var(--tu)); fill: var(--ink); }
+  /* The reading line runs behind these numerals; a wider halo closes the gap a decimal point leaves at mid-height. */
+  .fig div.dl text.tok, .fig div.dl text.ev { stroke-width: 10px; }
+  .fig div.dl tspan.w { font-family: var(--sans); font-size: calc(var(--fs-s) * var(--tu)); fill: var(--ink-3); letter-spacing: 0.01em; }
+  .fig div.dl tspan.un { font-family: var(--sans); font-size: calc(var(--fs-s) * var(--tu)); fill: var(--ink-3); }
+  .fig div.dl text.rf { fill: var(--ink-2); }
+  .fig div.dl text.zl-k { fill: var(--ink); font-weight: 500; }
+  .fig div.dl text.zl-g, .fig div.dl text.verdict { fill: var(--s-green); }
+  .fig div.dl tspan.d { font-size: calc(var(--fs-d) * var(--tu)); fill: var(--ink); }
+  .fig div.dl tspan.d.acc { fill: var(--accent); }
+  .fig div.dl tspan.ar { font-size: calc(var(--fs-d) * 0.8 * var(--tu)); fill: var(--ink-3); }
+  .fig div.dl text.co-t { font-size: calc(var(--fs-s) * var(--tu)); }
+
+  /* frame */
+  .fig div.dl .rl { stroke: var(--hair); stroke-width: 1; transition: stroke var(--t-state) var(--ease-io); }
+  .fig div.dl .arm.cur .rl, .fig div.dl .arm.on .rl { stroke: var(--ink-4); }
+  .fig div.dl tspan.n { transition: fill var(--t-state) var(--ease-io); }
+  .fig div.dl .arm.cur tspan.n { fill: var(--accent); }
+  .fig div.dl .zero { stroke: var(--ink); stroke-width: 1.25; }
+  .fig div.dl .gain { fill: var(--s-green-t); opacity: 0.7; }
+
+  /* tree */
+  .fig div.dl .eg { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+  .fig div.dl .rr { fill: var(--panel); stroke: var(--ink-4); stroke-width: 1; }
+  .fig div.dl .nd-root, .fig div.dl .nd-leaf { fill: var(--ink); }
+  .fig div.dl .nd-inner { fill: var(--panel); stroke: var(--ink); stroke-width: 1.25; }
+  .fig div.dl .lead { fill: none; stroke: var(--ink-4); stroke-width: 1; }
+  .fig div.dl .m0 { fill: rgb(var(--ink-rgb) / 0.14); }
+  .fig div.dl .m1 { fill: var(--s-red); }
+
+  /* cost (.gl: the glint the script runs along a bar as it arrives, a copy of the bar that paints one cell) */
+  .fig div.dl .bar, .fig div.dl .gl { stroke: var(--accent); }
+  .fig div.dl .wl, .fig div.dl .wt { stroke: var(--ink-3); stroke-width: 1.25; }
+
+  /* return */
+  .fig div.dl .wh { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+  .fig div.dl .est { fill: var(--ink); stroke: var(--panel); stroke-width: 2; }
+  .fig div.dl .arm.res .wh { stroke: var(--s-red); }
+  .fig div.dl .arm.res .est { fill: var(--s-red); }
+  .fig div.dl .ref { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+
+  /* key */
+  .fig div.dl .lg { opacity: 0; }
+  .fig div.dl .lg-task, .fig div.dl .lg-patch { fill: var(--accent); }
+  .fig div.dl .lg-ref { fill: none; stroke: var(--s-red); stroke-width: 1.2; }
+
+  /* moving parts (made by the script): a task or a patch on an edge, a refused patch, the ring round
+     a node that is working, the wall-clock line as its root delivers, and the ring round an estimate
+     as that delivery is graded */
+  .fig div.dl .pkt { fill: var(--accent); }
+  .fig div.dl .pkt.no { fill: var(--panel); stroke: var(--s-red); stroke-width: 1.2; }
+  .fig div.dl .ov { fill: none; stroke: var(--accent); stroke-width: 1.25; }
+  .fig div.dl .wp { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+  .fig div.dl .er { fill: none; stroke: var(--ink); stroke-width: 1.25; }
+  .fig div.dl .arm.res .er { stroke: var(--s-red); }
+
+  /* inspecting one arm (what steps back, and by how much, is the script's: it runs on the page's own
+     clock and curve) */
+  .fig div.dl .fx { opacity: 0; }
+  .fig div.dl .gd { stroke-width: 1; stroke-dasharray: 2 3; }
+  .fig div.dl .gd-c { stroke: var(--accent); }
+  .fig div.dl .gd-d { stroke: var(--ink-3); }
+  .fig div.dl .band { fill: rgb(var(--ink-rgb) / 0.05); }
+  .fig div.dl .arm.res .band { fill: var(--s-red-t); }
+  .fig div.dl .arm.res .gd-d { stroke: var(--s-red); }
+
+  /* As the plate narrows and text grows, drop the words a label can lose,
+     then the meter under the patch count. */
+  @media (max-width: 1100px) {
+    .fig .dl-w .xw { display: none; }
+  }
+  @media (max-width: 1000px) {
+    .fig .dl-w .pt g.dy { display: none; }
+    .fig .dl-w .pt text.dy:last-child { --dy: 58 !important; }
+  }
+</style>

@@ -10,9 +10,12 @@
 import { mountSupernova } from "./supernova";
 import { mountDeepTime } from "./deeptime";
 import { mountHorizon } from "./horizon";
+import { mountBigBang } from "./bigbang";
+import { mountMerger } from "./merger";
+import { mountCosmicWeb } from "./cosmicweb";
 
 const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const mounts = { supernova: mountSupernova, deeptime: mountDeepTime, horizon: mountHorizon } as const;
+const mounts = { supernova: mountSupernova, deeptime: mountDeepTime, horizon: mountHorizon, bigbang: mountBigBang, merger: mountMerger, cosmicweb: mountCosmicWeb } as const;
 const covering = new Set<Element>();
 
 for (const seq of document.querySelectorAll<HTMLElement>("[data-seq]")) {

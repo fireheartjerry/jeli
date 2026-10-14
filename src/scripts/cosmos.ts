@@ -560,7 +560,7 @@ void main() {
   gl_Position = u_proj * c;
   v_q = a_q;
 }`;
-const FS_SUN = FRAG_HEAD + `
+const FS_SUN = FRAG_HEAD + NOISE + `
 in vec2 v_q;
 uniform float u_mode; // 0 corona, 1 disc, 2 light held inside the sphere, 3 lens streak, 4 the source the shafts are cut from, 5 the far star
 uniform float u_span; // quad half-size in solar radii
@@ -605,10 +605,24 @@ void main() {
     float r2 = dot(v_q, v_q);
     if (r2 > 1.0) discard;
     float mu = sqrt(1.0 - r2);
-    // Brighter than the screen can show, so the limb never reads as a ring against its own glow.
     float edge = smoothstep(1.0, 0.94, r2);
-    // White-hot in the middle and gold towards the limb, so the disc keeps a shoulder inside its own glow.
-    vec3 hot = mix(vec3(1.0, 0.8, 0.46), vec3(1.0, 0.98, 0.93), pow(mu, 0.55)) * (0.92 + 0.5 * mu);
+    // The photosphere, as a filter would show it: the disc darkening towards the limb, more in
+    // blue than in red (so the limb is warmer); granules, the tops of convection cells; the larger
+    // supergranulation; sunspots in the two bands either side of the equator; and bright faculae,
+    // which show best near the limb. All of it turns with the Sun.
+    vec3 n = vec3(v_q, mu);
+    float ct = cos(u_turn * 0.3), st = sin(u_turn * 0.3);
+    vec3 m = vec3(ct * n.x + st * n.z, n.y, -st * n.x + ct * n.z);
+    vec3 ld = vec3(1.0) - vec3(0.44, 0.58, 0.72) * (1.0 - mu) - vec3(0.2, 0.17, 0.12) * (1.0 - mu * mu);
+    float gran = fbm3(m * 30.0 + vec3(u_turn * 0.4), 3);
+    float sup = fbm3(m * 7.0 + 3.0, 3);
+    float lat = abs(m.y);
+    float band = smoothstep(0.1, 0.2, lat) * (1.0 - smoothstep(0.36, 0.5, lat));
+    float spot = fbm3(m * 4.6 + 11.0, 4);
+    float umbra = smoothstep(0.75, 0.79, spot) * band, penumbra = smoothstep(0.67, 0.75, spot) * band;
+    float faculae = smoothstep(0.58, 0.72, fbm3(m * 9.0 + 5.0, 3)) * pow(1.0 - mu, 1.4) * 0.3;
+    float I = (0.93 + 0.16 * (gran - 0.5) + 0.07 * (sup - 0.5)) * (1.0 - 0.42 * penumbra - 0.45 * umbra) + faculae;
+    vec3 hot = vec3(1.0, 0.86, 0.66) * ld * I * 0.9;
     // u_gain brings the disc up with its light when the page opens, so it is never a bare white circle;
     // and it comes up the way a hot thing does, through ember and gold, not through grey.
     vec3 warm = mix(vec3(1.0, 0.5, 0.18), vec3(1.0), smoothstep(0.15, 1.0, u_gain));
@@ -626,7 +640,10 @@ void main() {
   float n = 0.5 + 0.5 * sin(a * 5.0 + 1.3) * sin(a * 9.0 + 4.1);
   n = n * 0.6 + 0.4 * (0.5 + 0.5 * sin(a * 23.0 + 0.7) * sin(a * 13.0 + 2.9));
   float shafts = pow(n, mix(2.4, 7.0, u_dim)) * (0.5 / pow(r, 0.85)) * smoothstep(1.0, 2.6, r);
-  // A thin ring of light, the kind a bright source throws round itself.
+  // The corona: streamers drawn out along the field lines, as an eclipse shows them.
+  float ca = atan(v_q.y, v_q.x);
+  float streams = fbm3(vec3(cos(ca) * 2.6, sin(ca) * 2.6, r * 0.07 + u_turn * 0.02), 4);
+  glow += pow(streams, 3.0) * 1.1 * exp(-(r - 1.0) * 0.75) * smoothstep(1.0, 1.15, r);
   float halo = exp(-pow((r - 4.6) / 0.16, 2.0)) * 0.09 + exp(-pow((r - 8.4) / 0.3, 2.0)) * 0.035;
   float edge = smoothstep(u_span, u_span * 0.45, r);
   float m = (glow * (1.0 - 0.8 * u_dim) + shafts * (1.0 - 0.45 * u_dim) + halo * (1.0 - 0.6 * u_dim)) * edge * u_gain;
@@ -2208,11 +2225,6 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
     g.uniform1f(u.u_fill, 0);
 
-    // The lens streak across the Sun, gone while the Sun is hidden.
-    g.uniform1f(u.u_mode, 3);
-    g.uniform1f(u.u_size, SUN_R * 26);
-    g.uniform1f(u.u_gain, 0.9 * big.seen * big.seen * (1 - 0.72 * p));
-    g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
 
     if (share > 0.003) leaving(px, sun, share, count);
 

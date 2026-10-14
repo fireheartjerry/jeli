@@ -201,12 +201,18 @@ vec3 remnantScene(vec2 p) {
   col += neb * shell * age;
   // Inside: a haze lit by the neutron star's wind, the blue of fast electrons in a magnetic field.
   col += vec3(0.4, 0.55, 1.0) * exp(-r / max(Rr * 0.35, 0.02)) * fbm3(vec3(p * 9.0, u_t * 0.05), 4) * 0.55 * age;
-  // The neutron star: twenty kilometres across, spinning, its beams sweeping round.
-  float spin = u_t * 2.2;
-  vec2 bd = vec2(cos(spin), sin(spin) * 0.35);
-  float along = dot(p, normalize(bd)), across = abs(dot(p, vec2(-normalize(bd).y, normalize(bd).x)));
-  float beam = exp(-across / (0.004 + 0.06 * abs(along))) * exp(-abs(along) / 0.45) * age;
-  col += vec3(0.75, 0.85, 1.0) * (exp(-r * 70.0) * 2.5 + beam * 0.5) * ss(0.86, 0.9);
+  // The neutron star: twenty kilometres across and spinning. Its beams are not seen from the side
+  // (there is nothing out here to scatter them); what is seen, as the Chandra telescope sees the
+  // Crab, is the wind it blows: a ring round its equator and a jet from each pole.
+  float tilt = 0.42;
+  vec2 tq = vec2(p.x, p.y / tilt);
+  float tr = length(tq);
+  float torus = exp(-pow((tr - 0.11 * (0.6 + 0.4 * age)) / 0.022, 2.0)) * (0.7 + 0.6 * fbm3(vec3(tq * 30.0, u_t * 0.3), 3));
+  vec2 ax = normalize(vec2(-0.35, 1.0));
+  float along = dot(p, ax), across = abs(dot(p, vec2(ax.y, -ax.x)));
+  float jets = exp(-across / (0.004 + 0.03 * abs(along))) * exp(-abs(along) / 0.16) * smoothstep(0.0, 0.02, abs(along)) * (along > 0.0 ? 1.0 : 0.55);
+  col += vec3(0.55, 0.7, 1.0) * (torus * 0.6 + jets * 0.55) * ss(0.86, 0.9);
+  col += vec3(0.8, 0.88, 1.0) * exp(-r * 90.0) * 2.4 * ss(0.86, 0.9);
   return col;
 }
 

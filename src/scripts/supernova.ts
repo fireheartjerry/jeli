@@ -85,8 +85,8 @@ vec3 shells(vec2 q, float r, float zoomed) {
   else if (r > L5) col = vec3(0.62, 0.5, 0.4) * (0.45 + 0.75 * fine * fine); // silicon
   else {
     // Iron: it no longer burns; it is hot from all that is burning round it, and from its own weight.
-    float g = fbm3(vec3(q * 60.0, t * 0.1), 4);
-    col = mix(vec3(0.12, 0.15, 0.24), vec3(0.6, 0.68, 0.9), smoothstep(L5, 0.0, r)) * (0.55 + 0.9 * g * g) + vec3(0.5, 0.6, 1.0) * exp(-r / (L5 * 0.35)) * 0.35;
+    float fil = ridge3(vec3(q * 22.0, t * 0.07), 4);
+    col = mix(vec3(0.1, 0.13, 0.24), vec3(0.62, 0.7, 0.92), smoothstep(L5, 0.0, r)) * (0.35 + 1.1 * pow(fil, 3.0)) + vec3(0.5, 0.6, 1.0) * exp(-r / (L5 * 0.35)) * 0.3;
   }
   // Where one burning shell meets the next, a thin brighter line.
   float edge = 0.0;
@@ -128,17 +128,32 @@ vec3 starScene(vec2 p) {
 }
 
 // ---- 3: the iron core, close: a hot dense gas of nuclei ----
+// Three depths of the gas, each drifting at its own scale, so falling into it has depth:
+// bright filaments where it is hottest, darker lanes between. As the camera goes on in,
+// the gas resolves into what it is made of, nuclei, each a point of light shaking with the heat.
 vec3 coreScene(vec2 p) {
-  float z = ss(0.33, 0.42);
-  float sc = mix(30.0, 160.0, z * z);
-  vec2 q = p * sc;
-  vec2 cell = floor(q);
-  vec2 at = vec2(hash2(cell), hash2(cell + 3.3)) * 0.6 + 0.2 + 0.08 * vec2(sin(u_t * 3.0 + hash2(cell) * 40.0), cos(u_t * 2.6 + hash2(cell + 1.0) * 40.0));
-  float d = length(q - cell - at);
-  float dots = smoothstep(0.32, 0.05, d) * smoothstep(0.35, 0.42, u_u);
-  float haze = fbm3(vec3(p * 6.0, u_t * 0.12), 4);
-  vec3 col = mix(vec3(0.1, 0.13, 0.2), vec3(0.45, 0.52, 0.7), haze * haze) * (1.0 - 0.7 * z);
-  col += vec3(0.75, 0.82, 1.0) * dots * 0.45;
+  float z = ss(0.33, 0.43);
+  vec3 col = vec3(0.0);
+  for (int l = 0; l < 3; l++) {
+    float fl = float(l);
+    float sc = mix(1.6, 7.5, z * z) * (1.0 + fl * 0.85);
+    vec3 q = vec3(p * sc + vec2(fl * 1.7, -fl * 0.9), u_t * (0.07 + 0.04 * fl) + fl * 3.7);
+    float fil = ridge3(q, 4);
+    float den = fbm3(q * 0.6 + 5.0, 3);
+    vec3 hot = mix(vec3(0.12, 0.16, 0.3), vec3(0.78, 0.86, 1.0), smoothstep(0.55, 0.95, fil));
+    col += hot * pow(fil, 4.0) * (0.62 - 0.17 * fl) + vec3(0.07, 0.09, 0.16) * den * (0.35 - 0.1 * fl);
+  }
+  // The middle of the core is the hottest.
+  col *= 0.75 + 0.5 * exp(-dot(p, p) * 0.8);
+  // Nuclei: a point of light each, from a haze to a field of them.
+  float g = ss(0.36, 0.43);
+  if (g > 0.0) {
+    float sc = mix(40.0, 150.0, z * z);
+    vec2 q = p * sc, cell = floor(q);
+    vec2 at = vec2(hash2(cell), hash2(cell + 3.3)) * 0.6 + 0.2 + 0.08 * vec2(sin(u_t * 3.0 + hash2(cell) * 40.0), cos(u_t * 2.6 + hash2(cell + 1.0) * 40.0));
+    float d = length(q - cell - at);
+    col += vec3(0.8, 0.86, 1.0) * (smoothstep(0.3, 0.04, d) * 0.6 + exp(-d * 5.0) * 0.15) * g;
+  }
   return col;
 }
 

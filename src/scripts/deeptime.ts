@@ -51,6 +51,29 @@ vec3 galaxies(vec2 p, float life, float red) {
   return col;
 }
 
+// One galaxy near enough to fill much of the frame, tilted, with a bar, two arms of young
+// stars, dust lanes along their inner edges and an old yellow bulge.
+vec3 hero(vec2 p, float life, float red) {
+  vec2 d = p - vec2(-0.42, 0.06);
+  float ang = 0.55;
+  d = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * d;
+  d.y /= 0.42;
+  float r = length(d) / 0.62, th = atan(d.y, d.x) + u_t * 0.004;
+  float arm = 0.5 + 0.5 * cos(2.0 * (th - 2.6 * log(max(r, 0.04))));
+  float arms = pow(arm, 3.0) * smoothstep(0.12, 0.35, r);
+  float dust = smoothstep(0.55, 0.85, 0.5 + 0.5 * cos(2.0 * (th - 2.6 * log(max(r, 0.04)) + 0.42))) * smoothstep(0.1, 0.3, r) * exp(-r * 1.4);
+  float clumps = fbm3(vec3(d * 9.0, 2.0), 4);
+  float disc = exp(-r * 2.3);
+  float bar = exp(-pow(d.x / 0.32, 2.0) - pow(d.y / 0.07, 2.0)) * 0.7;
+  float bulge = exp(-r * 9.0) * 1.6 + bar * exp(-r * 2.0);
+  vec3 young = mix(vec3(0.62, 0.74, 1.0), vec3(1.0, 0.36, 0.16), red);
+  vec3 old = mix(vec3(1.0, 0.83, 0.6), vec3(1.0, 0.42, 0.18), red * 0.8);
+  vec3 c = young * disc * (0.25 + 1.6 * arms * (0.6 + 0.8 * clumps)) * (1.0 - 0.75 * dust) + old * bulge;
+  // Star-forming knots along the arms: pink, where hydrogen is lit by new stars.
+  c += vec3(1.0, 0.45, 0.6) * pow(clumps, 6.0) * arms * disc * 3.0 * (1.0 - red);
+  return c * life * 0.7;
+}
+
 vec3 cinders(vec2 p, float cool) {
   // White dwarfs cooling: each a point, from white to dull red to nothing.
   vec3 col = vec3(0.0);
@@ -159,7 +182,7 @@ void main() {
     float life = 1.0 - 0.92 * ss(0.12, 0.3);
     float red = ss(0.1, 0.28);
     vec2 drift = p * (1.0 + 0.25 * ss(0.0, 0.3));
-    col += galaxies(drift, life, red) * a;
+    col += (galaxies(drift, life, red) + hero(drift, life, red)) * a;
   }
   float b = win(0.24, 0.3, 0.42, 0.46);
   if (b > 0.001) col += cinders(p, ss(0.28, 0.44)) * b;

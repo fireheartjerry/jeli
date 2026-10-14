@@ -2,6 +2,7 @@
 import Base from "../layouts/Base.astro";
 import Header from "../components/Header.astro";
 import Interlude from "../components/Interlude.astro";
+import Sequence from "../components/Sequence.astro";
 import Section from "../components/Section.astro";
 import Entry from "../components/Entry.astro";
 import Hero from "../components/Hero.astro";
@@ -63,6 +64,30 @@ const record = [
     <Hero />
 
     <About />
+
+    <Sequence
+      scene="bigbang"
+      name="The first moments of the universe"
+      length={12}
+      steps={[
+        { at: 0, when: "About 10⁻³⁶ seconds", title: "Inflation", scale: "In frame: far smaller than a proton, and growing", text: "Most cosmologists think space first grew by a factor of at least 10²⁶ in about 10⁻³² seconds, as if a proton grew wider than the distance from the Earth to the Sun. Tiny quantum jitters were stretched with it, into slight differences in density from place to place." },
+        { at: 0.12, when: "The first 20 or so microseconds", title: "Quark-gluon plasma", scale: "In frame: about 10 femtometres", text: "When inflation ended, its energy became a hot, dense sea of particles. Above about 2 trillion degrees, quarks and gluons are not held inside protons; they flow together as a liquid. Colliders at Brookhaven and CERN make tiny drops of it by smashing heavy nuclei together." },
+        { at: 0.22, when: "About 20 microseconds", title: "Protons and neutrons", scale: "In frame: about 10 femtometres", text: "As it cooled, quarks were bound in threes into protons and neutrons. Matter and antimatter met and turned to light; only about one quark in a billion had no partner, and that small excess is all the matter there is now. By one second there was about one neutron for every six protons." },
+        { at: 0.34, when: "About 3 minutes", title: "The first nuclei", scale: "In frame: a few dozen nuclei, drawn far closer than they were", text: "Below about a billion degrees, protons and neutrons could stick together without light breaking them apart. Within about 20 minutes nearly every neutron was in helium-4, two protons and two neutrons. About a quarter of the mass became helium; almost all the rest stayed single protons, the nuclei of hydrogen." },
+        { at: 0.46, when: "The next 380,000 years", title: "An opaque fog", scale: "In frame: inside the fog", text: "The universe was a glowing plasma of nuclei and free electrons. Light could not travel far before bouncing off an electron, so it was like being inside a cloud lit from within. As space kept expanding, it slowly cooled." },
+        { at: 0.56, when: "380,000 years", title: "The fog clears", scale: "In frame: hundreds of thousands of light-years", text: "At about 3,000 degrees, electrons settled onto nuclei to make the first atoms, and light could travel freely. That light is the cosmic microwave background. Its brightness differs from place to place by about one part in 100,000, made far stronger here so it shows." },
+        { at: 0.65, when: "Today", title: "The oldest light", scale: "In frame: a few degrees of sky", text: "Since then space has stretched about 1,100 times, and the light with it. Once orange, it now reaches us as microwaves from every direction, at 2.7 degrees above absolute zero. Its faint spots are thought to be the jitters from inflation, grown huge." },
+        { at: 0.74, when: "380,000 to about 100 million years", title: "The dark ages", scale: "In frame: millions of light-years", text: "No stars yet, only cooling hydrogen and helium gas and the dark matter around it. Gravity pulled the slightly denser places in, and they grew into a web of walls and threads around empty voids. It gave off almost no light; it is drawn faintly here." },
+        { at: 0.84, when: "About 100 to 200 million years", title: "The first stars", scale: "In frame: about a million light-years", text: "Where the gas gathered thickest it collapsed into the first stars, made only of hydrogen and helium. They were probably tens to hundreds of times the Sun's mass, very hot and short-lived. Their ultraviolet light split the gas around them back into electrons and nuclei, and it glowed red. None has been seen directly yet." },
+        { at: 0.93, when: "Within about 300 million years", title: "The first galaxies", scale: "In frame: about 10 million light-years", text: "Stars gathered into small galaxies along the web. The James Webb Space Telescope has seen one, MoM-z14, as it was 280 million years after the Big Bang. By about a billion years their light had split nearly all the gas between the galaxies, and the universe was clear." },
+      ]}
+    />
+
+    <Interlude
+      kind="wormhole"
+      name="A wormhole"
+      caption="A tunnel through space, if one could exist, seen from outside as a sphere. Through it, another galaxy, its whole sky squeezed into the ball; around it, our own sky bent by its gravity. General relativity allows them; nothing yet says one could be built or kept open."
+    />
 
     <Section id="work" title="Work" lede="Shipped software: AI video at a YC startup, fire control for a counter-drone turret, and a math judge used in 182 countries.">
       <Entry title="Mathos AI" href="https://mathos.ai" role="Software engineering intern" period="2026 to now" tags="Python, Celery, Remotion, AWS Fargate, SES, Next.js, OAuth 2.0, MCP">
@@ -128,6 +153,23 @@ const record = [
       caption="Drawn the way Interstellar drew Gargantua: the disc of gas almost edge on, brighter on the side coming towards you, and its far side bent up over the shadow by the hole's own gravity. An illustration; nothing like it is near the Sun."
     />
 
+    <Sequence
+      scene="horizon"
+      name="Falling into a black hole"
+      length={12}
+      steps={[
+        { at: 0, when: "About 70 AU from the centre", title: "A black hole of 100 million suns", scale: "In frame: about 45 AU", text: "Its event horizon is about 590 million kilometres across; in the Sun's place it would reach past the orbit of Mars. Around it turns a thin disc of hot gas. Interstellar's Gargantua was given the same mass. This one is drawn as if it did not spin." },
+        { at: 0.11, when: "About 45 AU out", title: "Light bent round it", scale: "In frame: about 35 AU", text: "The disc is seen almost edge on, yet its far side shows above the black and below it: that light has been bent round the hole on its way here. The black is the hole's shadow, about 2.6 times as wide as the horizon itself." },
+        { at: 0.22, when: "About 25 AU out", title: "One side brighter", scale: "In frame: about 25 AU", text: "The gas orbits at up to half the speed of light. On the side coming towards us its light is squeezed, bluer and brighter; on the side going away it is redder and dimmer. The gas is drawn at up to about 9,000 degrees, so that it glows in visible light; a real disc like this is far hotter, and glows mostly in ultraviolet." },
+        { at: 0.33, when: "About 10 AU out", title: "The last stable orbit", scale: "In frame: about 15 AU", text: "No circular orbit lasts closer in than three times the horizon's radius, about 6 AU from the centre. There the gas goes round in about 12 and a half hours, timed from far away; any closer and it falls in. Around a fast-spinning hole this edge would sit much closer." },
+        { at: 0.44, when: "3 AU out", title: "Where light can orbit", scale: "Looking along the orbit", text: "At one and a half times the horizon's radius, light itself can go round in a circle. From here the shadow covers exactly half the sky, with a straight edge. Light sent sideways can come back round: in principle you could see the back of your own head." },
+        { at: 0.55, when: "1% above the horizon", title: "Holding still", scale: "Looking straight up", text: "Staying here takes a rocket pushing at more than 100,000 times Earth's gravity. While you hold still, each hour of yours is ten hours outside. The rest of the universe looks ten times bluer, and is squeezed into a circle overhead about 30 degrees across." },
+        { at: 0.665, when: "Letting go", title: "Tides", scale: "Looking straight up", text: "Let go and you fall. Gravity pulls a little harder on your feet than on your head; at this horizon the difference is less than a millionth of Earth's gravity, too little to feel. At a black hole of 10 suns it would be about 20 million times Earth's gravity, and would stretch you into a thin strand long before the horizon." },
+        { at: 0.77, when: "The event horizon", title: "No way back", scale: "Looking straight up", text: "Crossing it, you feel and see nothing special: no wall, no flash, and starlight keeps falling in after you. But from here on every path into the future, even one of light, leads inward. Nothing you send can reach the outside again." },
+        { at: 0.88, when: "Inside", title: "The singularity is a time, not a place", scale: "Looking sideways", text: "Inside, the centre is not somewhere ahead to steer round but a moment in your future, as certain as tomorrow. It comes about 23 minutes after the horizon by your own clock; no rocket could stretch that past 26. What happens there, general relativity cannot say." },
+      ]}
+    />
+
     <Section id="research" title="Research" lede="Four papers. One measures when a coding agent should hand work to other agents; three are on how binary stars trade mass.">
       <Entry feature title={paper.title} href={paper.href} role="Sole author. NeurIPS 2026 workshops, Sydney" period="2026" tags="Controlled experiments, agent harnesses, DeepSWE, program verifiers">
         <p>
@@ -173,10 +215,39 @@ const record = [
       </Entry>
     </Section>
 
-    <Interlude
-      kind="nova"
-      name="A supernova"
-      caption="A star many times the Sun's mass runs out of fuel, collapses, and throws off its outer layers. For a few weeks it can outshine the rest of its galaxy; the shell it threw keeps spreading for thousands of years."
+    <Sequence
+      scene="supernova"
+      name="The death of a massive star"
+      length={11}
+      steps={[
+        { at: 0, when: "10 million years old", title: "A red supergiant", scale: "In frame: about 10 AU", text: "A star twenty times the mass of the Sun, near the end of its life. It has swollen to about a thousand times the Sun's width: in the Sun's place it would swallow every planet out past Mars." },
+        { at: 0.1, when: "Its last day", title: "Burning in layers", scale: "In frame: the star, cut open", text: "Inside, it burns in shells: hydrogen on the outside, then helium, carbon, oxygen and neon, and silicon. At the centre is a ball of iron about the size of the Earth. The layers are drawn far wider than they are." },
+        { at: 0.26, when: "A quarter of a second left", title: "Iron does not burn", scale: "In frame: about 1,000 km", text: "Fusing iron takes energy instead of giving it, so the core can no longer hold itself up. Once it reaches about 1.4 times the Sun's mass it falls in on itself, at up to a quarter of the speed of light." },
+        { at: 0.34, when: "During the fall", title: "Gamma rays break the nuclei", scale: "In frame: about 100 femtometres", text: "The core is so hot that its light breaks iron nuclei apart. Each iron-56, 26 protons and 30 neutrons, splits into 13 helium nuclei and 4 neutrons, then the helium into single protons and neutrons. Every split uses up energy, so the core falls faster." },
+        { at: 0.47, when: "Milliseconds", title: "Protons become neutrons", scale: "In frame: about 100 femtometres", text: "Electrons are squeezed into protons, turning them into neutrons and releasing neutrinos: particles so slight that a light-year of lead would stop only about half of them." },
+        { at: 0.55, when: "The bounce", title: "The core stops, and rebounds", scale: "In frame: about 300 km", text: "At the density of an atomic nucleus the core can fall no further. It stiffens and rebounds, sending out a shock wave. Over the next ten seconds neutrinos carry away 99% of the energy released, and some of them push the shock on." },
+        { at: 0.66, when: "Hours to weeks later", title: "The explosion", scale: "In frame: a few light-years", text: "The shock reaches the surface and blows the star apart. For weeks it can outshine its whole galaxy, and the gas it throws off carries the elements it made, iron, oxygen, calcium, out into space to make new stars and planets." },
+        { at: 0.74, when: "What is left", title: "A neutron star", scale: "In frame: about 100 km", text: "More mass than the Sun, in a ball about 20 kilometres across, spinning many times a second. A teaspoon of it would weigh billions of tonnes." },
+        { at: 0.82, when: "Inside it", title: "Quarks", scale: "In frame: about 5 femtometres", text: "Each neutron is three quarks held together by the strong force, carried by gluons. Pull two quarks apart and the field between them only stretches; at a neutron star's centre they may be pressed so close that they move freely." },
+        { at: 0.91, when: "A hypothesis", title: "Strange matter", scale: "In frame: about 5 femtometres", text: "Arnold Bodmer in 1971, and Edward Witten in 1984, suggested that a mix of up, down and strange quarks might be more stable than ordinary nuclei. If so, some neutron stars may be strange stars all through. None has been found yet." },
+      ]}
+    />
+
+    <Sequence
+      scene="merger"
+      name="Two neutron stars collide"
+      length={11}
+      steps={[
+        { at: 0, when: "100 seconds before", title: "Two neutron stars", scale: "In frame: about 600 km", text: "Each holds about 1.4 times the mass of the Sun in a ball about 24 kilometres across. They are 400 kilometres apart and go round each other 12 times a second, and have been slowly closing in for millions or billions of years." },
+        { at: 0.1, when: "100 seconds before", title: "Ripples in spacetime", scale: "In frame: about 100,000 km", text: "Masses in orbit send out gravitational waves, which stretch and squeeze space as they pass at the speed of light. Here the crests are about 12,000 kilometres apart. The specks are only markers, moved far more than the waves really move anything." },
+        { at: 0.21, when: "The last minute", title: "The chirp", scale: "In frame: closing in on the stars", text: "The waves carry off the orbit's energy, so the stars fall closer and go round faster, and the waves grow stronger and higher in pitch. LIGO followed the signal for about 100 seconds as it rose from 24 hertz to several hundred." },
+        { at: 0.33, when: "The last milliseconds", title: "Torn by tides", scale: "In frame: about 300 km", text: "By the end they go round hundreds of times a second, each moving at about a fifth of the speed of light. Each pulls the other out of shape, and as they touch, streams of matter are flung out from their far sides." },
+        { at: 0.43, when: "The merger", title: "One body, then a black hole", scale: "In frame: about 250 km", text: "The two become one spinning body of about 2.7 solar masses, hotter than a hundred billion degrees. That is probably too heavy to last: within a fraction of a second it most likely collapsed into a black hole, ringed by a disc of debris." },
+        { at: 0.53, when: "Within the first second", title: "Gold and platinum", scale: "In frame: about 40 femtometres", text: "The debris is so rich in free neutrons that nuclei catch them faster than they can decay. Swollen with neutrons, they then decay, neutron after neutron becoming a proton, into heavy elements such as gold and platinum. One estimate for this merger is about ten Earth masses of them." },
+        { at: 0.65, when: "1.7 seconds", title: "A jet, and gamma rays", scale: "In frame: about 400,000 km", text: "The remnant and its disc drove two narrow jets out along the spin axis at nearly the speed of light. One broke out of the debris; seen about 20 degrees off its axis, its gamma rays reached the Fermi and INTEGRAL satellites 1.7 seconds after the waves." },
+        { at: 0.77, when: "Hours to weeks", title: "The kilonova", scale: "In frame: 100 to 1,000 AU", text: "About 5% of a solar mass of debris flew out at a tenth to a third of the speed of light, heated by its new elements decaying. A fast blue part faded within days; a slower red part, made opaque by rare-earth elements, glowed for weeks in the infrared." },
+        { at: 0.89, when: "17 August 2017", title: "Heard, then seen", scale: "In frame: about 60,000 light-years", text: "LIGO and Virgo recorded the waves at 12:41 UTC, after 130 million years on the way. The gamma rays came 1.7 seconds later, so gravity travels at the speed of light to within about one part in 10¹⁵. Eleven hours on, telescopes found the kilonova in the galaxy NGC 4993." },
+      ]}
     />
 
     <Section id="projects" title="Projects" lede="Hackathon builds and things I made because I wanted them.">
@@ -230,10 +301,27 @@ const record = [
       </div>
     </Section>
 
+    <Sequence
+      scene="cosmicweb"
+      name="From the Sun to the edge of the observable universe"
+      length={12}
+      steps={[
+        { at: 0, when: "Light from the Sun to Neptune: about 4 hours", title: "The Solar System", scale: "In frame: about 80 AU", text: "The Sun and its eight planets, with their orbits drawn in. Neptune, the farthest, is about 30 times the Earth's distance from the Sun. Sunlight takes about 8 minutes to reach us and about 4 hours to reach Neptune." },
+        { at: 0.11, when: "Light to its outer edge: perhaps a year and a half", title: "The Oort cloud", scale: "In frame: about 4 light-years", text: "Far past the planets, a vast, thin shell of icy bodies is thought to surround the Sun, from a few thousand to perhaps 100,000 times the Earth's distance. No one has seen it directly; it is inferred from comets that fall in from it on very long orbits. Drawn much brighter than it could be seen." },
+        { at: 0.22, when: "Light from Proxima Centauri: 4.24 years", title: "The nearest stars", scale: "In frame: about 30 light-years", text: "The closest star to the Sun is Proxima Centauri, a small red dwarf, beside the pair Alpha Centauri A and B. About a dozen stars lie within 10 light-years. Most are red dwarfs too faint to see without a telescope; Sirius, the brightest star in our sky, is 8.6 light-years away." },
+        { at: 0.33, when: "Light from the Orion Nebula: about 1,300 years", title: "Our arm of the galaxy", scale: "In frame: about 5,000 light-years", text: "The Sun lies in the Orion Arm, a spur about 3,500 light-years wide between two of the Milky Way's main arms. Clouds of dust block the light behind them, and in some of the clouds new stars are forming, lighting the gas around them pink." },
+        { at: 0.44, when: "Light from the centre: about 26,000 years", title: "The Milky Way", scale: "In frame: about 110,000 light-years", text: "A barred spiral galaxy about 100,000 light-years across, with 100 to 400 billion stars. The Sun is about 26,000 light-years from the centre, and takes about 230 million years to go round it once." },
+        { at: 0.55, when: "Light from Andromeda: 2.5 million years", title: "The Local Group", scale: "In frame: about 2.5 million light-years", text: "The Milky Way and Andromeda are the two largest of more than 50 galaxies bound together here, most of them small. Andromeda is coming towards us at about 110 kilometres a second. Recent measurements give about even odds that the two merge within 10 billion years." },
+        { at: 0.66, when: "Across it: about 500 million light-years", title: "The Laniakea supercluster", scale: "In frame: about 700 million light-years", text: "Our group lies in the outskirts of a supercluster of roughly 100,000 galaxies, mapped in 2014 from how galaxies move: within its edge, drawn here as a thin line, they all drift towards a common centre. The name is Hawaiian for immense heaven." },
+        { at: 0.77, when: "Across a void: 30 to 300 million light-years", title: "The cosmic web", scale: "In frame: about 4 billion light-years", text: "On the largest scales, galaxies lie along thin filaments and sheets around vast, nearly empty voids. The threads are mostly dark matter, which makes up about 85% of all matter. Its gravity drew ordinary gas along with it, and galaxies formed where the gas collected." },
+        { at: 0.88, when: "Light from the edge: 13.8 billion years old", title: "The observable universe", scale: "In frame: about 120 billion light-years", text: "Everything whose light has had time to reach us: a sphere about 93 billion light-years across, wider than 13.8 billion light-years in each direction because space has kept expanding while the light travelled. At its edge is the cosmic microwave background, light released 380,000 years after the Big Bang, now cooled to 2.7 degrees above absolute zero. Its slight unevenness is drawn far stronger than it is." },
+      ]}
+    />
+
     <Interlude
       kind="quasar"
-      name="A quasar"
-      caption="Gas falling into the black hole at the centre of a distant galaxy, heated until it outshines every star around it, with two jets thrown out at close to the speed of light. The nearer jet looks the brighter of the two."
+      name="A quasar, past a nebula"
+      caption="Far off, gas falling into the black hole at the centre of a galaxy, heated until it outshines every star around it, with two jets thrown out at close to the speed of light. Near, in our own galaxy, a cloud of hydrogen glowing red and oxygen glowing teal, with lanes of dust across it."
     />
 
     <Section id="record" title="Record" lede="Scholarships, papers and contest results.">
@@ -257,6 +345,21 @@ const record = [
         <Contests />
       </div>
     </Section>
+
+    <Sequence
+      scene="deeptime"
+      name="Deep time: the rest of the universe's life"
+      length={10}
+      steps={[
+        { at: 0, when: "Now: 13.8 billion years", title: "The age of stars", scale: "In frame: about a billion light-years", text: "The universe today: hundreds of billions of galaxies, most of them still making stars. By the clock this sequence keeps, we live at the very beginning." },
+        { at: 0.14, when: "100 trillion years", title: "The last stars go out", scale: "In frame: about a billion light-years", text: "The gas for new stars runs out. The longest-lived stars, small red dwarfs, burn for trillions of years, and then they too go out, and the galaxies go dark." },
+        { at: 0.28, when: "10¹⁵ to 10⁴⁰ years", title: "Cinders", scale: "In frame: about a light-year", text: "What is left are the remains of stars: white dwarfs cooling to black, neutron stars, black holes. If protons decay at all, experiments show they last more than 10³⁴ years; if they do, these cinders slowly fall apart too." },
+        { at: 0.44, when: "Up to 10¹⁰⁰ years", title: "Black holes evaporate", scale: "In frame: a black hole, shrinking", text: "Black holes outlast everything else. Quantum effects at the edge of each make it glow very faintly and lose mass, a little faster the smaller it gets. One the mass of the Sun takes about 10⁶⁷ years; the largest, about 10¹⁰⁰. Each ends in a flash." },
+        { at: 0.6, when: "After 10¹⁰⁰ years", title: "Heat death", scale: "In frame: empty space", text: "Then nothing is left that can happen. What energy remains is spread evenly through space, about 10⁻³⁰ degrees above absolute zero, and with no differences left there is nothing to drive any change. Physicists call this the heat death." },
+        { at: 0.76, when: "At every moment, everywhere", title: "Empty space is not empty", scale: "In frame: much smaller than an atom", text: "Even a perfect vacuum is never still: quantum fields shake at their lowest energy, and pairs of particles and antiparticles appear and vanish too quickly to catch. At the smallest scales, near 10⁻³⁵ metres, space itself may be a foam." },
+        { at: 0.9, when: "Possible, very unlikely", title: "A false vacuum", scale: "In frame: much smaller than an atom", text: "The Higgs field may not be in its lowest state. If a bubble of a lower state ever formed, it would spread at nearly the speed of light, and inside it the laws of physics would be different. Calculations put the expected wait far beyond the age of the universe." },
+      ]}
+    />
   </main>
 
   <Footer />

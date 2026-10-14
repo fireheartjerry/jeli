@@ -315,6 +315,20 @@ take({
     await m.hold(1.5, "home");
   },
 });
+// The two sequences, scrolled through from end to end.
+for (const [name, secs] of [["supernova", 8], ["deeptime", 7]])
+  take({
+    id: `home.seq.${name}`,
+    covers: [`sequence:${name}`],
+    about: `The ${name} sequence, start to finish.`,
+    run: async ({ m, page }) => {
+      const at = await page.evaluate((n) => { const e = document.querySelector(`[data-seq="${n}"]`); const r = e.getBoundingClientRect(); return { top: r.top + scrollY, len: r.height - innerHeight }; }, name);
+      await m.place(at.top, 1.5);
+      await m.scroll(at.top + at.len, Math.round(at.len / secs), "play");
+      await m.hold(1, "end");
+    },
+  });
+
 // One page giving way to another is not recorded here. With the clock held,
 // Chrome draws every picture of the page being left as a white sheet, so a
 // cross-document transition cannot be stepped. tools/qa/live.mjs records those

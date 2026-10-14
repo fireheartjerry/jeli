@@ -228,6 +228,8 @@ function init(layer: HTMLElement) {
   document.addEventListener("cosmos:pulse", () => cosmos.pulse());
   // After a cut (scripts/scroll.ts) the camera is simply where the page now is.
   document.addEventListener("cosmos:snap", () => cosmos.snap());
+  // While a sequence (Sequence.astro) fills the window, the scene behind it rests.
+  document.addEventListener("cosmos:rest", (e) => cosmos.rest(!!(e as CustomEvent).detail));
 
   // A change of page photographs the page being left (styles/transitions.css),
   // and Chrome photographs a WebGL canvas as a white sheet. So the scene is
@@ -279,7 +281,12 @@ function init(layer: HTMLElement) {
       for (const top of heads) if (y + 140 >= top) ch++;
       const tallScreen = vh > window.innerWidth * 1.1;
       if (it.kind === "hole") cosmos.stage("hole", cruise, ch, tallScreen ? 0 : 0.06, tallScreen ? 0.12 : 0.1);
-      if (it.kind === "quasar") cosmos.stage("quasar", cruise, ch, tallScreen ? 0 : 0.12, tallScreen ? 0.1 : 0.08);
+      if (it.kind === "quasar") {
+        cosmos.stage("quasar", cruise, ch, tallScreen ? 0.12 : 0.28, tallScreen ? 0.2 : 0.16);
+        // Nearer, in our own galaxy, a nebula stands across the view: the quasar is seen past its edge.
+        cosmos.stage("nebula", cruise, ch, tallScreen ? -0.25 : -0.2, tallScreen ? -0.05 : -0.02);
+      }
+      if (it.kind === "wormhole") cosmos.stage("wormhole", cruise, ch, tallScreen ? 0 : 0.08, tallScreen ? 0.12 : 0.1);
     }
   };
   let landed = false;
@@ -309,7 +316,9 @@ function init(layer: HTMLElement) {
       const off = Math.abs(it.top + it.h / 2 - (y + vh / 2)) / vh;
       open = Math.max(open, 1 - Math.min(1, Math.max(0, (off - 0.12) / 0.5)));
       // A far thing is out there only while its own stretch of sky is near: it comes up over the screen before, and goes over the screen after.
-      if (it.kind === "hole" || it.kind === "quasar") cosmos.show(it.kind, 1 - Math.min(1, Math.max(0, (off - 0.7) / 0.9)));
+      const near = 1 - Math.min(1, Math.max(0, (off - 0.7) / 0.9));
+      if (it.kind === "hole" || it.kind === "quasar" || it.kind === "wormhole") cosmos.show(it.kind, near);
+      if (it.kind === "quasar") cosmos.show("nebula", near);
       if (it.kind === "nova") {
         if (off < 0.18 && !it.fired) {
           it.fired = true;

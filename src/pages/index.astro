@@ -2,6 +2,7 @@
 import Base from "../layouts/Base.astro";
 import Header from "../components/Header.astro";
 import Interlude from "../components/Interlude.astro";
+import Sequence from "../components/Sequence.astro";
 import Section from "../components/Section.astro";
 import Entry from "../components/Entry.astro";
 import Hero from "../components/Hero.astro";
@@ -63,6 +64,12 @@ const record = [
     <Hero />
 
     <About />
+
+    <Interlude
+      kind="wormhole"
+      name="A wormhole"
+      caption="A tunnel through space, if one could exist, seen from outside as a sphere. Through it, another galaxy, its whole sky squeezed into the ball; around it, our own sky bent by its gravity. General relativity allows them; nothing yet says one could be built or kept open."
+    />
 
     <Section id="work" title="Work" lede="Shipped software: AI video at a YC startup, fire control for a counter-drone turret, and a math judge used in 182 countries.">
       <Entry title="Mathos AI" href="https://mathos.ai" role="Software engineering intern" period="2026 to now" tags="Python, Celery, Remotion, AWS Fargate, SES, Next.js, OAuth 2.0, MCP">
@@ -173,10 +180,22 @@ const record = [
       </Entry>
     </Section>
 
-    <Interlude
-      kind="nova"
-      name="A supernova"
-      caption="A star many times the Sun's mass runs out of fuel, collapses, and throws off its outer layers. For a few weeks it can outshine the rest of its galaxy; the shell it threw keeps spreading for thousands of years."
+    <Sequence
+      scene="supernova"
+      name="The death of a massive star"
+      length={11}
+      steps={[
+        { at: 0, when: "10 million years old", title: "A red supergiant", scale: "In frame: about 10 AU", text: "A star twenty times the mass of the Sun, near the end of its life. It has swollen to about a thousand times the Sun's width: in the Sun's place it would swallow every planet out past Mars." },
+        { at: 0.1, when: "Its last day", title: "Burning in layers", scale: "In frame: the star, cut open", text: "Inside, it burns in shells: hydrogen on the outside, then helium, carbon, oxygen and neon, and silicon. At the centre is a ball of iron about the size of the Earth. The layers are drawn far wider than they are." },
+        { at: 0.26, when: "A quarter of a second left", title: "Iron does not burn", scale: "In frame: about 1,000 km", text: "Fusing iron takes energy instead of giving it, so the core can no longer hold itself up. Once it reaches about 1.4 times the Sun's mass it falls in on itself, at up to a quarter of the speed of light." },
+        { at: 0.34, when: "During the fall", title: "Gamma rays break the nuclei", scale: "In frame: about 100 femtometres", text: "The core is so hot that its light breaks iron nuclei apart. Each iron-56, 26 protons and 30 neutrons, splits into 13 helium nuclei and 4 neutrons, then the helium into single protons and neutrons. Every split uses up energy, so the core falls faster." },
+        { at: 0.47, when: "Milliseconds", title: "Protons become neutrons", scale: "In frame: about 100 femtometres", text: "Electrons are squeezed into protons, turning them into neutrons and releasing neutrinos: particles so slight that a light-year of lead would stop only about half of them." },
+        { at: 0.55, when: "The bounce", title: "The core stops, and rebounds", scale: "In frame: about 300 km", text: "At the density of an atomic nucleus the core can fall no further. It stiffens and rebounds, sending out a shock wave. Over the next ten seconds neutrinos carry away 99% of the energy released, and some of them push the shock on." },
+        { at: 0.66, when: "Hours to weeks later", title: "The explosion", scale: "In frame: a few light-years", text: "The shock reaches the surface and blows the star apart. For weeks it can outshine its whole galaxy, and the gas it throws off carries the elements it made, iron, oxygen, calcium, out into space to make new stars and planets." },
+        { at: 0.74, when: "What is left", title: "A neutron star", scale: "In frame: about 100 km", text: "More mass than the Sun, in a ball about 20 kilometres across, spinning many times a second. A teaspoon of it would weigh billions of tonnes." },
+        { at: 0.82, when: "Inside it", title: "Quarks", scale: "In frame: about 5 femtometres", text: "Each neutron is three quarks held together by the strong force, carried by gluons. Pull two quarks apart and the field between them only stretches; at a neutron star's centre they may be pressed so close that they move freely." },
+        { at: 0.91, when: "A hypothesis", title: "Strange matter", scale: "In frame: about 5 femtometres", text: "Arnold Bodmer in 1971, and Edward Witten in 1984, suggested that a mix of up, down and strange quarks might be more stable than ordinary nuclei. If so, some neutron stars may be strange stars all through. None has been found yet." },
+      ]}
     />
 
     <Section id="projects" title="Projects" lede="Hackathon builds and things I made because I wanted them.">
@@ -232,8 +251,8 @@ const record = [
 
     <Interlude
       kind="quasar"
-      name="A quasar"
-      caption="Gas falling into the black hole at the centre of a distant galaxy, heated until it outshines every star around it, with two jets thrown out at close to the speed of light. The nearer jet looks the brighter of the two."
+      name="A quasar, past a nebula"
+      caption="Far off, gas falling into the black hole at the centre of a galaxy, heated until it outshines every star around it, with two jets thrown out at close to the speed of light. Near, in our own galaxy, a cloud of hydrogen glowing red and oxygen glowing teal, with lanes of dust across it."
     />
 
     <Section id="record" title="Record" lede="Scholarships, papers and contest results.">
@@ -257,6 +276,21 @@ const record = [
         <Contests />
       </div>
     </Section>
+
+    <Sequence
+      scene="deeptime"
+      name="Deep time: the rest of the universe's life"
+      length={10}
+      steps={[
+        { at: 0, when: "Now: 13.8 billion years", title: "The age of stars", scale: "In frame: about a billion light-years", text: "The universe today: hundreds of billions of galaxies, most of them still making stars. By the clock this sequence keeps, we live at the very beginning." },
+        { at: 0.14, when: "100 trillion years", title: "The last stars go out", scale: "In frame: about a billion light-years", text: "The gas for new stars runs out. The longest-lived stars, small red dwarfs, burn for trillions of years, and then they too go out, and the galaxies go dark." },
+        { at: 0.28, when: "10¹⁵ to 10⁴⁰ years", title: "Cinders", scale: "In frame: about a light-year", text: "What is left are the remains of stars: white dwarfs cooling to black, neutron stars, black holes. If protons decay at all, experiments show they last more than 10³⁴ years; if they do, these cinders slowly fall apart too." },
+        { at: 0.44, when: "Up to 10¹⁰⁰ years", title: "Black holes evaporate", scale: "In frame: a black hole, shrinking", text: "Black holes outlast everything else. Quantum effects at the edge of each make it glow very faintly and lose mass, a little faster the smaller it gets. One the mass of the Sun takes about 10⁶⁷ years; the largest, about 10¹⁰⁰. Each ends in a flash." },
+        { at: 0.6, when: "After 10¹⁰⁰ years", title: "Heat death", scale: "In frame: empty space", text: "Then nothing is left that can happen. What energy remains is spread evenly through space, about 10⁻³⁰ degrees above absolute zero, and with no differences left there is nothing to drive any change. Physicists call this the heat death." },
+        { at: 0.76, when: "At every moment, everywhere", title: "Empty space is not empty", scale: "In frame: much smaller than an atom", text: "Even a perfect vacuum is never still: quantum fields shake at their lowest energy, and pairs of particles and antiparticles appear and vanish too quickly to catch. At the smallest scales, near 10⁻³⁵ metres, space itself may be a foam." },
+        { at: 0.9, when: "Possible, very unlikely", title: "A false vacuum", scale: "In frame: much smaller than an atom", text: "The Higgs field may not be in its lowest state. If a bubble of a lower state ever formed, it would spread at nearly the speed of light, and inside it the laws of physics would be different. Calculations put the expected wait far beyond the age of the universe." },
+      ]}
+    />
   </main>
 
   <Footer />

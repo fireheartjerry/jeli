@@ -32,7 +32,19 @@ npm run build    # static output in dist/
   towards the camera, the far side lensed up over the shadow, the sky behind bent into an Einstein
   ring), a supernova whose shell keeps spreading, and a quasar with its two jets. They are one
   extra full-screen pass (`FS_DEEP` in `cosmos.ts`); a supernova also goes off now and then, and as
-  each new section is reached. The footer is the same move run backwards, home to the closed sphere. The pointer leans the
+  each new section is reached; a comet now and then; and in front of the quasar, an emission nebula.
+  A wormhole opens the deep part of the page: the far sky squeezed into its sphere, ours lensed
+  round it.
+- Two sequences hold the page still while a scene plays through as it is scrolled
+  (`src/components/Sequence.astro`, `src/scripts/sequence.ts`), each in its own canvas, drawn only
+  while on screen; the scene behind rests while one fills the window. `supernova.ts`: a red
+  supergiant, cut open to its burning shells, its iron core falling in, iron nuclei broken by gamma
+  rays into helium and then single nucleons (lit 3D spheres), the bounce and shock, the explosion and
+  its remnant, the neutron star left, its quarks, and strange matter. `deeptime.ts`: the eras of the
+  universe's future, black holes evaporating by Hawking radiation, the heat death, the quantum vacuum
+  and a false vacuum. Every number in their captions is from the physics literature, and hedged
+  where the physics is.
+- The footer is the same move run backwards, home to the closed sphere. The pointer leans the
   camera, and a drag on the cover or the footer swings it before it returns to its mark. 16 Psyche
   and the boulders near it are real meshes (`src/scripts/geo/psyche.ts`), built from the seed in
   idle slices and hung at fixed places in the world. The galaxy behind is painted once into a

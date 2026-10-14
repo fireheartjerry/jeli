@@ -129,9 +129,11 @@ export interface Cosmos {
   /** Put the camera where the scroll says at once (the page has cut, not travelled). With `settled`, the opening is skipped too. */
   snap(settled?: boolean): void;
   /** Hang one of the far things on the sky so it is at (nx, ny) on the screen when the take is at `cruise`, in chapter `ch`. */
-  stage(kind: "hole" | "quasar", cruise: number, ch: number, nx: number, ny: number): void;
+  stage(kind: "hole" | "quasar" | "wormhole" | "nebula", cruise: number, ch: number, nx: number, ny: number): void;
   /** How much of a staged far thing is shown, 0 to 1. */
-  show(kind: "hole" | "quasar", v: number): void;
+  show(kind: "hole" | "quasar" | "wormhole" | "nebula", v: number): void;
+  /** Stop drawing (something opaque covers the whole window), or start again. */
+  rest(on: boolean): void;
   /** A star goes off at (nx, ny) on the screen now; `size` scales it. */
   nova(nx?: number, ny?: number, size?: number): void;
   /** The scene as it is at this instant, drawn once more and copied to a canvas of its own. */
@@ -302,6 +304,11 @@ uniform vec4 u_bh; // the black hole: its direction in the camera's frame, and h
 uniform float u_bhr; // the angular radius of its shadow
 uniform vec4 u_qso; // the quasar: direction, seen
 uniform vec4 u_sn[3]; // supernovae: direction, and seconds since each went off (negative: none)
+uniform vec4 u_wh; // a wormhole: direction, seen
+uniform float u_whr; // the angular radius of its sphere
+uniform vec4 u_neb; // an emission nebula: direction, seen
+uniform vec4 u_comet; // a comet's head: direction, seconds since it came into view (negative: none)
+uniform vec3 u_cometV; // the way its head is moving across the sky, in the camera's frame
 const float GLAT = ${GALAXY.lat.toFixed(3)};
 float cellHash(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 // The sky in one direction: the painted galaxy, and a fine grain of stars.
@@ -322,11 +329,76 @@ float flow(float R, float ph, float t) {
   vec2 c = vec2(cos(ph - spin), sin(ph - spin));
   return fbm3(vec3(R * 2.4, c * 2.3), 4) * 0.75 + fbm3(vec3(R * 9.0, c * 0.9), 2) * 0.35;
 }
+// The sky on the far side of the wormhole: a spiral galaxy close by, nearly face on, in a crowded field of stars.
+vec3 otherSky(vec3 d) {
+  vec3 g = normalize(vec3(0.25, 0.3, 1.0));
+  float ang = acos(clamp(dot(d, g), -1.0, 1.0));
+  vec3 a1 = normalize(cross(g, vec3(0.0, 1.0, 0.0))), a2 = cross(a1, g);
+  vec2 q = vec2(dot(d, a1), dot(d, a2)) / max(sin(ang), 1e-3) * ang / 0.5;
+  q = mat2(0.8, 0.6, -0.6, 0.8) * q;
+  q.y *= 1.7;
+  float rr = length(q), th = atan(q.y, q.x);
+  float arms = pow(0.5 + 0.5 * cos(2.0 * (th - 2.4 * log(max(rr, 0.03)))), 3.0);
+  float body = exp(-rr * 2.6) * (0.3 + 1.5 * arms * smoothstep(0.04, 0.3, rr)) * (0.65 + 0.7 * fbm3(vec3(q * 7.0, 1.3), 3)) + exp(-rr * 16.0) * 1.4;
+  vec3 c = mix(vec3(1.0, 0.82, 0.62), vec3(0.62, 0.76, 1.0), smoothstep(0.08, 0.6, rr)) * body * 0.85;
+  c += vec3(0.4, 0.12, 0.3) * pow(fbm3(d * 2.6 + 5.0, 4), 2.0) * 0.4 + vec3(0.05, 0.22, 0.32) * pow(fbm3(d * 3.4 + 1.0, 3), 2.0) * 0.3;
+  vec3 sq = d * 320.0, cell = floor(sq);
+  vec3 at = vec3(cellHash(cell + 1.7), cellHash(cell + 3.1), cellHash(cell + 5.3)) * 0.64 + 0.18;
+  float st = smoothstep(0.34, 0.05, length(sq - cell - at)) * step(0.72, cellHash(cell + 9.4)) * (pow(cellHash(cell), 5.0) * 2.5 + 0.2);
+  return c + mix(vec3(1.0, 0.88, 0.75), vec3(0.75, 0.85, 1.0), cellHash(cell + 2.2)) * st * 0.7;
+}
 void main() {
   vec3 r = normalize(vec3((v_q.x - u_lens.z) * u_lens.x, (v_q.y - u_lens.w) * u_lens.y, -1.0));
   vec3 col = vec3(0.0);
   float a = 0.0;
   vec3 e1, e2;
+
+  // An emission nebula: hydrogen glowing red, oxygen teal at its heart, and dust in lanes across it.
+  if (u_neb.w > 0.002 && dot(r, u_neb.xyz) > 0.0) {
+    frame(u_neb.xyz, e1, e2);
+    vec2 p = vec2(dot(r, e1), dot(r, e2)) / 0.42;
+    float ang = length(p);
+    if (ang < 1.8) {
+      float n1 = fbm3(vec3(p * 2.6, 3.1), 5), n2 = fbm3(vec3(p * 5.5 + 4.0, 7.7), 4);
+      float shape = smoothstep(1.5, 0.15, ang + (n1 - 0.5) * 1.1);
+      float gas = shape * smoothstep(0.32, 0.78, n1 + 0.1 * (1.0 - ang));
+      float dust = smoothstep(0.52, 0.78, n2) * shape;
+      vec3 neb = mix(vec3(0.22, 0.62, 0.68), vec3(0.88, 0.26, 0.34), smoothstep(0.15, 0.85, ang + (n2 - 0.5) * 0.5)) * gas * 0.5;
+      neb += vec3(1.0, 0.62, 0.36) * pow(gas, 3.0) * 0.32;
+      neb *= 1.0 - 0.85 * dust;
+      col += neb * u_neb.w;
+      a = max(a, dust * 0.55 * u_neb.w);
+    }
+  }
+
+  if (u_wh.w > 0.002 && dot(r, u_wh.xyz) > 0.0) {
+    vec3 b = u_wh.xyz;
+    frame(b, e1, e2);
+    vec2 p = vec2(dot(r, e1), dot(r, e2)) / u_whr;
+    float rr = length(p);
+    if (rr < 7.0) {
+      float k = u_wh.w;
+      vec3 c;
+      if (rr < 1.0) {
+        // Through the throat the whole of the far sky is squeezed into the sphere: what is straight
+        // ahead there is at its centre, and what is behind is drawn round its rim.
+        float th = pow(rr, 1.35) * 3.14159 * 0.94;
+        vec2 dir2 = p / max(rr, 1e-4);
+        vec3 d = cos(th) * b + sin(th) * (dir2.x * e1 + dir2.y * e2);
+        c = otherSky(d) * (0.55 + 0.45 * smoothstep(1.0, 0.55, rr));
+      } else {
+        // Outside it, our own sky is bent round it as round any mass, and shows twice near the edge.
+        const float E = 1.45;
+        vec2 beta = p - p * (E * E) / max(rr * rr, 1e-3);
+        beta *= min(1.0, 60.0 / max(length(beta), 1e-3));
+        c = backdrop(normalize(b + (beta.x * e1 + beta.y * e2) * u_whr));
+      }
+      float rim = exp(-pow((rr - 1.0) / 0.014, 2.0)) * 0.55 + exp(-abs(rr - 1.0) / 0.12) * 0.06;
+      float cover = (1.0 - smoothstep(4.5, 7.0, rr)) * k;
+      col += c * cover + vec3(0.8, 0.88, 1.0) * rim * k;
+      a = max(a, cover);
+    }
+  }
 
   if (u_bh.w > 0.002 && dot(r, u_bh.xyz) > 0.0) {
     vec3 b = u_bh.xyz;
@@ -406,6 +478,27 @@ void main() {
     float shell = exp(-pow((rr - R) / (0.05 * R + 0.5), 2.0)) * exp(-t / 4.5) * smoothstep(0.2, 1.4, t) * 0.15 * fil;
     vec3 hot = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.72, 0.45), smoothstep(0.6, 4.0, t));
     col += hot * (core + spikes) + (vec3(1.0, 0.62, 0.5) * 0.6 + vec3(0.5, 0.7, 1.0) * 0.4) * shell;
+  }
+
+  if (u_comet.w >= 0.0) {
+    float t = u_comet.w;
+    vec3 h = normalize(u_comet.xyz);
+    if (dot(r, h) > 0.0) {
+      frame(h, e1, e2);
+      vec2 p = vec2(dot(r, e1), dot(r, e2)) / 0.0028;
+      vec2 v = normalize(vec2(dot(u_cometV, e1), dot(u_cometV, e2)) + 1e-5);
+      float along = -dot(p, v), side = dot(p, vec2(-v.y, v.x));
+      if (along > -10.0 && along < 160.0 && abs(side) < 40.0) {
+        // A head, and two tails behind it: the ion tail straight and blue, the dust tail curving and gold.
+        float fade = smoothstep(0.0, 1.2, t) * smoothstep(9.0, 6.5, t);
+        float head = exp(-length(p) * 0.85) * 2.2 + exp(-length(p) * 0.22) * 0.22;
+        float behind = step(0.0, along);
+        float ion = exp(-abs(side) / (0.35 + 0.018 * along)) * exp(-along / 110.0) * behind;
+        float bend = side - 0.0022 * along * along;
+        float dust = exp(-abs(bend) / (0.8 + 0.07 * along)) * exp(-along / 60.0) * behind;
+        col += (vec3(1.0, 0.97, 0.92) * head + vec3(0.55, 0.74, 1.0) * ion * 0.6 + vec3(1.0, 0.84, 0.58) * dust * 0.42) * fade;
+      }
+    }
   }
 
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
@@ -1368,6 +1461,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const viewWas = new Float32Array(16); // the view one frame ago, for the stars' motion
   let smeared = 0; // the shutter's smear, eased
   let deepWarm = false;
+  let resting = false; // something opaque covers the window: the scene is not drawn
   let fresh = true; // nothing to compare the first frame with, or the frame after a cut
   const F = F0;
   // The shot: from just outside the shell, above its first band, back to
@@ -1421,11 +1515,16 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   // Where the black hole and the quasar hang: chosen once, as directions on the
   // sky, so that each is in frame at a given place in the reading (a way through
   // the page, and a chapter) and drifts through the frame as the camera turns.
-  const deepSky = { bh: null as number[] | null, qso: null as number[] | null };
+  type Far = "hole" | "quasar" | "wormhole" | "nebula";
+  const deepSky: Record<Far, number[] | null> = { hole: null, quasar: null, wormhole: null, nebula: null };
   // Where each is staged: the point of the take and the place on the screen. (Directions are worked
   // out again each frame from these, so the camera's slow drift round the Sun carries them too.)
-  const staged: Partial<Record<"hole" | "quasar", { cruise: number; ch: number; nx: number; ny: number }>> = {};
-  const seenFar = { hole: 0, quasar: 0 }; // how much of each is shown: each comes up as its stretch of page nears
+  const staged: Partial<Record<Far, { cruise: number; ch: number; nx: number; ny: number }>> = {};
+  const seenFar: Record<Far, number> = { hole: 0, quasar: 0, wormhole: 0, nebula: 0 }; // how much of each is shown: each comes up as its stretch of page nears
+  // A comet now and then, crossing the frame: where its head starts and ends on the sky, and since when.
+  let comet: { d0: number[]; d1: number[]; at: number } | null = null;
+  const COMET = 9; // seconds it is in view
+  let cometNext = 16;
   /** The direction on the sky that the camera, far out at that point of the take, sees at (nx, ny) on the screen. */
   function skyAt(cruise: number, ch: number, nx: number, ny: number) {
     const a = az + SWEEP + FAR.sweep * cruise + ch * CHAPTER.turn, el = FAR.el;
@@ -1452,7 +1551,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       const nx = at ? at.nx : -0.85 + rnd() * 1.7, ny = at ? at.ny : -0.8 + rnd() * 1.55;
       const d = along(B, nx, ny, lens[0], lens[1]);
       // Never on the black hole's disc, nor on the Sun.
-      if (!at && deepSky.bh && d[0] * deepSky.bh[0] + d[1] * deepSky.bh[1] + d[2] * deepSky.bh[2] > 0.97) continue;
+      if (!at && deepSky.hole && d[0] * deepSky.hole[0] + d[1] * deepSky.hole[1] + d[2] * deepSky.hole[2] > 0.97) continue;
       if (!at && Math.hypot(nx - lens[0], ny - lens[1]) < 0.25) continue;
       if (novae.length >= 3) novae.shift();
       novae.push({ d, at: clock, size });
@@ -1980,21 +2079,30 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.disable(g.SCISSOR_TEST);
     }
     if (galaxy && deepK > 0.002) {
-      for (const [k, at] of Object.entries(staged)) {
-        const d = skyAt(at!.cruise, at!.ch, at!.nx, at!.ny);
-        if (k === "hole") deepSky.bh = d;
-        else deepSky.qso = d;
-      }
+      for (const [k, at] of Object.entries(staged)) deepSky[k as Far] = skyAt(at!.cruise, at!.ch, at!.nx, at!.ny);
       const dp = prog.deep;
       g.useProgram(dp.p);
       g.uniformMatrix3fv(dp.u.u_look, false, lookG);
       g.uniform4f(dp.u.u_lens, aspect / F, 1 / F, lens[0], lens[1]);
       g.uniform1f(dp.u.u_gain, GALAXY.gain * night * (1 + 0.5 * away));
       g.uniform1f(dp.u.u_clock, clock);
-      const bh = deepSky.bh ? inView(deepSky.bh) : [0, 0, 1], qso = deepSky.qso ? inView(deepSky.qso) : [0, 0, 1];
-      g.uniform4f(dp.u.u_bh, bh[0], bh[1], bh[2], deepSky.bh ? deepK * seenFar.hole : 0);
+      const at = (k: Far) => (deepSky[k] ? inView(deepSky[k]!) : [0, 0, 1]);
+      const shown = (k: Far) => (deepSky[k] ? deepK * seenFar[k] : 0);
+      const bh = at("hole"), qso = at("quasar"), wh = at("wormhole"), neb = at("nebula");
+      g.uniform4f(dp.u.u_bh, bh[0], bh[1], bh[2], shown("hole"));
+      g.uniform4f(dp.u.u_wh, wh[0], wh[1], wh[2], shown("wormhole"));
+      g.uniform1f(dp.u.u_whr, (h > w * 1.1 ? 0.11 : 0.1) / F);
+      g.uniform4f(dp.u.u_neb, neb[0], neb[1], neb[2], shown("nebula"));
+      if (comet && clock - comet.at < COMET) {
+        const t = (clock - comet.at) / COMET;
+        const hd = [0, 1, 2].map((i) => comet!.d0[i] + (comet!.d1[i] - comet!.d0[i]) * t);
+        const hc = inView(hd), vc = inView([0, 1, 2].map((i) => comet!.d1[i] - comet!.d0[i]));
+        const vl = Math.hypot(vc[0], vc[1], vc[2]) || 1;
+        g.uniform4f(dp.u.u_comet, hc[0], hc[1], hc[2], clock - comet.at);
+        g.uniform3f(dp.u.u_cometV, vc[0] / vl, vc[1] / vl, vc[2] / vl);
+      } else g.uniform4f(dp.u.u_comet, 0, 0, -1, -1);
       g.uniform1f(dp.u.u_bhr, (h > w * 1.1 ? 0.1 : 0.095) / F);
-      g.uniform4f(dp.u.u_qso, qso[0], qso[1], qso[2], deepSky.qso ? deepK * seenFar.quasar : 0);
+      g.uniform4f(dp.u.u_qso, qso[0], qso[1], qso[2], shown("quasar"));
       const sn = new Float32Array(12);
       for (let i = 0; i < 3; i++) {
         const n = novae[i];
@@ -2252,6 +2360,16 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
         novaNext = 22 + rnd() * 16;
       }
     }
+    // And now and then a comet crosses the frame, from one side towards the other.
+    if (away > 0.9) {
+      cometNext -= dt;
+      if (cometNext <= 0 && w) {
+        const left = rnd() < 0.5, y0 = -0.5 + rnd() * 1.1;
+        comet = { d0: along(B, left ? -1.15 : 1.15, y0, lens[0], lens[1]), d1: along(B, left ? 0.35 : -0.35, y0 + (rnd() - 0.6) * 0.5, lens[0], lens[1]), at: clock };
+        cometNext = 45 + rnd() * 30;
+      }
+    }
+    if (comet && clock - comet.at < COMET) moving = true;
     // A supernova in view keeps the scene drawing every frame.
     if (novae.some((n) => clock - n.at < NOVA)) moving = true;
     // The camera keeps the orbit of wherever it is, so what is near it drifts
@@ -2288,8 +2406,8 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     // After a few seconds of that, a quarter of them: it is a still sky behind someone reading.
     const calm = away > 0.97 && !moving && !grab && Math.abs(look.wantAz - look.az) + Math.abs(look.wantEl - look.el) < 2e-4;
     quiet = calm ? quiet + dt : 0;
-    if (calm && ++skipped < (quiet > 4 ? 4 : 2)) {
-      // not this frame
+    if (resting || (calm && ++skipped < (quiet > 4 ? 4 : 2))) {
+      // not this frame (or none at all, while the window is covered)
     } else {
       skipped = 0;
       if (gap && born > 2 && !calm) ease(gap);
@@ -2390,6 +2508,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     },
     stage(kind, cruise, ch, nx, ny) {
       staged[kind] = { cruise, ch, nx, ny };
+    },
+    rest(on) {
+      resting = on;
     },
     show(kind, v) {
       seenFar[kind] = Math.max(0, Math.min(1, v));

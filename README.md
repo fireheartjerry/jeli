@@ -43,7 +43,12 @@ npm run build    # static output in dist/
   its remnant, the neutron star left, its quarks, and strange matter. `deeptime.ts`: the eras of the
   universe's future, black holes evaporating by Hawking radiation, the heat death, the quantum vacuum
   and a false vacuum. Every number in their captions is from the physics literature, and hedged
-  where the physics is.
+  where the physics is. Four more: `bigbang.ts` (inflation to the first galaxies, colours from
+  blackbody temperature), `horizon.ts` (falling into a black hole of 100 million suns: every pixel
+  follows its ray of light along its real path, in and past the horizon), `merger.ts` (two neutron
+  stars, their gravitational waves as moving markers on GW170817's real chirp, the kilonova, and
+  iron seeding gold), and `cosmicweb.ts` (one logarithmic zoom from the planets, at their real
+  positions, to the cosmic microwave background).
 - The footer is the same move run backwards, home to the closed sphere. The pointer leans the
   camera, and a drag on the cover or the footer swings it before it returns to its mark. 16 Psyche
   and the boulders near it are real meshes (`src/scripts/geo/psyche.ts`), built from the seed in

@@ -7,15 +7,18 @@
  * A scene is only drawn while its sequence is on screen. A sequence whose
  * scene cannot run (no WebGL2) is taken out of the page.
  */
-import { mountSupernova } from "./supernova";
-import { mountDeepTime } from "./deeptime";
-import { mountHorizon } from "./horizon";
-import { mountBigBang } from "./bigbang";
-import { mountMerger } from "./merger";
-import { mountCosmicWeb } from "./cosmicweb";
-
+type Scene = { draw(u: number, t: number): void } | null;
+// Each scene's code is fetched only when its sequence comes near, so none of it weighs on the page's first load.
+const mounts: Record<string, () => Promise<(c: HTMLCanvasElement) => Scene>> = {
+  supernova: () => import("./supernova").then((m) => m.mountSupernova),
+  deeptime: () => import("./deeptime").then((m) => m.mountDeepTime),
+  horizon: () => import("./horizon").then((m) => m.mountHorizon),
+  bigbang: () => import("./bigbang").then((m) => m.mountBigBang),
+  merger: () => import("./merger").then((m) => m.mountMerger),
+  cosmicweb: () => import("./cosmicweb").then((m) => m.mountCosmicWeb),
+};
 const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const mounts = { supernova: mountSupernova, deeptime: mountDeepTime, horizon: mountHorizon, bigbang: mountBigBang, merger: mountMerger, cosmicweb: mountCosmicWeb } as const;
+const idle = (fn: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 60));
 const covering = new Set<Element>();
 
 for (const seq of document.querySelectorAll<HTMLElement>("[data-seq]")) {
@@ -25,7 +28,7 @@ for (const seq of document.querySelectorAll<HTMLElement>("[data-seq]")) {
   const at = steps.map((s) => +s.dataset.at!);
   const scale = seq.querySelector<HTMLElement>("[data-seq-scale]");
   const bar = seq.querySelector<HTMLElement>("[data-seq-bar]");
-  let scene: { draw(u: number, t: number): void } | null = null;
+  let scene: Scene = null;
   let raf = 0, shown = -1, on = false;
   const t0 = performance.now();
 
@@ -52,18 +55,27 @@ for (const seq of document.querySelectorAll<HTMLElement>("[data-seq]")) {
     }
   };
 
+  // Two screens ahead, while the page is idle: fetch the scene, set it up, and draw it once into
+  // the canvas, so the work of building its shaders is done before it is on screen, not as it arrives.
+  let ready: Promise<Scene> | null = null;
+  const prepare = () =>
+    (ready ??= new Promise<Scene>((done) =>
+      idle(async () => {
+        const make = await mounts[seq.dataset.seq!]?.().catch(() => null);
+        const made = make?.(canvas) ?? null;
+        if (!made) seq.setAttribute("data-off", "");
+        else made.draw(0, 0);
+        done(made);
+      }),
+    ));
+  new IntersectionObserver(([e]) => e.isIntersecting && prepare(), { rootMargin: "200% 0px" }).observe(seq);
+
   new IntersectionObserver(
-    ([e]) => {
+    async ([e]) => {
       if (e.isIntersecting && !on) {
-        // The scene is set up the first time it nears the window, not before.
-        if (!scene) {
-          scene = mounts[seq.dataset.seq as keyof typeof mounts]?.(canvas) ?? null;
-          if (!scene) {
-            seq.setAttribute("data-off", "");
-            return;
-          }
-        }
         on = true;
+        scene = await prepare();
+        if (!scene || !on) return;
         raf = requestAnimationFrame(frame);
       } else if (!e.isIntersecting && on) {
         on = false;

@@ -4,14 +4,6 @@ import { fingerprint, hex } from "../scripts/worldline";
 const SEED = "yuzeli";
 const seedHex = hex(fingerprint(SEED));
 
-// The cover's contents: the five facts a reader should leave with, each a way in.
-const ledger = [
-  { k: "Schulich Leader Scholarship", v: "$100K+", href: "#record" },
-  { k: "NeurIPS 2026 workshops", v: "sole author", href: "#research" },
-  { k: "TopsOJ, founder", v: "100,000+ users", href: "#work" },
-  { k: "Waterloo Defence", v: "Software Lead", href: "#work" },
-  { k: "Mathos AI (YC W24)", v: "engineering intern", href: "#work" },
-];
 ---
 
 {/*
@@ -69,18 +61,6 @@ const ledger = [
       </p>
     </div>
 
-    <ol class="ledger" aria-label="At a glance">
-      {ledger.map((row, i) => (
-        <li style={`--i:${i}`}>
-          {/* Under the pointer the value rolls over into the accent (.roll) and a hairline draws along the cell's top edge ([data-wire]); both are in global.css. */}
-          <a href={row.href} data-wire>
-            <span class="k">{row.k}</span>
-            <span class="dots" aria-hidden="true"></span>
-            <span class="v cm roll"><span>{row.v}</span></span>
-          </a>
-        </li>
-      ))}
-    </ol>
 
     {/* Narrow screens have no index rail, so the sections are listed here as plain links. */}
     <nav class="jump" aria-label="Sections">
@@ -147,22 +127,21 @@ const ledger = [
       linear-gradient(180deg, rgb(6 8 13 / 0.88), rgb(6 8 13 / 0.62) 7%, transparent 17%);
   }
 
-  /* Legend top left, the stars filling the right, the name bottom left, the ledger along the foot. */
+  /* Legend top left, the stars filling the right, the name low on the left. */
   .frame {
     pointer-events: none;
     min-height: max(100svh, 640px);
     display: grid;
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    grid-template-rows: 1fr auto auto;
-    grid-template-areas: "legend ." "id ." "ledger ledger";
+    grid-template-rows: 1fr auto;
+    grid-template-areas: "legend ." "id .";
     column-gap: clamp(32px, 6vw, 96px);
     padding-top: calc(var(--bar) + clamp(20px, 4.4svh, 44px));
     padding-bottom: clamp(24px, 4svh, 40px);
   }
 
   .legend,
-  .id,
-  .ledger {
+  .id {
     pointer-events: auto;
   }
   .legend {
@@ -247,7 +226,7 @@ const ledger = [
     animation: rise-in var(--t-arrive) var(--ease-out) 0.25s backwards;
   }
   h1 {
-    font-size: clamp(72px, min(12.6vw, 21.5svh), 196px);
+    font-size: clamp(72px, min(12.6vw, 21.5svh), 268px);
     line-height: 0.84;
     letter-spacing: -0.048em;
     font-weight: 500;
@@ -261,7 +240,7 @@ const ledger = [
     vocabulary. The name rises by the letter inside its word; every other
     block rises from behind its own foot (it is moved down by its height and
     cut off at its foot by as much, so the edge it comes up through stays put);
-    the ledger's rule is drawn from the left and its dividers grow down from it.
+    the small print's rules are drawn from the left.
     It waits for the scene, so that type and scene arrive together, but never
     for more than a third of a second (Base.astro's inline script lets it go).
   */
@@ -311,69 +290,6 @@ const ledger = [
   .cue {
     display: none;
   }
-
-  /* The ledger: a plate of five facts along the foot of the cover. */
-  .ledger {
-    grid-area: ledger;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    margin-top: clamp(22px, 4svh, 40px);
-    position: relative;
-    border-top: 1px solid transparent;
-  }
-  /* Its rule is drawn from the left; each divider grows down from the rule as the rule reaches it. */
-  .ledger::before {
-    content: "";
-    position: absolute;
-    inset: -1px 0 auto;
-    height: 1px;
-    background: var(--hair);
-    transform-origin: left;
-    animation: draw-x var(--t-arrive) var(--ease-out) 0.7s backwards;
-  }
-  .ledger li {
-    position: relative;
-  }
-  .ledger li + li::before {
-    content: "";
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 1px;
-    background: var(--hair);
-    transform-origin: top;
-    animation: draw-y var(--t-state) var(--ease-io) backwards;
-    animation-delay: calc(0.82s + var(--i) * 70ms);
-  }
-  /* And in each cell the value comes up into its slot, its label from behind its own foot. */
-  .ledger .v > span {
-    animation: slot-in var(--t-arrive) var(--ease-out) backwards;
-    animation-delay: calc(0.9s + var(--i) * 70ms);
-  }
-  .ledger .k {
-    animation: rise-in var(--t-arrive) var(--ease-out) backwards;
-    animation-delay: calc(0.96s + var(--i) * 70ms);
-  }
-  .ledger a {
-    display: flex;
-    flex-direction: column-reverse;
-    gap: 3px;
-    height: 100%;
-    padding: 14px 16px 2px;
-    color: var(--ink-3);
-    transition:
-      color var(--t-press) var(--ease-io),
-      --u var(--t-press) var(--ease-io);
-  }
-  .ledger li:first-child a {
-    padding-left: 0;
-  }
-  /* The cell's hairline lies on the ledger's own rule, and over the first pixel of the divider beside it. */
-  .ledger a::before {
-    inset: -1px 0 auto;
-  }
-  .ledger li + li a::before {
-    left: -1px;
-  }
   .k {
     font-size: 13.5px;
     line-height: 1.35;
@@ -390,16 +306,6 @@ const ledger = [
     color: var(--ink);
     white-space: nowrap;
   }
-  .ledger a:hover,
-  .ledger a:focus-visible {
-    color: var(--ink-2);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .ledger a {
-      transition: none;
-    }
-  }
-
   /* With reduced motion the cover is simply there: nothing on it arrives. */
   @media (prefers-reduced-motion: reduce) {
     .hero *,
@@ -409,7 +315,16 @@ const ledger = [
     }
   }
 
-  /* Short windows: keep the name and the ledger, let the small print go. */
+  /* Large screens: the legend's type grows with the page. */
+  @media (min-width: 1800px) {
+    .legend { max-width: 380px; font-size: 15px; }
+    .lede { max-width: 34ch; }
+  }
+  @media (min-width: 2300px) {
+    .legend { max-width: 440px; font-size: 16.5px; }
+  }
+
+  /* Short windows: keep the name, let the small print go. */
   @media (max-height: 800px) and (min-width: 881px) {
     .frame { padding-top: calc(var(--bar) + 14px); padding-bottom: 20px; }
     .fine { display: none; }
@@ -418,8 +333,6 @@ const ledger = [
     .id { padding-top: 16px; }
     h1 { font-size: clamp(72px, min(12.6vw, 18svh), 196px); }
     .lede { margin-top: 14px; font-size: 17px; }
-    .ledger { margin-top: 18px; }
-    .ledger a { padding-top: 10px; }
   }
   @media (max-height: 660px) and (min-width: 881px) {
     .tele { display: none; }
@@ -435,7 +348,7 @@ const ledger = [
   }
 
   /* Phones and small tablets: the stars on top, then everything in one column,
-     and the ledger becomes a list with dotted leaders. */
+     and the section links run along the foot. */
   @media (max-width: 880px) {
     .frame {
       display: flex;
@@ -499,14 +412,6 @@ const ledger = [
     :global(html[data-flat]) .cue .live {
       display: none;
     }
-    /* The ledger is a list here: a rule over it and under each line, none to draw across or down. */
-    .ledger {
-      border-top-color: var(--hair);
-    }
-    .ledger::before,
-    .ledger li + li::before {
-      content: none;
-    }
     .hero .legend .hint,
     .hero .legend .held,
     :global(html[data-motion]:not([data-flat])) .hero .legend .hint {
@@ -516,7 +421,6 @@ const ledger = [
       color: inherit;
     }
     .id { order: 1; }
-    .ledger { order: 2; }
     .jump {
       order: 3;
       display: flex;
@@ -538,28 +442,6 @@ const ledger = [
     }
     .lede {
       max-width: 40ch;
-    }
-    .ledger {
-      display: block;
-      margin-top: 32px;
-      font-size: 15px;
-    }
-    .ledger li + li {
-      border-left: 0;
-    }
-    .ledger li + li a::before {
-      left: 0;
-    }
-    .ledger li {
-      border-bottom: 1px solid var(--hair);
-    }
-    .ledger a,
-    .ledger li:first-child a {
-      flex-direction: row;
-      align-items: baseline;
-      gap: 10px;
-      padding: 12px 0;
-      color: var(--ink-2);
     }
     .k {
       font-size: 15px;

@@ -26,7 +26,13 @@ npm run build    # static output in dist/
   camera keeps going, past Saturn, Uranus and Neptune and through the Kuiper belt to 140 AU, rising
   over the ecliptic so the orbits open into rings, until the sphere is one gold star; its distance
   is carried in its logarithm, so the sphere shrinks by the same factor for every screen scrolled.
-  The footer is the same move run backwards, home to the closed sphere. The pointer leans the
+  Out past the planets the sky holds three things far beyond the Solar System, each framed in an
+  open stretch of page between two sections (`src/components/Interlude.astro`): a spinning black
+  hole drawn the way Interstellar drew Gargantua (its disc beamed brighter on the side coming
+  towards the camera, the far side lensed up over the shadow, the sky behind bent into an Einstein
+  ring), a supernova whose shell keeps spreading, and a quasar with its two jets. They are one
+  extra full-screen pass (`FS_DEEP` in `cosmos.ts`); a supernova also goes off now and then, and as
+  each new section is reached. The footer is the same move run backwards, home to the closed sphere. The pointer leans the
   camera, and a drag on the cover or the footer swings it before it returns to its mark. 16 Psyche
   and the boulders near it are real meshes (`src/scripts/geo/psyche.ts`), built from the seed in
   idle slices and hung at fixed places in the world. The galaxy behind is painted once into a
@@ -51,7 +57,9 @@ npm run build    # static output in dist/
   is carried between its heading and its page, and by night the sky is carried under the page as a
   still (Chrome photographs a live WebGL canvas as a white sheet). A change of theme is a
   terminator crossing the window (`src/scripts/theme.ts`).
-- Every other figure is a plate (`src/components/Figure.astro`) around one SVG or canvas. The SVG
+- Every other figure is a plate (`src/components/Figure.astro`) around one SVG or canvas. Under a
+  mouse a plate catches the light where the pointer is, its edge brightens nearest it, and its
+  corner marks close in; a readout that changes comes up in the accent. The SVG
   is rendered at build time in its finished state, so the page reads without JavaScript and under
   `prefers-reduced-motion`. `src/scripts/figures.ts` lazy-loads `src/scripts/figures/<name>.ts` for
   each `[data-fig]` as it nears the viewport. `tools/FIGURES.md` is the contract a new figure follows.

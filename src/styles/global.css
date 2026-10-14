@@ -306,6 +306,13 @@ button {
   letter-spacing: 0;
 }
 
+/* Wide windows get a wider page, so the column is not an island in the middle of a large screen. */
+@media (min-width: 1800px) {
+  :root { --measure: 1400px; }
+}
+@media (min-width: 2300px) {
+  :root { --measure: 1680px; }
+}
 .wrap {
   width: 100%;
   max-width: calc(var(--measure) + 2 * var(--gutter));

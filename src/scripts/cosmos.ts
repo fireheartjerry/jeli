@@ -128,6 +128,12 @@ export interface Cosmos {
   turn(n: number): void;
   /** Put the camera where the scroll says at once (the page has cut, not travelled). With `settled`, the opening is skipped too. */
   snap(settled?: boolean): void;
+  /** Hang one of the far things on the sky so it is at (nx, ny) on the screen when the take is at `cruise`, in chapter `ch`. */
+  stage(kind: "hole" | "quasar", cruise: number, ch: number, nx: number, ny: number): void;
+  /** How much of a staged far thing is shown, 0 to 1. */
+  show(kind: "hole" | "quasar", v: number): void;
+  /** A star goes off at (nx, ny) on the screen now; `size` scales it. */
+  nova(nx?: number, ny?: number, size?: number): void;
   /** The scene as it is at this instant, drawn once more and copied to a canvas of its own. */
   still(): HTMLCanvasElement | null;
   run(on: boolean): void;
@@ -280,6 +286,132 @@ void main() {
   o = vec4(max(c + (n - 0.5) / 255.0, 0.0), 0.0);
 }`;
 
+// ---- deep sky: what the camera finds out past the planets ----
+// Three things far beyond the Solar System, drawn as light on the sky behind
+// it: a black hole with its disc, a quasar, and the supernovae that go off as
+// the reader moves from one part of the page to the next. Each is a direction
+// on the sky, so each turns with the camera like the stars around it.
+const FS_DEEP = FRAG_HEAD + NOISE + `
+in vec2 v_q;
+uniform sampler2D u_sky;
+uniform mat3 u_look; // from the camera's frame to the galaxy's
+uniform vec4 u_lens;
+uniform float u_gain;
+uniform float u_clock;
+uniform vec4 u_bh; // the black hole: its direction in the camera's frame, and how much of it is seen
+uniform float u_bhr; // the angular radius of its shadow
+uniform vec4 u_qso; // the quasar: direction, seen
+uniform vec4 u_sn[3]; // supernovae: direction, and seconds since each went off (negative: none)
+const float GLAT = ${GALAXY.lat.toFixed(3)};
+float cellHash(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+// The sky in one direction: the painted galaxy, and a fine grain of stars.
+vec3 backdrop(vec3 r) {
+  vec3 d = u_look * r;
+  float lat = asin(clamp(d.y, -1.0, 1.0));
+  vec3 c = vec3(0.0);
+  if (abs(lat) < GLAT) c = texture(u_sky, vec2(atan(d.z, d.x) / 6.2831853 + 0.5, lat / (2.0 * GLAT) + 0.5)).rgb * u_gain;
+  vec3 q = d * 900.0, cell = floor(q);
+  vec3 at = vec3(cellHash(cell + 1.7), cellHash(cell + 3.1), cellHash(cell + 5.3)) * 0.64 + 0.18;
+  float s = smoothstep(0.32, 0.04, length(q - cell - at)) * step(0.9, cellHash(cell + 9.4)) * (pow(cellHash(cell), 6.0) * 2.2 + 0.18);
+  return c + mix(vec3(1.0, 0.9, 0.8), vec3(0.82, 0.9, 1.0), cellHash(cell + 2.2)) * s * 0.55;
+}
+void frame(vec3 b, out vec3 e1, out vec3 e2) { e1 = normalize(cross(b, vec3(0.0, 1.0, 0.0))); e2 = cross(e1, b); }
+// Gas going round: streaks drawn out along the orbit, sheared as it goes (inner rings lap outer ones).
+float flow(float R, float ph, float t) {
+  float spin = t * 0.75 * pow(1.8 / max(R, 1.8), 1.5);
+  vec2 c = vec2(cos(ph - spin), sin(ph - spin));
+  return fbm3(vec3(R * 2.4, c * 2.3), 4) * 0.75 + fbm3(vec3(R * 9.0, c * 0.9), 2) * 0.35;
+}
+void main() {
+  vec3 r = normalize(vec3((v_q.x - u_lens.z) * u_lens.x, (v_q.y - u_lens.w) * u_lens.y, -1.0));
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  vec3 e1, e2;
+
+  if (u_bh.w > 0.002 && dot(r, u_bh.xyz) > 0.0) {
+    vec3 b = u_bh.xyz;
+    frame(b, e1, e2);
+    vec2 p = vec2(dot(r, e1), dot(r, e2)) / u_bhr;
+    float rr = length(p);
+    if (rr < 15.0) {
+      float k = u_bh.w;
+      // Light from behind is bent round it: a ray that passes at p left the sky at p - E^2 p / |p|^2.
+      // Close in, everything behind is drawn out into the Einstein ring; inside, the shadow.
+      const float E = 2.3;
+      vec2 beta = p - p * (E * E) / max(rr * rr, 1e-3);
+      beta *= min(1.0, 60.0 / max(length(beta), 1e-3));
+      vec3 bg = backdrop(normalize(b + (beta.x * e1 + beta.y * e2) * u_bhr)) * smoothstep(0.985, 1.03, rr);
+      float cover = (1.0 - smoothstep(8.0, 15.0, rr)) * k;
+
+      // The disc, seen almost edge on and rolled a little.
+      const float roll = -0.12, tilt = 0.17;
+      vec2 q = mat2(cos(roll), sin(roll), -sin(roll), cos(roll)) * p;
+      vec2 dd = vec2(q.x, q.y / tilt);
+      float R = length(dd);
+      float ph = atan(dd.y, dd.x);
+      // The side coming at the camera is beamed: brighter and bluer. The other is dimmer and redder.
+      float D = 1.0 - 0.36 * dd.x / max(R, 1e-3);
+      float D3 = D * D * D;
+      float band = smoothstep(1.45, 1.95, R) * (1.0 - smoothstep(6.0, 10.0, R));
+      float near = q.y < 0.0 ? 1.0 : smoothstep(1.0, 1.06, rr); // the far half goes behind the shadow
+      float disc = band * pow(2.0 / max(R, 2.0), 1.7) * (0.45 + 1.1 * flow(R, ph, u_clock)) * D3 * near;
+      // The far side of the disc, seen again over the top of the shadow and under it, bent round by the hole.
+      float ps = atan(q.y, q.x);
+      float halo = exp(-(rr - 1.07) / 0.62) * smoothstep(1.03, 1.12, rr) * (1.0 - smoothstep(2.6, 3.4, rr)) * (q.y > 0.0 ? 1.0 : 0.7);
+      halo *= (0.4 + 1.0 * flow(2.4 + (rr - 1.05) * 3.5, ps * 1.0, u_clock)) * mix(0.35, 1.0, abs(q.y) / max(rr, 1e-3)) * (1.0 - 0.3 * q.x / max(rr, 1e-3));
+      // The photon ring: light that went round once before it got away.
+      float ring = exp(-pow((rr - 1.035) / 0.017, 2.0)) * 1.2;
+      // Exposed like film: the brightest gas holds its colour instead of burning out.
+      float lum = 1.0 - exp(-(disc + halo * 1.15 + ring) * 1.35);
+      vec3 warm = vec3(1.0, 0.52, 0.2), hot = vec3(1.0, 0.92, 0.8), blue = vec3(0.8, 0.88, 1.0);
+      vec3 tint = mix(mix(warm, hot, clamp(lum * 1.1, 0.0, 1.0)), blue, clamp((D - 1.0) * 0.9, 0.0, 0.6));
+      vec3 glow = vec3(1.0, 0.7, 0.45) * exp(-rr / 2.4) * 0.05;
+      col += bg * cover + (tint * lum * 0.85 + glow) * k;
+      a = cover;
+    }
+  }
+
+  if (u_qso.w > 0.002 && dot(r, u_qso.xyz) > 0.0) {
+    frame(u_qso.xyz, e1, e2);
+    vec2 p = vec2(dot(r, e1), dot(r, e2)) / 0.0062;
+    float rr = length(p);
+    if (rr < 70.0) {
+      // A point brighter than its whole galaxy, with two jets: the near one bright, the one going away faint.
+      float core = exp(-rr * 1.1) * 2.6 + exp(-rr * 0.2) * 0.22 + (exp(-abs(p.y) * 3.0) * exp(-abs(p.x) * 0.12) + exp(-abs(p.x) * 3.0) * exp(-abs(p.y) * 0.12)) * 0.35;
+      vec2 ax = vec2(0.77, 0.64);
+      float t = dot(p, ax), w = dot(p, vec2(-ax.y, ax.x));
+      float jet = exp(-abs(w) / (0.3 + 0.04 * abs(t))) * exp(-abs(t) / 30.0) * smoothstep(1.0, 3.5, abs(t)) * (t > 0.0 ? 1.0 : 0.35);
+      jet *= 0.55 + 0.45 * sin(abs(t) * 0.8 - u_clock * 1.4);
+      float host = exp(-length(p / vec2(10.0, 4.6)) * 1.7) * 0.16;
+      col += (vec3(0.96, 0.96, 1.0) * core + vec3(0.55, 0.66, 1.0) * jet * 0.8 + vec3(1.0, 0.85, 0.7) * host) * u_qso.w;
+    }
+  }
+
+  for (int i = 0; i < 3; i++) {
+    float t = u_sn[i].w;
+    // (The direction's length is the size it is drawn at.)
+    float sc = length(u_sn[i].xyz);
+    vec3 sd = u_sn[i].xyz / max(sc, 1e-4);
+    if (t < 0.0 || dot(r, sd) <= 0.0) continue;
+    frame(sd, e1, e2);
+    vec2 p = vec2(dot(r, e1), dot(r, e2)) / (0.0024 * sc);
+    float rr = length(p);
+    if (rr > 170.0) continue;
+    // A star goes off: up in a third of a second, down over the next few, and the shell it threw keeps going.
+    float L = smoothstep(0.0, 0.35, t) * exp(-max(t - 0.35, 0.0) / 1.7);
+    float core = L * (exp(-rr * 0.85) * 3.2 + exp(-rr * 0.11) * 0.45);
+    float spikes = L * (exp(-abs(p.y) * 2.4) * exp(-abs(p.x) * 0.055) + exp(-abs(p.x) * 2.4) * exp(-abs(p.y) * 0.055)) * 0.8;
+    float R = 4.0 + 12.0 * sqrt(t);
+    float fil = 0.45 + 0.9 * noise3(vec3(p / max(rr, 1e-3) * 5.0, t * 0.15) + float(i) * 7.0);
+    float shell = exp(-pow((rr - R) / (0.05 * R + 0.5), 2.0)) * exp(-t / 4.5) * smoothstep(0.2, 1.4, t) * 0.15 * fil;
+    vec3 hot = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.72, 0.45), smoothstep(0.6, 4.0, t));
+    col += hot * (core + spikes) + (vec3(1.0, 0.62, 0.5) * 0.6 + vec3(0.5, 0.7, 1.0) * 0.4) * shell;
+  }
+
+  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  o = vec4(max(col + (n - 0.5) / 255.0 * step(0.0005, a + dot(col, vec3(1.0))), 0.0), a);
+}`;
+
 // ---- far stars: fixed on the sky, so they only turn with the camera ----
 const VS_SKY = HEAD + `
 in vec4 a_s; // direction xyz, brightness
@@ -417,6 +549,7 @@ uniform vec3 u_cam;
 uniform float u_scale; // pixels per AU at unit distance
 uniform float u_building; // 0 at rest, 1 while collectors are going up
 out vec2 v_q; out float v_face; out float v_fresh; out float v_seed; out float v_glint; out float v_far; out float v_px; out float v_back;
+out float v_spec; out float v_mat;
 void main() {
   float k = a_c.x;
   float fam = floor(k / ${RINGS / 3}.0), j = k - fam * ${RINGS / 3}.0;
@@ -429,9 +562,16 @@ void main() {
   float ang = TAU * a_c.y + u_time * TAU * ${Math.sqrt(1 - BETA).toFixed(5)} / pow(r, 1.5);
   vec3 p = r * (cos(ang) * U + sin(ang) * V) + cross(U, V) * a_j.y;
   if (a_c.w > u_p) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); return; }
-  vec3 n = -normalize(p); // every panel faces the Sun
-  vec3 t1 = normalize(cos(ang) * V - sin(ang) * U); // along its orbit
+  // Every panel faces the Sun, give or take the few degrees each one is steered by to keep its station.
+  float s1 = fract(a_c.z * 13.7), s2 = fract(a_c.z * 29.3), s3 = fract(a_c.z * 7.31);
+  vec3 o1 = normalize(cos(ang) * V - sin(ang) * U), o2 = cross(-normalize(p), o1);
+  vec3 n = normalize(-normalize(p) + o1 * (s1 - 0.5) * 0.14 + o2 * (s2 - 0.5) * 0.14);
+  // And each is turned about its own axis, and built to one of a few sizes.
+  float roll = s3 * TAU;
+  vec3 t1 = normalize(cross(n, o2)) * cos(roll) + o2 * sin(roll);
+  t1 = normalize(t1 - n * dot(t1, n));
   vec3 t2 = cross(n, t1);
+  float size = 0.62 + 0.62 * fract(a_c.z * 53.1);
   vec4 centre = u_proj * u_view * vec4(p, 1.0);
   // Far panels would vanish below a pixel; they are held at a glint's size instead.
   float px = ${HEX} * u_scale / max(centre.w, 0.02);
@@ -441,11 +581,17 @@ void main() {
   v_fresh = smoothstep(u_p - mix(0.012, 0.07, smoothstep(6.0, 48.0, px / u_px)), u_p, a_c.w) * u_building;
   float open = 1.0 - v_fresh, turn = v_fresh * 2.1;
   vec2 c = mat2(cos(turn), sin(turn), -sin(turn), cos(turn)) * a_q * mix(0.16, 1.0, open * open * (3.0 - 2.0 * open));
-  gl_Position = u_proj * u_view * vec4(p + (c.x * t1 + c.y * t2) * ${HEX} * grow, 1.0);
+  gl_Position = u_proj * u_view * vec4(p + (c.x * t1 + c.y * t2) * ${HEX} * grow * size, 1.0);
   v_q = a_q;
   v_px = px * grow;
   vec3 out_ = normalize(u_cam - p);
   v_face = dot(n, out_); // above zero we see the sunlit side
+  // The foil is a mirror: what the camera sees of the Sun in it.
+  vec3 L = -normalize(p);
+  // (Only on panels seen large enough to tell apart: on a far sphere of tiny panels a glint would flicker from frame to frame.)
+  v_spec = pow(max(0.0, dot(reflect(-L, n), out_)), 180.0) * smoothstep(2.5, 9.0, px / u_px);
+  // What it is made of: a solar cell, gold foil, or aluminised film.
+  v_mat = fract(a_c.z * 31.7);
   // How nearly this panel stands on the line from the camera to the Sun.
   v_back = pow(max(0.0, dot(-out_, normalize(-u_cam))), 12.0);
   v_seed = a_c.z;
@@ -455,6 +601,7 @@ void main() {
 }`;
 const FS_PANEL = FRAG_HEAD + `
 in vec2 v_q; in float v_face; in float v_fresh; in float v_seed; in float v_glint; in float v_far; in float v_px; in float v_back;
+in float v_spec; in float v_mat;
 uniform float u_heat;
 uniform float u_emit; // 1: write only the light this panel gives off, for the shafts and bloom
 void main() {
@@ -478,12 +625,24 @@ void main() {
   float hub = (1.0 - smoothstep(0.05, 0.08, rad)) * detail;
   vec3 col;
   if (v_face > 0.0) {
-    // The sunlit side: gold foil, a slow sheen across it, darker frame and seams.
-    vec3 foil = mix(vec3(0.99, 0.76, 0.4), vec3(1.0, 0.93, 0.74), v_seed);
-    float sheen = 0.82 + 0.18 * (v_q.x * 0.55 - v_q.y * 0.83);
-    col = foil * sheen * (0.8 + 0.2 * v_seed);
+    // The sunlit side. Most of the swarm is solar cells, dark blue under a grid of
+    // contacts; the rest is gold foil and aluminised film. All of it is glossy, so
+    // what decides how bright a panel looks is how nearly it shows the camera the Sun.
+    float sheen = 0.86 + 0.14 * (v_q.x * 0.55 - v_q.y * 0.83);
+    vec3 base;
+    if (v_mat < 0.6) {
+      float grid = max(1.0 - smoothstep(0.0, 0.05, abs(fract(v_q.x * 5.0) - 0.5) * 2.0 - 0.9), 1.0 - smoothstep(0.0, 0.05, abs(fract(v_q.y * 5.0) - 0.5) * 2.0 - 0.9)) * detail;
+      base = mix(vec3(0.05, 0.075, 0.14), vec3(0.11, 0.13, 0.2), v_seed) + vec3(0.32, 0.3, 0.28) * grid * 0.35;
+      base += vec3(0.85, 0.72, 0.5) * 0.07; // the Sun's light scattered off the glass
+    } else if (v_mat < 0.9) {
+      base = mix(vec3(0.78, 0.55, 0.26), vec3(0.95, 0.76, 0.42), v_seed) * 0.58;
+    } else {
+      base = mix(vec3(0.62, 0.62, 0.6), vec3(0.8, 0.78, 0.72), v_seed) * 0.4;
+    }
+    col = base * sheen;
     col *= 1.0 - 0.42 * frame - 0.22 * spoke - 0.5 * hub;
-    col += vec3(1.0, 0.98, 0.92) * v_glint * 1.7;
+    vec3 sunTint = v_mat < 0.6 ? vec3(1.0, 0.95, 0.88) : (v_mat < 0.9 ? vec3(1.0, 0.82, 0.55) : vec3(1.0, 0.97, 0.92));
+    col += sunTint * (v_spec * 2.4 + v_glint * 1.3);
     col *= mix(0.6, 1.0, smoothstep(0.0, 0.5, v_face)); // dimmer seen edge-on
   } else {
     // The back: almost black, its frame and seams catching a little starlight.
@@ -847,12 +1006,13 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const light = !!opts.light;
 
   type Prog = ReturnType<typeof compile>;
-  let prog: Record<"far" | "sky" | "sun" | "swarm" | "rock" | "tug" | "line" | "big" | "lamp" | "haze" | "haul" | "beam" | "shaft" | "down" | "up" | "mix", Prog>;
+  let prog: Record<"far" | "deep" | "sky" | "sun" | "swarm" | "rock" | "tug" | "line" | "big" | "lamp" | "haze" | "haul" | "beam" | "shaft" | "down" | "up" | "mix", Prog>;
   let paint: Prog;
   try {
     paint = compile(gl, VS_POST, FS_PAINT);
     prog = {
       far: compile(gl, VS_FAR, FS_FAR),
+      deep: compile(gl, VS_FAR, FS_DEEP),
       sky: compile(gl, VS_SKY, FS_SKY),
       sun: compile(gl, VS_SUN, FS_SUN),
       swarm: compile(gl, VS_SWARM, FS_PANEL),
@@ -914,6 +1074,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   }
   const mSky = mesh(prog.sky.p, sky, [["a_s", 4], ["a_t", 1]]);
   const mFar = mesh(prog.far.p, QUAD, [["a_q", 2]]);
+  const mDeep = mesh(prog.deep.p, QUAD, [["a_q", 2]]);
   const mSun = mesh(prog.sun.p, QUAD, [["a_q", 2]]);
   const mHaze = mesh(prog.haze.p, QUAD, [["a_q", 2]]);
 
@@ -1205,6 +1366,8 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   // ---------- camera ----------
   const view = new Float32Array(16), proj = new Float32Array(16);
   const viewWas = new Float32Array(16); // the view one frame ago, for the stars' motion
+  let smeared = 0; // the shutter's smear, eased
+  let deepWarm = false;
   let fresh = true; // nothing to compare the first frame with, or the frame after a cut
   const F = F0;
   // The shot: from just outside the shell, above its first band, back to
@@ -1254,6 +1417,49 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   }
   const B = new Float32Array(9), B0 = new Float32Array(9);
 
+  // ---------- deep sky ----------
+  // Where the black hole and the quasar hang: chosen once, as directions on the
+  // sky, so that each is in frame at a given place in the reading (a way through
+  // the page, and a chapter) and drifts through the frame as the camera turns.
+  const deepSky = { bh: null as number[] | null, qso: null as number[] | null };
+  // Where each is staged: the point of the take and the place on the screen. (Directions are worked
+  // out again each frame from these, so the camera's slow drift round the Sun carries them too.)
+  const staged: Partial<Record<"hole" | "quasar", { cruise: number; ch: number; nx: number; ny: number }>> = {};
+  const seenFar = { hole: 0, quasar: 0 }; // how much of each is shown: each comes up as its stretch of page nears
+  /** The direction on the sky that the camera, far out at that point of the take, sees at (nx, ny) on the screen. */
+  function skyAt(cruise: number, ch: number, nx: number, ny: number) {
+    const a = az + SWEEP + FAR.sweep * cruise + ch * CHAPTER.turn, el = FAR.el;
+    const Bt = new Float32Array(9);
+    basis([Math.cos(el) * Math.sin(a), Math.sin(el), Math.cos(el) * Math.cos(a)], Bt);
+    return along(Bt, nx, ny, spot.far.x * 2 - 1, 1 - spot.far.y * 2);
+  }
+  /** The world direction through (nx, ny) on the screen, for a camera with basis `Bt` and lens shift (ox, oy). */
+  function along(Bt: ArrayLike<number>, nx: number, ny: number, ox: number, oy: number) {
+    const cx = ((nx - ox) * (w / Math.max(1, h))) / F, cy = (ny - oy) / F;
+    const d = [0, 1, 2].map((i) => Bt[i] * cx + Bt[3 + i] * cy + Bt[6 + i]);
+    const l = Math.hypot(d[0], d[1], d[2]);
+    return d.map((v) => v / l);
+  }
+  /** A world direction in the camera's frame. */
+  const inView = (d: number[]) => [view[0] * d[0] + view[4] * d[1] + view[8] * d[2], view[1] * d[0] + view[5] * d[1] + view[9] * d[2], view[2] * d[0] + view[6] * d[1] + view[10] * d[2]];
+  // Supernovae: a star somewhere in frame goes off. Three can be seen at once.
+  const novae: { d: number[]; at: number; size: number }[] = [];
+  const NOVA = 18; // seconds one is seen for, flash and shell together
+  let novaNext = 9; // seconds of deep space until the next one goes off by itself
+  function nova(at?: { nx: number; ny: number }, size = 1) {
+    if (!w) return;
+    for (let tries = 0; tries < 6; tries++) {
+      const nx = at ? at.nx : -0.85 + rnd() * 1.7, ny = at ? at.ny : -0.8 + rnd() * 1.55;
+      const d = along(B, nx, ny, lens[0], lens[1]);
+      // Never on the black hole's disc, nor on the Sun.
+      if (!at && deepSky.bh && d[0] * deepSky.bh[0] + d[1] * deepSky.bh[1] + d[2] * deepSky.bh[2] > 0.97) continue;
+      if (!at && Math.hypot(nx - lens[0], ny - lens[1]) < 0.25) continue;
+      if (novae.length >= 3) novae.shift();
+      novae.push({ d, at: clock, size });
+      return;
+    }
+  }
+
   const smooth = (t: number) => t * t * (3 - 2 * t);
 
   function camera() {
@@ -1299,7 +1505,8 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     // Where the Sun sits when the camera is at the sphere: where the cover has it, or the footer.
     const base = leg.cruise > 0.5 ? spot.end : spot.cover;
     sunX = base.x + (spot.far.x - base.x) * away;
-    sunY = base.y + (base === spot.end ? leg.lift : 0) + (spot.far.y - base.y) * away;
+    // (The footer's lift is for the camera at home: far out it would only push the sky off the screen.)
+    sunY = base.y + (base === spot.end ? Math.min(1.5, leg.lift) * (1 - away) : 0) + (spot.far.y - base.y) * away;
     const ox = sunX * 2 - 1, oy = 1 - sunY * 2 - tilt * s * (1 - away);
     lens[0] = ox;
     lens[1] = oy;
@@ -1735,7 +1942,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     const smear = fresh ? 0 : Math.hypot(view[2] - viewWas[2], view[6] - viewWas[6], view[10] - viewWas[10], view[1] - viewWas[1], view[5] - viewWas[5], view[9] - viewWas[9]) * F * (canvas.height / 2) * 0.5 * 0.7;
     if (galaxy) {
       g.useProgram(prog.far.p);
-      g.uniform1f(prog.far.u.u_smear, smear);
+      // Eased over a few frames, so a camera coming to rest does not bring the faint stars back all at once.
+      smeared += (smear - smeared) * (smear > smeared ? 0.6 : 0.18);
+      g.uniform1f(prog.far.u.u_smear, smeared);
       g.uniformMatrix3fv(prog.far.u.u_look, false, lookG);
       g.uniform4f(prog.far.u.u_lens, aspect / F, 1 / F, lens[0], lens[1]);
       g.uniform1f(prog.far.u.u_gain, GALAXY.gain * night * (1 + 0.5 * away));
@@ -1754,6 +1963,52 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.drawArrays(g.POINTS, 0, mSky.count);
     viewWas.set(view);
     fresh = false;
+
+    // Deep sky, out past the planets.
+    const deepK = smooth(Math.max(0, Math.min(1, (away - 0.55) / 0.4)));
+    // The deep sky's program is drawn once, into one pixel, the first time the sky is up: a driver
+    // finishes a program the first time it is used, and that should not be on the way out to deep space.
+    if (galaxy && !deepWarm) {
+      deepWarm = true;
+      g.enable(g.SCISSOR_TEST);
+      g.scissor(0, 0, 1, 1);
+      g.useProgram(prog.deep.p);
+      g.uniform4f(prog.deep.u.u_bh, 0, 0, -1, 0.01);
+      g.uniform1f(prog.deep.u.u_bhr, 0.01);
+      g.bindVertexArray(mDeep.vao);
+      g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+      g.disable(g.SCISSOR_TEST);
+    }
+    if (galaxy && deepK > 0.002) {
+      for (const [k, at] of Object.entries(staged)) {
+        const d = skyAt(at!.cruise, at!.ch, at!.nx, at!.ny);
+        if (k === "hole") deepSky.bh = d;
+        else deepSky.qso = d;
+      }
+      const dp = prog.deep;
+      g.useProgram(dp.p);
+      g.uniformMatrix3fv(dp.u.u_look, false, lookG);
+      g.uniform4f(dp.u.u_lens, aspect / F, 1 / F, lens[0], lens[1]);
+      g.uniform1f(dp.u.u_gain, GALAXY.gain * night * (1 + 0.5 * away));
+      g.uniform1f(dp.u.u_clock, clock);
+      const bh = deepSky.bh ? inView(deepSky.bh) : [0, 0, 1], qso = deepSky.qso ? inView(deepSky.qso) : [0, 0, 1];
+      g.uniform4f(dp.u.u_bh, bh[0], bh[1], bh[2], deepSky.bh ? deepK * seenFar.hole : 0);
+      g.uniform1f(dp.u.u_bhr, (h > w * 1.1 ? 0.1 : 0.095) / F);
+      g.uniform4f(dp.u.u_qso, qso[0], qso[1], qso[2], deepSky.qso ? deepK * seenFar.quasar : 0);
+      const sn = new Float32Array(12);
+      for (let i = 0; i < 3; i++) {
+        const n = novae[i];
+        const age = n ? clock - n.at : -1;
+        const c = (n && age < NOVA ? inView(n.d) : [0, 0, -1]).map((v) => v * (n?.size ?? 1));
+        sn.set([c[0], c[1], c[2], n && age < NOVA ? age : -1], i * 4);
+      }
+      g.uniform4fv(dp.u.u_sn, sn);
+      g.uniform1i(dp.u.u_sky, 0);
+      g.activeTexture(g.TEXTURE0);
+      g.bindTexture(g.TEXTURE_2D, galaxy);
+      g.bindVertexArray(mDeep.vao);
+      g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+    }
 
     let u = use(prog.line);
     const outer = smooth(Math.min(1, away * 1.7));
@@ -1989,6 +2244,16 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       else moving = true;
     }
     if (clock - chapter.at < CHAPTER.seconds) moving = true;
+    // Far out, now and then, a star somewhere in frame goes off.
+    if (away > 0.9) {
+      novaNext -= dt;
+      if (novaNext <= 0) {
+        nova();
+        novaNext = 22 + rnd() * 16;
+      }
+    }
+    // A supernova in view keeps the scene drawing every frame.
+    if (novae.some((n) => clock - n.at < NOVA)) moving = true;
     // The camera keeps the orbit of wherever it is, so what is near it drifts
     // slowly. Far out a real orbit would take centuries; there it is given a
     // drift of a few pixels a second, enough that the sky is never quite still.
@@ -2123,12 +2388,26 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     pulse() {
       pulsed = clock;
     },
+    stage(kind, cruise, ch, nx, ny) {
+      staged[kind] = { cruise, ch, nx, ny };
+    },
+    show(kind, v) {
+      seenFar[kind] = Math.max(0, Math.min(1, v));
+    },
+    nova(nx, ny, size) {
+      nova(nx === undefined || ny === undefined ? undefined : { nx, ny }, size);
+    },
     turn(n) {
       const to = n * CHAPTER.turn;
       if (to === chapter.to) return;
       chapter.from = chapter.now;
       chapter.to = to;
       chapter.at = clock;
+      // A new part of the page, far out: something goes off to mark it.
+      if (away > 0.9 && n > 0) {
+        nova();
+        novaNext = 22 + rnd() * 16;
+      }
     },
     snap(settled) {
       fresh = true;

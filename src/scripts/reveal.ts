@@ -35,8 +35,10 @@ const where = (el: Element) => {
  */
 const hurry = () => Math.max(1, Math.min(3, Math.abs(speed.now) / (1.2 * window.innerHeight)));
 
-const hold = (els: Element | Element[]) => gsap.set(els, { opacity: 0 });
-const show = (els: Element | Element[]) => gsap.set(els, { opacity: 1, clearProps: "opacity" });
+// (A block with nothing of that kind in it is left alone: GSAP warns about an empty target.)
+const none = (els: Element | Element[]) => Array.isArray(els) && !els.length;
+const hold = (els: Element | Element[]) => none(els) || gsap.set(els, { opacity: 0 });
+const show = (els: Element | Element[]) => none(els) || gsap.set(els, { opacity: 1, clearProps: "opacity" });
 
 /**
  * Lines of type rising into place, in reading order across every element

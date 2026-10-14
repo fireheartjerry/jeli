@@ -73,11 +73,11 @@ take({
 });
 take({
   id: "home.cover.hover",
-  covers: ["hover:nav", "hover:ledger"],
+  covers: ["hover:nav"],
   about: "The header links and the five facts along the foot of the cover, under the pointer.",
   run: async ({ m, page }) => {
     await m.run(5.5);
-    for (const sel of ["[data-bar] nav a.q", "[data-hero] .ledger a"]) {
+    for (const sel of ["[data-bar] nav a.q"]) {
       const n = await page.locator(sel).count();
       for (let i = 0; i < n; i++) {
         const c = await centre(page, sel, i);

@@ -36,7 +36,7 @@ function init(layer: HTMLElement) {
   const hero = document.querySelector<HTMLElement>("[data-hero]");
   const hold = hero?.closest<HTMLElement>("[data-hold]") ?? null;
   const foot = document.querySelector<HTMLElement>("[data-foot]");
-  const ledger = hero?.querySelector<HTMLElement>(".ledger") ?? null;
+  const name = hero?.querySelector<HTMLElement>(".id") ?? null;
   const odo = document.querySelector<HTMLElement>("[data-odo]");
   // A value may be shown in more than one place (the legend, and the line under the cue on a narrow screen).
   const out: Record<string, HTMLElement[]> = {};
@@ -84,7 +84,7 @@ function init(layer: HTMLElement) {
   const free = (x: number, y: number, wide_: number) => !blocks.some((r) => x + wide_ > r.left - 16 && x < r.right + 16 && y > r.top - 14 && y < r.bottom + 14);
   const survey = () => {
     const from = home ? foot : hero;
-    blocks = from ? [...from.querySelectorAll(home ? ".cap, .big, .meta" : ".legend, .id, .ledger")].map((el) => el.getBoundingClientRect()) : [];
+    blocks = from ? [...from.querySelectorAll(home ? ".cap, .big, .meta" : ".legend, .id")].map((el) => el.getBoundingClientRect()) : [];
   };
   // How wide each name is, measured once the text face is in.
   const widths: Record<string, number> = {};
@@ -93,6 +93,9 @@ function init(layer: HTMLElement) {
   // Where the camera is on the take, from the scroll. Measured on refresh, never on a scroll frame.
   let holdTop = 0, holdLen = 1, coverEnd = 0, max = 1, leave = 1, land = 1, home = false;
   let heads: number[] = []; // where each section's title is, down the page
+  // The stretches of open sky between parts of the page (Interlude.astro), and how open the sky is now: 1 with one centred.
+  const interludes = [...document.querySelectorAll<HTMLElement>("[data-interlude]")].map((el) => ({ el, kind: el.dataset.interlude!, top: 0, h: 1, fired: false }));
+  let open = 0;
   let box = { w: 1, h: 1 }; // the canvas, CSS px
   let away = 0; // as the scene last drew it
   let narrow = !wide();
@@ -119,7 +122,7 @@ function init(layer: HTMLElement) {
     // when it is home again, and an even one over the whole sky in between.
     fade("cover", home ? 0 : 1 - s.away);
     fade("end", home ? 1 - s.away : 0);
-    fade("deep", s.away);
+    fade("deep", s.away * (1 - 0.82 * open));
 
     const sun = s.labels.sun;
     // Names are for the camera at the sphere. Home on a narrow screen there is no clear sky to put one on.
@@ -174,11 +177,11 @@ function init(layer: HTMLElement) {
       box = { w, h };
       narrow = !wide();
       survey();
-      if (!hero || !ledger) return { x: 0.68, y: 0.42 };
+      if (!hero || !name) return { x: 0.68, y: 0.42 };
       if (!narrow) {
-        // The Sun sits right of centre, above the ledger, clear of the name.
-        const base = ledger.getBoundingClientRect().top - hero.getBoundingClientRect().top;
-        return { x: w > 1500 ? 0.66 : 0.68, y: (bar + (base - bar) * 0.4) / h };
+        // The Sun sits right of centre, a little above the middle of the cover, level with the top of the name.
+        const top = name.getBoundingClientRect().top - hero.getBoundingClientRect().top;
+        return { x: w > 1500 ? 0.66 : 0.68, y: Math.min(0.46, (bar + (top - bar) * 0.62) / h) };
       }
       // The band's height is the stylesheet's (global.css), read back in pixels.
       const band = parseFloat(getComputedStyle(root).getPropertyValue("--sky-h")) || Math.min(w * 0.8, window.innerHeight * 0.46);
@@ -265,6 +268,19 @@ function init(layer: HTMLElement) {
     leave = Math.min(0.9 * vh, body / 3);
     land = Math.min(1.25 * vh, body / 3);
     heads = chapters.map((h) => h.getBoundingClientRect().top + window.scrollY);
+    // Each far thing is hung where the camera will be looking when its stretch of sky is centred in the window.
+    for (const it of interludes) {
+      const r = it.el.getBoundingClientRect();
+      it.top = r.top + window.scrollY;
+      it.h = Math.max(1, r.height);
+      const y = it.top + it.h / 2 - vh / 2;
+      const cruise = Math.max(0, Math.min(1, (y - coverEnd) / Math.max(1, max - coverEnd)));
+      let ch = 0;
+      for (const top of heads) if (y + 140 >= top) ch++;
+      const tallScreen = vh > window.innerWidth * 1.1;
+      if (it.kind === "hole") cosmos.stage("hole", cruise, ch, tallScreen ? 0 : 0.06, tallScreen ? 0.12 : 0.1);
+      if (it.kind === "quasar") cosmos.stage("quasar", cruise, ch, tallScreen ? 0 : 0.12, tallScreen ? 0.1 : 0.08);
+    }
   };
   let landed = false;
   const track = (y: number) => {
@@ -286,6 +302,21 @@ function init(layer: HTMLElement) {
     let chapter = 0;
     for (const top of heads) if (y + 140 >= top) chapter++;
     cosmos.turn(chapter);
+    // The open stretches: the sky is unveiled as one comes to the middle of the window, and a star goes off in the middle of one.
+    const vh = window.innerHeight;
+    open = 0;
+    for (const it of interludes) {
+      const off = Math.abs(it.top + it.h / 2 - (y + vh / 2)) / vh;
+      open = Math.max(open, 1 - Math.min(1, Math.max(0, (off - 0.12) / 0.5)));
+      // A far thing is out there only while its own stretch of sky is near: it comes up over the screen before, and goes over the screen after.
+      if (it.kind === "hole" || it.kind === "quasar") cosmos.show(it.kind, 1 - Math.min(1, Math.max(0, (off - 0.7) / 0.9)));
+      if (it.kind === "nova") {
+        if (off < 0.18 && !it.fired) {
+          it.fired = true;
+          cosmos.nova(vh > window.innerWidth * 1.1 ? 0.05 : 0.18, 0.12, 2.6);
+        } else if (off > 0.9) it.fired = false;
+      }
+    }
     // Home: one pulse up the beam, a moment after the page has come to rest there.
     if (arrive >= 1 && !landed) {
       landed = true;
@@ -318,7 +349,7 @@ function init(layer: HTMLElement) {
     for (const e of entries) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target);
     sync();
   });
-  for (const el of [hold ?? hero, foot]) if (el) io.observe(el);
+  for (const el of [hold ?? hero, foot, ...interludes.map((it) => it.el)]) if (el) io.observe(el);
   document.addEventListener("visibilitychange", sync);
   document.addEventListener("themechange", sync);
   sync();

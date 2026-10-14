@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import Header from "../components/Header.astro";
+import Interlude from "../components/Interlude.astro";
 import Section from "../components/Section.astro";
 import Entry from "../components/Entry.astro";
 import Hero from "../components/Hero.astro";
@@ -121,6 +122,12 @@ const record = [
       </Entry>
     </Section>
 
+    <Interlude
+      kind="hole"
+      name="A black hole, out past the edge of this page"
+      caption="Drawn the way Interstellar drew Gargantua: the disc of gas almost edge on, brighter on the side coming towards you, and its far side bent up over the shadow by the hole's own gravity. An illustration; nothing like it is near the Sun."
+    />
+
     <Section id="research" title="Research" lede="Four papers. One measures when a coding agent should hand work to other agents; three are on how binary stars trade mass.">
       <Entry feature title={paper.title} href={paper.href} role="Sole author. NeurIPS 2026 workshops, Sydney" period="2026" tags="Controlled experiments, agent harnesses, DeepSWE, program verifiers">
         <p>
@@ -165,6 +172,12 @@ const record = [
         </div>
       </Entry>
     </Section>
+
+    <Interlude
+      kind="nova"
+      name="A supernova"
+      caption="A star many times the Sun's mass runs out of fuel, collapses, and throws off its outer layers. For a few weeks it can outshine the rest of its galaxy; the shell it threw keeps spreading for thousands of years."
+    />
 
     <Section id="projects" title="Projects" lede="Hackathon builds and things I made because I wanted them.">
       <Entry title="Cardboard Cockpit" href="https://devpost.com/software/wad" role="Hack the North" period="2026" tags="Godot, OpenCV, ArUco, BLE, WebSockets">
@@ -216,6 +229,12 @@ const record = [
         </ul>
       </div>
     </Section>
+
+    <Interlude
+      kind="quasar"
+      name="A quasar"
+      caption="Gas falling into the black hole at the centre of a distant galaxy, heated until it outshines every star around it, with two jets thrown out at close to the speed of light. The nearer jet looks the brighter of the two."
+    />
 
     <Section id="record" title="Record" lede="Scholarships, papers and contest results.">
       <div class="record-grid">

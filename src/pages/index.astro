@@ -135,6 +135,23 @@ const record = [
       caption="Drawn the way Interstellar drew Gargantua: the disc of gas almost edge on, brighter on the side coming towards you, and its far side bent up over the shadow by the hole's own gravity. An illustration; nothing like it is near the Sun."
     />
 
+    <Sequence
+      scene="horizon"
+      name="Falling into a black hole"
+      length={12}
+      steps={[
+        { at: 0, when: "About 70 AU from the centre", title: "A black hole of 100 million suns", scale: "In frame: about 45 AU", text: "Its event horizon is about 590 million kilometres across; in the Sun's place it would reach past the orbit of Mars. Around it turns a thin disc of hot gas. Interstellar's Gargantua was given the same mass. This one is drawn as if it did not spin." },
+        { at: 0.11, when: "About 45 AU out", title: "Light bent round it", scale: "In frame: about 35 AU", text: "The disc is seen almost edge on, yet its far side shows above the black and below it: that light has been bent round the hole on its way here. The black is the hole's shadow, about 2.6 times as wide as the horizon itself." },
+        { at: 0.22, when: "About 25 AU out", title: "One side brighter", scale: "In frame: about 25 AU", text: "The gas orbits at up to half the speed of light. On the side coming towards us its light is squeezed, bluer and brighter; on the side going away it is redder and dimmer. The gas is drawn at up to about 9,000 degrees, so that it glows in visible light; a real disc like this is far hotter, and glows mostly in ultraviolet." },
+        { at: 0.33, when: "About 10 AU out", title: "The last stable orbit", scale: "In frame: about 15 AU", text: "No circular orbit lasts closer in than three times the horizon's radius, about 6 AU from the centre. There the gas goes round in about 12 and a half hours, timed from far away; any closer and it falls in. Around a fast-spinning hole this edge would sit much closer." },
+        { at: 0.44, when: "3 AU out", title: "Where light can orbit", scale: "Looking along the orbit", text: "At one and a half times the horizon's radius, light itself can go round in a circle. From here the shadow covers exactly half the sky, with a straight edge. Light sent sideways can come back round: in principle you could see the back of your own head." },
+        { at: 0.55, when: "1% above the horizon", title: "Holding still", scale: "Looking straight up", text: "Staying here takes a rocket pushing at more than 100,000 times Earth's gravity. While you hold still, each hour of yours is ten hours outside. The rest of the universe looks ten times bluer, and is squeezed into a circle overhead about 30 degrees across." },
+        { at: 0.665, when: "Letting go", title: "Tides", scale: "Looking straight up", text: "Let go and you fall. Gravity pulls a little harder on your feet than on your head; at this horizon the difference is less than a millionth of Earth's gravity, too little to feel. At a black hole of 10 suns it would be about 20 million times Earth's gravity, and would stretch you into a thin strand long before the horizon." },
+        { at: 0.77, when: "The event horizon", title: "No way back", scale: "Looking straight up", text: "Crossing it, you feel and see nothing special: no wall, no flash, and starlight keeps falling in after you. But from here on every path into the future, even one of light, leads inward. Nothing you send can reach the outside again." },
+        { at: 0.88, when: "Inside", title: "The singularity is a time, not a place", scale: "Looking sideways", text: "Inside, the centre is not somewhere ahead to steer round but a moment in your future, as certain as tomorrow. It comes about 23 minutes after the horizon by your own clock; no rocket could stretch that past 26. What happens there, general relativity cannot say." },
+      ]}
+    />
+
     <Section id="research" title="Research" lede="Four papers. One measures when a coding agent should hand work to other agents; three are on how binary stars trade mass.">
       <Entry feature title={paper.title} href={paper.href} role="Sole author. NeurIPS 2026 workshops, Sydney" period="2026" tags="Controlled experiments, agent harnesses, DeepSWE, program verifiers">
         <p>

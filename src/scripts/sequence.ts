@@ -9,9 +9,10 @@
  */
 import { mountSupernova } from "./supernova";
 import { mountDeepTime } from "./deeptime";
+import { mountHorizon } from "./horizon";
 
 const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const mounts = { supernova: mountSupernova, deeptime: mountDeepTime } as const;
+const mounts = { supernova: mountSupernova, deeptime: mountDeepTime, horizon: mountHorizon } as const;
 const covering = new Set<Element>();
 
 for (const seq of document.querySelectorAll<HTMLElement>("[data-seq]")) {

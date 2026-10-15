@@ -1856,7 +1856,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     spot.cover = opts.place(w, h);
     spot.end = opts.placeEnd?.(w, h) ?? spot.cover;
     // Far out the Sun rides high and to the right, clear of the reading column.
-    spot.far = opts.placeFar?.(w, h) ?? (w > h ? { x: 0.86, y: 0.2 } : { x: 0.8, y: 0.15 });
+    spot.far = opts.placeFar?.(w, h) ?? (w > h ? { x: 0.74, y: 0.4 } : { x: 0.8, y: 0.15 });
     if (!running) draw();
   }
 

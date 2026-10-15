@@ -15,27 +15,21 @@
       the arithmetic done.
     </p>
     <p>
-      I'm also interested in AI agents and simulation, and I like questions you can settle by running
-      the experiment. Do more coding agents fix more bugs? My experiments could not find the gain.
-    </p>
-    <p>
-      I like making things people use. I started <a class="ln" href="#work">TopsOJ</a> in high school,
-      and more than 100,000 people have used it. Now I work on AI video at Mathos and lead the software
-      for Waterloo Defence's counter-drone turret.
-    </p>
-    <p>
-      Most days I am programming alongside coding agents: more than 100 billion tokens so far.
+      I also love AI agents, simulation, and making things people use. Most days I'm building
+      alongside coding agents.
     </p>
   </div>
 </section>
 
 <style>
+  /* Like every part of the page, it keeps to the left and leaves the right to the sky. */
   .about {
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    column-gap: clamp(32px, 6vw, 96px);
-    align-items: baseline;
+    row-gap: 22px;
     padding-top: clamp(72px, 9vw, 136px);
+  }
+  .about > * {
+    max-width: 560px;
   }
   h2 {
     font-size: clamp(40px, 5vw, 68px);
@@ -44,8 +38,8 @@
   }
   .say {
     max-width: 40em;
-    font-size: 21px;
-    line-height: 1.5;
+    font-size: 19px;
+    line-height: 1.55;
     letter-spacing: -0.008em;
     color: var(--ink-2);
   }
@@ -59,10 +53,6 @@
     padding-block: 6px;
   }
   @media (max-width: 880px) {
-    .about {
-      grid-template-columns: minmax(0, 1fr);
-      row-gap: 18px;
-    }
     .say {
       font-size: 17px;
     }

@@ -16,15 +16,17 @@ const { id, title, lede } = Astro.props;
 </section>
 
 <style>
+  /* The page keeps to the left; the right of the window is left to the sky. */
   section {
     padding-top: clamp(72px, 9vw, 136px);
   }
+  section > :global(*) {
+    max-width: 560px;
+  }
   .sec-h {
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    column-gap: clamp(32px, 6vw, 96px);
-    align-items: baseline;
-    padding-bottom: clamp(20px, 3vw, 36px);
+    row-gap: 14px;
+    padding-bottom: clamp(12px, 2vw, 24px);
   }
   h2 {
     font-size: clamp(40px, 5vw, 68px);
@@ -35,11 +37,5 @@ const { id, title, lede } = Astro.props;
     font-size: 17px;
     color: var(--ink-3);
     max-width: 46ch;
-  }
-  @media (max-width: 880px) {
-    .sec-h {
-      grid-template-columns: minmax(0, 1fr);
-      row-gap: 12px;
-    }
   }
 </style>

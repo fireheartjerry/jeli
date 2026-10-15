@@ -118,8 +118,10 @@ const { cover = false } = Astro.props;
     --k: 1;
   }
   /* Far out the whole sky is taken down evenly: it is behind everything that is read. */
+  /* Far out the sky is held down under the page's column, on the left, and left open beside it. */
   .cosmos .veil.deep {
-    background: rgb(6 8 13 / 0.56);
+    --col: calc(max(0px, (100vw - var(--measure)) / 2) + var(--gutter) + 560px);
+    background: linear-gradient(90deg, rgb(6 8 13 / 0.74), rgb(6 8 13 / 0.62) calc(var(--col, 640px) - 80px), rgb(6 8 13 / 0.12) calc(var(--col, 640px) + 260px), rgb(6 8 13 / 0.04));
   }
   @media (max-width: 880px) {
     /* On a narrow screen the type sits under the scene, so the scene is a band and all below it is ground. */

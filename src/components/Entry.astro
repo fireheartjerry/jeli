@@ -1,85 +1,35 @@
 ---
+/**
+ * One thing done: its name, the role and when, and a line on what it was.
+ * No more than that; the detail lives behind the link.
+ */
 interface Props {
   title: string;
   href?: string;
   role?: string;
-  period: string;
-  tags?: string;
-  /** Feature entries put their figure full-width under the text. */
-  feature?: boolean;
+  period?: string;
 }
-const { title, href, role, period, tags, feature = false } = Astro.props;
+const { title, href, role, period } = Astro.props;
 // Links within the site stay in this tab.
 const external = !!href && /^https?:/.test(href);
 ---
 
-<article class:list={["entry", { feature }]} data-reveal="entry">
-  {/* The rule above the entry, and the pen that draws it across as the entry arrives (scripts/reveal.ts). */}
-  <span class="rule" aria-hidden="true"></span>
-  <span class="rule-pen" aria-hidden="true"></span>
+<article class="entry" data-reveal="entry">
   <div class="text">
-    <header>
-      <h3>
-        {href ? <a class="ln" href={href} target={external ? "_blank" : undefined} rel={external ? "noopener" : undefined}>{title}</a> : title}
-      </h3>
-      <p class="meta">
-        {role && <span>{role}</span>}
-        <span class="num">{period}</span>
-      </p>
-    </header>
+    <h3>
+      {href ? <a class="ln" href={href} target={external ? "_blank" : undefined} rel={external ? "noopener" : undefined}>{title}</a> : title}
+    </h3>
+    <p class="meta">
+      {role && <span>{role}</span>}
+      {period && <span class="num">{period}</span>}
+    </p>
     <div class="body"><slot /></div>
-    {tags && <p class="tags">{tags}</p>}
   </div>
-  {Astro.slots.has("figure") && <div class="figure"><slot name="figure" /></div>}
 </article>
 
 <style>
   .entry {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    column-gap: clamp(32px, 6vw, 96px);
-    align-items: start;
-    padding-block: clamp(40px, 5.5vw, 80px);
-  }
-  .entry.no-fig {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  }
-  .text {
-    position: sticky;
-    top: 96px;
-  }
-  .figure {
-    display: grid;
-    /* A track that may be narrower than its content: a long unbreakable line in a figure must not widen the page. */
-    grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
-  }
-  /* The rule above each entry draws itself in as the entry arrives. */
-  .entry {
-    position: relative;
-  }
-  .rule,
-  .rule-pen {
-    display: none;
-  }
-  .rule {
-    position: absolute;
-    inset: 0 0 auto;
-    height: 1px;
-    background: var(--ink-4);
-    transform-origin: left;
-  }
-  /* A short bright stroke that runs at the head of the rule while it is drawn; --k is how far along it is. */
-  .rule-pen {
-    --k: 0;
-    position: absolute;
-    top: -0.5px;
-    left: calc(var(--k) * (100% - 26px));
-    width: 26px;
-    height: 1.5px;
-    border-radius: 1px;
-    background: var(--accent);
-    opacity: 0;
+    padding-block: 22px;
   }
   h3 {
     font-size: 21px;
@@ -94,51 +44,18 @@ const external = !!href && /^https?:/.test(href);
     flex-wrap: wrap;
     gap: 0 0.9em;
     margin-top: 4px;
-    font-size: 15px;
+    font-size: 14.5px;
     color: var(--ink-3);
   }
   .body {
-    margin-top: 18px;
+    margin-top: 10px;
     color: var(--ink-2);
-    max-width: 46ch;
+    max-width: 44ch;
   }
   .body :global(p + p) {
-    margin-top: 0.8em;
+    margin-top: 0.6em;
   }
   .body :global(a.ln) {
     padding-block: 10px;
-  }
-  .tags {
-    margin-top: 18px;
-    font-size: 13.5px;
-    color: var(--ink-3);
-  }
-  /* Feature layout: text spans a wide measure, the figure takes the full row below. */
-  .entry.feature {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    row-gap: clamp(32px, 4vw, 56px);
-  }
-  .entry.feature .text {
-    position: static;
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    column-gap: clamp(32px, 6vw, 96px);
-    align-items: start;
-  }
-  .entry.feature .text > header { grid-column: 1; }
-  .entry.feature .body { grid-column: 2; margin-top: 0; max-width: 60ch; }
-  .entry.feature .tags { grid-column: 2; }
-  .entry.feature .figure { grid-column: 1 / -1; }
-  @media (max-width: 880px) {
-    .entry.feature .text { grid-template-columns: minmax(0, 1fr); }
-    .entry.feature .body, .entry.feature .tags { grid-column: 1; margin-top: 18px; }
-    .entry {
-      grid-template-columns: minmax(0, 1fr);
-      row-gap: 36px;
-    }
-    .text {
-      position: static;
-    }
   }
 </style>

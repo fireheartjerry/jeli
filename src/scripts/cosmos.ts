@@ -140,6 +140,8 @@ export interface Cosmos {
   stage(kind: "hole" | "quasar" | "wormhole" | "nebula", cruise: number, ch: number, nx: number, ny: number): void;
   /** How much of a staged far thing is shown, 0 to 1. */
   show(kind: "hole" | "quasar" | "wormhole" | "nebula", v: number): void;
+  /** Light one orbit (jupiter, saturn, neptune, or the heliopause) in gold, 0 to 1: the page is crossing it. */
+  mark(name: string, v: number): void;
   /** Stop drawing (something opaque covers the whole window), or start again. */
   rest(on: boolean): void;
   /** A star goes off at (nx, ny) on the screen now; `size` scales it. */
@@ -1473,16 +1475,19 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   // ---------- hairlines: two orbits and the AU grid ----------
   // `far` is 0 for a line of the inner system, which goes out as the camera
   // leaves, and 1 for one of the outer system, which only comes up then.
-  const loops: { m: ReturnType<typeof mesh>; alpha: number; far: number }[] = [];
+  const loops: { m: ReturnType<typeof mesh>; alpha: number; far: number; name?: string }[] = [];
+  // How lit each named orbit is (the page is crossing it), and how lit it is drawn: the second follows the first.
+  const marked: Record<string, number> = {}, lit: Record<string, number> = {};
+  let glowing = false; // an orbit is still coming up or going down, so the scene keeps drawing every frame
   const P3 = new Float32Array(3);
-  const orbit = (pl: (typeof PLANETS)[keyof typeof PLANETS], alpha: number, far: number, seg = SEG) => {
+  const orbit = (pl: (typeof PLANETS)[keyof typeof PLANETS], alpha: number, far: number, seg = SEG, name?: string) => {
     const pts = new Float32Array(seg * 3);
     for (let i = 0; i < seg; i++) {
       // Even steps of mean anomaly crowd the points a little at aphelion; on orbits this round it does not show.
       keplerCPU(pl.a, pl.e, pl.i, pl.node, pl.peri, (i / seg) * TAU, P3);
       pts.set(P3, i * 3);
     }
-    loops.push({ m: mesh(prog.line.p, pts, [["a_p", 3]]), alpha, far });
+    loops.push({ m: mesh(prog.line.p, pts, [["a_p", 3]]), alpha, far, name });
   };
   const ring = (r: number, alpha: number, far: number, seg = SEG) => {
     const pts = new Float32Array(seg * 3);
@@ -1490,16 +1495,20 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     loops.push({ m: mesh(prog.line.p, pts, [["a_p", 3]]), alpha, far });
   };
   orbit(PLANETS.mars, 0.17, 0);
-  orbit(PLANETS.jupiter, 0.17, 0.5); // Jupiter's is seen from both
+  orbit(PLANETS.jupiter, 0.17, 0.5, SEG, "jupiter"); // Jupiter's is seen from both
   for (const r of [2, 3, 4]) ring(r, 0.06, 0);
   // Long arcs cross the whole frame, so they are cut finer.
-  orbit(PLANETS.saturn, 0.15, 1, 240);
+  orbit(PLANETS.saturn, 0.15, 1, 240, "saturn");
   orbit(PLANETS.uranus, 0.13, 1, 320);
-  orbit(PLANETS.neptune, 0.13, 1, 400);
+  orbit(PLANETS.neptune, 0.13, 1, 400, "neptune");
   // The scale out here, in powers of ten: 10 AU and 100 AU.
   ring(10, 0.045, 1, 240);
   ring(100, 0.045, 1, 480);
   ring(1000, 0.04, 1, 480);
+  // Where the Sun's wind gives way, about where Voyager 1 crossed it. Not a circle in truth (it is blown back
+  // into a long tail), and not drawn at all until the page says the camera is past it.
+  ring(121, 0, 1, 480);
+  loops[loops.length - 1].name = "heliopause";
 
   // ---------- camera ----------
   const view = new Float32Array(16), proj = new Float32Array(16);
@@ -2170,10 +2179,20 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
 
     let u = use(prog.line);
     const outer = smooth(Math.min(1, away * 1.7));
+    glowing = false;
     for (const l of loops) {
-      const al = l.alpha * (l.far === 0 ? 1 - outer : l.far === 1 ? outer : 1);
+      // A lit orbit is the one being crossed: it comes up gold, over whatever it is drawn at otherwise.
+      let k = 0;
+      if (l.name) {
+        const to = marked[l.name] ?? 0;
+        k = lit[l.name] = (lit[l.name] ?? 0) + (to - (lit[l.name] ?? 0)) * 0.06;
+        if (Math.abs(to - k) > 0.002) glowing = true;
+      }
+      const base = l.alpha * (l.far === 0 ? 1 - outer : l.far === 1 ? outer : 1);
+      const al = base + (0.72 - base) * k;
       if (al < 0.004) continue;
-      g.uniform4f(u.u_col, 0.94 * al, 0.93 * al, 0.9 * al, al);
+      const gold = k;
+      g.uniform4f(u.u_col, (0.94 + 0.06 * gold) * al, (0.93 - 0.17 * gold) * al, (0.9 - 0.42 * gold) * al, al);
       g.bindVertexArray(l.m.vao);
       g.drawArrays(g.LINE_LOOP, 0, l.m.count);
     }
@@ -2399,7 +2418,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       if (Math.abs(aim[k] - leg[k]) < 1e-4) leg[k] = aim[k];
       else moving = true;
     }
-    if (clock - chapter.at < CHAPTER.seconds) moving = true;
+    if (clock - chapter.at < CHAPTER.seconds || glowing) moving = true;
     if (comet && clock - comet.at < COMET) moving = true;
     // A supernova in view keeps the scene drawing every frame.
     if (novae.some((n) => clock - n.at < NOVA)) moving = true;
@@ -2545,6 +2564,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     },
     rest(on) {
       resting = on;
+    },
+    mark(name, v) {
+      marked[name] = Math.max(0, Math.min(1, v));
     },
     show(kind, v) {
       seenFar[kind] = Math.max(0, Math.min(1, v));

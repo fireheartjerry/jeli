@@ -63,10 +63,29 @@ const { cover = false } = Astro.props;
     background: transparent;
   }
   html[data-voyage][data-theme="light"] [data-ground] {
-    background: var(--paper);
-    /* The ground runs to both edges of the window, whatever the measure of the column on it. */
-    box-shadow: 0 0 0 100vmax var(--paper);
-    clip-path: inset(0 -100vmax);
+    /* The ground runs to both edges of the window, whatever the measure of the column on it, and no further up or down. */
+    border-image: linear-gradient(var(--paper) 0 0) fill 0 / 0 / 0 100vmax;
+    position: relative;
+  }
+  /* Its edges are not cut: the paper thins into the sky over a long stretch, above and below, on an eased curve. */
+  html[data-voyage][data-theme="light"] [data-ground]::before,
+  html[data-voyage][data-theme="light"] [data-ground]::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    width: 100vw;
+    height: 180px;
+    translate: -50% 0;
+    pointer-events: none;
+    --fade: transparent, rgb(from var(--paper) r g b / 0.06) 22%, rgb(from var(--paper) r g b / 0.3) 50%, rgb(from var(--paper) r g b / 0.72) 78%, var(--paper);
+  }
+  html[data-voyage][data-theme="light"] [data-ground]::before {
+    bottom: 100%;
+    background: linear-gradient(to bottom, var(--fade));
+  }
+  html[data-voyage][data-theme="light"] [data-ground]::after {
+    top: 100%;
+    background: linear-gradient(to top, var(--fade));
   }
   /* The canvas and the names live in the fixed layer while the scene runs. For
      a still frame (reduced motion) the script puts both inside the cover instead. */

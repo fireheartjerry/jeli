@@ -348,6 +348,8 @@ function init(layer: HTMLElement) {
       open = Math.max(open, 1 - Math.min(1, Math.max(0, (off - 0.12) / 0.5)));
       // A far thing is out there only while its own stretch of sky is near: it comes up over the screen before, and goes over the screen after.
       const near = 1 - Math.min(1, Math.max(0, (off - 0.7) / 0.9));
+      // A passage lights the orbit it names while it is near the middle of the window.
+      if (it.el.dataset.orbit) cosmos.mark(it.el.dataset.orbit, 1 - Math.min(1, Math.max(0, (off - 0.15) / 0.55)));
       if (it.kind === "hole" || it.kind === "quasar" || it.kind === "wormhole") cosmos.show(it.kind, near);
       if (it.kind === "quasar") cosmos.show("nebula", near);
       if (it.kind === "nova") {

@@ -26,6 +26,11 @@ npm run build    # static output in dist/
   camera keeps going, past Saturn, Uranus and Neptune and through the Kuiper belt to 140 AU, rising
   over the ecliptic so the orbits open into rings, until the sphere is one gold star; its distance
   is carried in its logarithm, so the sphere shrinks by the same factor for every screen scrolled.
+- Between the sections are passages (`src/components/Passage.astro`): open sky with one title card each.
+  `scripts/voyage.ts` puts the camera at each passage's distance as it is centred (5.2, 9.5, 30 and 140 AU),
+  lights the orbit the card names in gold, and flies the camera past the planet itself (`FS_PLANET`:
+  Jupiter, Saturn with its rings, Neptune, ray-traced in the camera's frame and lit as a crescent). A
+  flight log under each card, off until asked for, says what is out there.
 - The footer is the same move run backwards, home to the closed sphere. The pointer leans the
   camera, and a drag on the cover or the footer swings it before it returns to its mark. 16 Psyche
   and the boulders near it are real meshes (`src/scripts/geo/psyche.ts`), built from the seed in

@@ -343,6 +343,15 @@ function init(layer: HTMLElement) {
     // The open stretches: the sky is unveiled as one comes to the middle of the window, and a star goes off in the middle of one.
     const vh = window.innerHeight;
     open = 0;
+    // The planet nearest its pass, if any is: 0 with its passage centred, less before, more after.
+    let flyName: "jupiter" | "saturn" | "neptune" | null = null, flyT = 9;
+    for (const it of interludes) {
+      const o = it.el.dataset.orbit;
+      if (o !== "jupiter" && o !== "saturn" && o !== "neptune") continue;
+      const t = (y + vh / 2 - (it.top + it.h / 2)) / vh / 0.9;
+      if (t > -1.6 && t < 2.6 && Math.abs(t) < Math.abs(flyT)) (flyName = o), (flyT = t);
+    }
+    cosmos.flyby(flyName, flyName ? flyT : 0);
     for (const it of interludes) {
       const off = Math.abs(it.top + it.h / 2 - (y + vh / 2)) / vh;
       open = Math.max(open, 1 - Math.min(1, Math.max(0, (off - 0.12) / 0.5)));

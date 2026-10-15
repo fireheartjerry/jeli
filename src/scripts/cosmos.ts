@@ -248,22 +248,31 @@ void main() {
   // Star clouds, and the knots inside them.
   float clouds = fbm3(q * 4.0, 5);
   float knots = pow(fbm3(q * 9.0 + 3.0, 4), 2.0);
-  float light = (disc * (0.3 + 1.3 * clouds) + haze) * (0.7 + 1.1 * knots) + bulge * 0.85;
+  // A thick disc of old stars round the thin one, and the core's glow spilling well past the bulge.
+  float thick = exp(-pow(mid / (wide * 3.2), 2.0)) * 0.11 * mix(0.45, 1.0, toward);
+  float glow = exp(-(lon * lon * 0.5 + lat * lat * 3.2)) * 0.32;
+  float light = (disc * (0.3 + 1.3 * clouds) + haze) * (0.7 + 1.1 * knots) + bulge * 1.05 + thick + glow;
   // Dust: dark lanes drawn out along the plane, and one long rift through the middle.
   float ridge = 1.0 - abs(2.0 * fbm3(q * vec3(5.0, 12.0, 5.0) + 1.7, 4) - 1.0);
   float lanes = smoothstep(0.6, 0.9, ridge + 0.25 * fbm3(q * 14.0, 3)) * exp(-pow((mid + 0.01) / (wide * 0.8), 2.0));
   float rift = smoothstep(0.42, 0.66, fbm3(q * vec3(2.2, 6.5, 2.2) + 9.0, 4)) * exp(-pow(mid / (wide * 0.5), 2.0));
-  light *= 1.0 - 0.82 * clamp(lanes + rift, 0.0, 1.0);
+  float dust = clamp(lanes + rift, 0.0, 1.0);
+  // Dust takes the blue out before it takes the light: the edges of every lane glow warm.
+  float fringe = smoothstep(0.0, 0.5, dust) * (1.0 - smoothstep(0.5, 1.0, dust));
+  light *= 1.0 - 0.86 * dust;
   // Old yellow stars at the centre, young blue ones out along the arms.
-  vec3 col = mix(vec3(0.72, 0.81, 1.0), vec3(1.0, 0.85, 0.64), clamp(bulge * 1.5 + 0.3 * toward, 0.0, 1.0));
+  vec3 col = mix(vec3(0.72, 0.81, 1.0), vec3(1.0, 0.85, 0.64), clamp(bulge * 1.5 + glow + 0.3 * toward, 0.0, 1.0));
+  col *= mix(vec3(1.0), vec3(1.08, 0.86, 0.66), fringe * 0.5);
+  // Where young stars are being born the hydrogen round them glows red, in knots strung along the arms, just off the dust.
+  float born = smoothstep(0.66, 0.86, fbm3(q * 16.0 + 5.0, 4)) * smoothstep(0.55, 0.8, clouds) * exp(-pow(mid / (wide * 0.9), 2.0)) * (1.0 - 0.7 * dust);
   float edge = smoothstep(1.0, 0.78, abs(v_uv.y - 0.5) * 2.0);
-  o = vec4(col * light * edge, 1.0);
+  o = vec4((col * light + vec3(1.0, 0.32, 0.42) * born * 0.55) * edge, 1.0);
 }`;
 const VS_FAR = `#version 300 es
 in vec2 a_q;
 out vec2 v_q;
 void main() { v_q = a_q; gl_Position = vec4(a_q, 0.0, 1.0); }`;
-const FS_FAR = FRAG_HEAD + `
+const FS_FAR = FRAG_HEAD + NOISE + `
 in vec2 v_q;
 uniform sampler2D u_sky;
 uniform mat3 u_look; // from the camera's frame to the galaxy's
@@ -276,6 +285,10 @@ void main() {
   float lat = asin(clamp(d.y, -1.0, 1.0));
   if (abs(lat) > ${GALAXY.lat.toFixed(3)}) discard;
   vec3 c = texture(u_sky, vec2(atan(d.z, d.x) / 6.2831853 + 0.5, lat / ${(2 * GALAXY.lat).toFixed(3)} + 0.5)).rgb * u_gain;
+  // Finer than the painted strip can hold: a grain in the star clouds at
+  // about the size of a few pixels, so the band keeps its texture however
+  // close the lens is to it. Fixed on the sky.
+  c *= 0.84 + 0.32 * fbm3(d * 260.0, 2);
   // The band is not smoke. It is stars, too faint and too many to keep one by
   // one: so the sky is cut into cells a seventh of a degree across, each cell
   // is given one star at a place and a brightness of its own, and there are as
@@ -580,11 +593,17 @@ void main() {
   if (u_mode > 4.5) {
     // The whole sphere from far out: one gold star. A tight core in a soft
     // halo, and the fine cross a lens puts on any point bright enough.
+    // (The quad is about 118 px each way from the middle, so 0.0085 is a pixel.)
     float d = length(v_q);
-    float core = exp(-d * d * 1100.0) * 1.7 + exp(-d * 30.0) * 0.42 + 0.01 / (d + 0.035);
-    float glint = max(exp(-abs(v_q.x) * 190.0) * exp(-abs(v_q.y) * 3.4), exp(-abs(v_q.y) * 190.0) * exp(-abs(v_q.x) * 3.4));
-    float m = (core + glint * 0.62) * smoothstep(1.0, 0.55, d) * u_gain;
-    o = vec4(mix(vec3(1.0, 0.8, 0.52), vec3(1.0, 0.97, 0.9), smoothstep(0.25, 1.3, core)) * m, 0.0);
+    float core = exp(-d * d * 4200.0) * 2.6 + exp(-d * d * 520.0) * 0.5 + exp(-d * 16.0) * 0.1;
+    // The first ring of the lens's own diffraction, barely there.
+    float ring = exp(-pow((d - 0.052) / 0.007, 2.0)) * 0.07;
+    float spikes = max(exp(-abs(v_q.y) * 260.0) * exp(-abs(v_q.x) * 2.4), exp(-abs(v_q.x) * 260.0) * exp(-abs(v_q.y) * 2.4));
+    vec2 r = vec2(v_q.x + v_q.y, v_q.y - v_q.x) * 0.7071;
+    spikes += 0.22 * max(exp(-abs(r.y) * 300.0) * exp(-abs(r.x) * 7.5), exp(-abs(r.x) * 300.0) * exp(-abs(r.y) * 7.5));
+    float m = (core + ring + spikes * 0.7) * smoothstep(1.0, 0.6, d) * u_gain;
+    // White-hot where it is brightest, gold as it falls away.
+    o = vec4(mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.98, 0.94), smoothstep(0.2, 1.8, core)) * m, 0.0);
     return;
   }
   if (u_mode > 3.5) {
@@ -787,6 +806,7 @@ in vec4 a_e1; // a, e, inclination, node
 in vec4 a_e2; // argument of perihelion, mean anomaly at t=0, size, random
 in vec4 a_e3; // colour rgb, kind (0 belt rock, 1 keeps forever, 2 planet)
 uniform float u_far; // how far out the camera is, 0 to 1
+uniform float u_gone; // the share of the rocks too small to see from here: 0 inside about 12 AU, all of them by 140
 out vec3 v_l; out vec3 v_c; out float v_seed; out float v_px;
 void main() {
   float M = a_e2.y + u_time * TAU / pow(a_e1.x, 1.5);
@@ -794,7 +814,7 @@ void main() {
   vec4 pv = u_view * vec4(p, 1.0);
   vec4 clip = u_proj * pv;
   // The belt is the quarry: it thins as the swarm fills.
-  if (a_e3.w < 0.5 && a_e2.w < u_p * 0.82) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 0.0; return; }
+  if ((a_e3.w < 0.5 && a_e2.w < u_p * 0.82) || (a_e3.w < 1.5 && fract(a_e2.w * 7.31) < u_gone)) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 0.0; return; }
   gl_Position = clip;
   v_px = clamp(u_px * a_e2.z * 3.6 / clip.w, 1.3 * u_px, a_e3.w > 0.5 ? 40.0 : 15.0 * u_px);
   gl_PointSize = v_px;
@@ -1205,7 +1225,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   function paintSky() {
     const g = gl!;
     painted = true;
-    const gw = light ? 1024 : 2048, gh = gw / 4;
+    const gw = light ? 2048 : 4096, gh = gw / 4;
     const tex = g.createTexture()!;
     g.bindTexture(g.TEXTURE_2D, tex);
     g.texStorage2D(g.TEXTURE_2D, 1, g.RGBA8, gw, gh);
@@ -2076,7 +2096,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.uniform1f(prog.far.u.u_smear, smeared);
       g.uniformMatrix3fv(prog.far.u.u_look, false, lookG);
       g.uniform4f(prog.far.u.u_lens, aspect / F, 1 / F, lens[0], lens[1]);
-      g.uniform1f(prog.far.u.u_gain, GALAXY.gain * night * (1 + 0.5 * away));
+      g.uniform1f(prog.far.u.u_gain, GALAXY.gain * night * (1 + 0.65 * away));
       g.uniform1i(prog.far.u.u_sky, 0);
       g.activeTexture(g.TEXTURE0);
       g.bindTexture(g.TEXTURE_2D, galaxy);
@@ -2193,10 +2213,13 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     u = use(prog.rock);
     g.uniform1f(u.u_fade, 1);
     g.uniform1f(u.u_far, smooth(Math.min(1, away * 2.4)));
+    // From far out a rock cannot be seen at all, and a dark speck held up against the star would read as dirt on the lens.
+    g.uniform1f(u.u_gone, smooth(Math.max(0, Math.min(1, Math.log(range / 12) / Math.log(FAR.r / 12)))));
     g.bindVertexArray(mRock.vao);
     g.drawArrays(g.POINTS, 0, mRock.count);
     if (outer > 0.01) {
       g.uniform1f(u.u_far, 0);
+      g.uniform1f(u.u_gone, 0);
       g.uniform1f(u.u_fade, outer);
       g.bindVertexArray(mKuiper.vao);
       g.drawArrays(g.POINTS, 0, mKuiper.count);

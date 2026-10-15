@@ -96,6 +96,11 @@ function init(layer: HTMLElement) {
   // The stretches of open sky between parts of the page (Interlude.astro), and how open the sky is now: 1 with one centred.
   const interludes = [...document.querySelectorAll<HTMLElement>("[data-interlude]")].map((el) => ({ el, kind: el.dataset.interlude!, top: 0, h: 1, fired: false }));
   let open = 0;
+  // Where the page puts the camera on its way out: at the cover's end, then at
+  // each passage's place as it is centred. Past the last, it holds.
+  let stops: { y: number; r: number }[] = [];
+  let roaming = false; // the page is under way between the cover and the footer
+  let under = 0; // how far the page has come up over the sky after the cover, 0 to 1
   let box = { w: 1, h: 1 }; // the canvas, CSS px
   let away = 0; // as the scene last drew it
   let narrow = !wide();
@@ -122,11 +127,12 @@ function init(layer: HTMLElement) {
     // when it is home again, and an even one over the whole sky in between.
     fade("cover", home ? 0 : 1 - s.away);
     fade("end", home ? 1 - s.away : 0);
-    fade("deep", s.away * (1 - 0.82 * open));
+    // While the page is under way its type is over the sky wherever the camera is, so the sky is held down from the first screen past the cover; only a passage lifts it.
+    fade("deep", Math.max(s.away, under) * (1 - 0.82 * open));
 
     const sun = s.labels.sun;
     // Names are for the camera at the sphere. Home on a narrow screen there is no clear sky to put one on.
-    const naming = s.away < 0.3 && !(home && narrow);
+    const naming = s.away < 0.3 && !roaming && !(home && narrow);
     for (const [name, el] of Object.entries(tags)) {
       const at = s.labels[name];
       if (!at) continue;
@@ -288,6 +294,9 @@ function init(layer: HTMLElement) {
       }
       if (it.kind === "wormhole") cosmos.stage("wormhole", cruise, ch, tallScreen ? 0 : 0.08, tallScreen ? 0.12 : 0.1);
     }
+    stops = [{ y: coverEnd, r: 0 }];
+    for (const it of interludes) if (it.el.dataset.reach) stops.push({ y: it.top + it.h / 2 - vh / 2, r: +it.el.dataset.reach });
+    if (stops.length < 2 || !hold) stops = [];
   };
   let landed = false;
   const track = (y: number) => {
@@ -296,11 +305,33 @@ function init(layer: HTMLElement) {
     const held = hold ? Math.max(0, Math.min(1, (y - holdTop) / holdLen)) : 1;
     const cruise = Math.max(0, Math.min(1, past / body));
     const arrive = foot ? Math.max(0, Math.min(1, (y - (max - land)) / land)) : 0;
-    home = cruise > 0.5;
+    // The page sets the way out itself: the camera goes from
+    // one passage's place to the next at a steady zoom, and the far end of the
+    // cruise is kept for the stretch after the last, so the turn for home is
+    // made where nothing near can be seen.
+    let reach: number | undefined, run = cruise;
+    if (stops.length) {
+      const last = stops[stops.length - 1];
+      reach = last.r;
+      for (let i = 1; i < stops.length; i++) {
+        const a = stops[i - 1], b = stops[i];
+        if (y < b.y) {
+          reach = a.r + (b.r - a.r) * Math.max(0, Math.min(1, (y - a.y) / Math.max(1, b.y - a.y)));
+          break;
+        }
+      }
+      run = y <= last.y ? 0.45 * Math.max(0, (y - coverEnd) / Math.max(1, last.y - coverEnd)) : 0.45 + 0.55 * Math.min(1, (y - last.y) / Math.max(1, max - last.y));
+    }
+    home = run > 0.5;
+    roaming = past > 0.2 * window.innerHeight && arrive <= 0;
+    under = Math.max(0, Math.min(1, past / (0.6 * window.innerHeight))) * (1 - arrive);
     cosmos.setVoyage({
-      cover: narrow ? Math.min(1, held / 0.55) : held,
-      depart: !hero ? 1 : narrow ? Math.max(0, (held - 0.55) / 0.45) : Math.max(0, Math.min(1, past / leave)),
-      cruise,
+      // (Staged, a narrow screen builds over the whole hold too: the leaving is no longer played inside it.)
+      cover: narrow && reach === undefined ? Math.min(1, held / 0.55) : held,
+      // Staged, the camera is "away" (far enough that the scene is drawn for distance) by about Saturn.
+      depart: !hero ? 1 : reach !== undefined ? Math.min(1, reach / 0.3) : narrow ? Math.max(0, (held - 0.55) / 0.45) : Math.max(0, Math.min(1, past / leave)),
+      cruise: run,
+      reach,
       arrive,
       // On a narrow screen the sphere comes up with the footer, so the footer's caption never has to cross it.
       lift: narrow && home ? Math.max(0, max - y) / box.h : 0,

@@ -160,3 +160,11 @@ Drafted on 13 Oct 2026 after Jerry asked for an intro that states his interests,
 - **Mathos figure.** Jerry said on 13 Oct 2026 that Fig. 2 is fine. It was not checked against the Mathos code: the stages come from the résumé, and their order, and that a rendered file is stored before it is downloaded, are a reading of it.
 - **Résumé.** Since 13 Oct 2026 the site serves the Overleaf master ("Jerry Li - Resume Master - 2027 Applications") with three edits made in both places: the scholarship reads $100,000+, the NeurIPS entry's subtitle reads "Independent Research, Sole Author", and the degree is expected in 2029 (Jerry: "write 2029 everywhere or dont mention it"). It is one page. It says more than the site does about Waterloo Defence (a perception system and its detector's benchmark numbers); the site's own entry still follows the team's public wording. The per-application résumé projects on Overleaf were not opened or changed.
 - **Paper link.** No public copy was found; the paper page links nowhere external. Add the OpenReview or arXiv link when there is one.
+
+## Passages (flight log)
+
+- Jupiter's Trojans at 60° ahead of and behind Jupiter; "may hold about as many large bodies as the main belt" (Jewitt, Trujillo & Luu 2000 estimate a population comparable to the main belt's). Hohmann transfer from 2.7 AU to 1 AU: a = 1.85 AU, half of 1.85^1.5 yr ≈ 1.26 yr, "about fifteen months".
+- Saturn's orbital period 29.46 yr. Scene: 60,000 collectors on Kepler orbits solved in the vertex shader (cosmos.ts).
+- Neptune at 30.07 AU; light time 30 × 499 s ≈ 4.2 h. Kuiper belt to about 50 AU; more than 100,000 objects over 100 km is the usual estimate.
+- Voyager 1 crossed the heliopause on 25 August 2012 at about 121.6 AU. Light time to 140 AU: 140 × 499 s ≈ 19.4 h.
+- The odometer reads the camera's real distance; each passage's place is where scripts/voyage.ts puts the camera when it is centred (wide screens).

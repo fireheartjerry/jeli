@@ -88,6 +88,14 @@ export interface Voyage {
    * screen the sphere comes up with it.
    */
   lift?: number;
+  /**
+   * How far out the camera is, as the share of the way from the end of the
+   * cover's shot to the edge of the take, counted in the logarithm of the
+   * distance. Given, it sets the distance on its own, so the page can put each
+   * of its parts at its own place on the way out; left out, the leaving and
+   * the cruise set it.
+   */
+  reach?: number;
 }
 
 export interface CosmosOptions {
@@ -1491,7 +1499,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   let scroll = from.cover ?? 0; // 0..1 through the cover
   let shot = scroll; // the same, a moment behind: the camera follows the scroll instead of jumping with it
   // The rest of the take: where the scroll puts the camera, and where it has got to.
-  const aim = { depart: from.depart ?? 0, cruise: from.cruise ?? 0, arrive: from.arrive ?? 0, lift: 0 };
+  const aim = { depart: from.depart ?? 0, cruise: from.cruise ?? 0, arrive: from.arrive ?? 0, lift: 0, reach: from.reach ?? -1 };
   const leg = { ...aim };
   // The chapter the page is in, as a heading: where it is turning from and to, and since when.
   const chapter = { from: 0, to: 0, at: -99, now: 0 };
@@ -1601,8 +1609,13 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     // the cover left it, so the footer's caption has clear sky over it.
     const off = tall > 1 && leg.cruise > 0.5 ? 1 + HOME_TALL * (1 - away) : 1;
     // Out and back: nothing at either end of the page, everything in the middle, and at rest at all three.
-    const deep = Math.sin(Math.PI * leg.cruise) ** 2 * away;
-    const dist = (NEAR.r + (WIDE.r - NEAR.r) * pulled) * (1 + (tall - 1) * (0.35 + 0.65 * s)) * (1 - ARRIVE.closer * late) * off * (FAR.r / WIDE.r) ** left * (FAR.deep / FAR.r) ** deep;
+    // Or, where the page has given its own places on the way out, the way out is those, and goes no further than FAR.r.
+    const staged = aim.reach >= 0;
+    const deep = staged ? 0 : Math.sin(Math.PI * leg.cruise) ** 2 * away;
+    const gone = staged ? Math.max(0, leg.reach) * (1 - home) : left;
+    // (A tall screen holds the camera further off so the sphere fits; on a staged way out that is let go by the first place, so the distance there is the place's own.)
+    const room = staged ? Math.max(0, 1 - gone / 0.08) : 1;
+    const dist = (NEAR.r + (WIDE.r - NEAR.r) * pulled) * (1 + (tall - 1) * (0.35 + 0.65 * s) * room) * (1 - ARRIVE.closer * late) * off * (FAR.r / WIDE.r) ** gone * (FAR.deep / FAR.r) ** deep;
     range = dist;
     stop = ((NEAR.r + (WIDE.r - NEAR.r) * pulled) / WIDE.r) ** 1.9;
     // Far out it rises over the ecliptic, and the orbits open from lines into rings.
@@ -2358,29 +2371,12 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     shot += (scroll - shot) * follow;
     if (Math.abs(scroll - shot) < 1e-4) shot = scroll;
     let moving = shot !== scroll;
-    for (const k of ["depart", "cruise", "arrive", "lift"] as const) {
+    for (const k of ["depart", "cruise", "arrive", "lift", "reach"] as const) {
       leg[k] += (aim[k] - leg[k]) * follow;
       if (Math.abs(aim[k] - leg[k]) < 1e-4) leg[k] = aim[k];
       else moving = true;
     }
     if (clock - chapter.at < CHAPTER.seconds) moving = true;
-    // Far out, now and then, a star somewhere in frame goes off.
-    if (away > 0.9) {
-      novaNext -= dt;
-      if (novaNext <= 0) {
-        nova();
-        novaNext = 22 + rnd() * 16;
-      }
-    }
-    // And now and then a comet crosses the frame, from one side towards the other.
-    if (away > 0.9) {
-      cometNext -= dt;
-      if (cometNext <= 0 && w) {
-        const left = rnd() < 0.5, y0 = -0.5 + rnd() * 1.1;
-        comet = { d0: along(B, left ? -1.15 : 1.15, y0, lens[0], lens[1]), d1: along(B, left ? 0.35 : -0.35, y0 + (rnd() - 0.6) * 0.5, lens[0], lens[1]), at: clock };
-        cometNext = 45 + rnd() * 30;
-      }
-    }
     if (comet && clock - comet.at < COMET) moving = true;
     // A supernova in view keeps the scene drawing every frame.
     if (novae.some((n) => clock - n.at < NOVA)) moving = true;
@@ -2505,6 +2501,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     setVoyage(v) {
       for (const k of ["depart", "cruise", "arrive"] as const) if (v[k] !== undefined) aim[k] = Math.max(0, Math.min(1, v[k]!));
       if (v.lift !== undefined) aim.lift = Math.max(0, v.lift);
+      aim.reach = v.reach === undefined ? -1 : Math.max(0, Math.min(1, v.reach));
+      if (aim.reach < 0) leg.reach = -1;
+      else if (leg.reach < 0) leg.reach = aim.reach;
       if (v.cover !== undefined) scroll = Math.max(0, Math.min(1, v.cover));
       if (!running) {
         // Stopped (out of sight, or a still frame): the camera is simply where the
@@ -2536,11 +2535,6 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       chapter.from = chapter.now;
       chapter.to = to;
       chapter.at = clock;
-      // A new part of the page, far out: something goes off to mark it.
-      if (away > 0.9 && n > 0) {
-        nova();
-        novaNext = 22 + rnd() * 16;
-      }
     },
     snap(settled) {
       fresh = true;

@@ -145,9 +145,10 @@ export interface Cosmos {
   /**
    * Fly past a planet: `t` is where the page is in the pass, 0 when the
    * planet is where its card wants it, less before (it is still beside or
-   * behind the camera), more after (it falls away towards the Sun). Null: none.
+   * behind the camera), more after (it falls away towards the Sun). Each
+   * planet keeps its own, so one can still be falling away as the next comes in.
    */
-  flyby(name: "jupiter" | "saturn" | "neptune" | null, t: number): void;
+  flyby(name: "jupiter" | "saturn" | "neptune", t: number): void;
   /** Stop drawing (something opaque covers the whole window), or start again. */
   rest(on: boolean): void;
   /** A star goes off at (nx, ny) on the screen now; `size` scales it. */
@@ -1624,7 +1625,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   let glowing = false; // an orbit is still coming up or going down, so the scene keeps drawing every frame
   // The planet being flown past, and its program, built the first time one is near.
   const KINDS = { jupiter: 0, saturn: 1, neptune: 2 } as const;
-  const fly = { kind: -1, t: 0, shown: -9 };
+  const passes = [9, 9, 9]; // each planet's place in its pass; 9 is out of it
   let planet: Prog | null = null;
   let flying = false; // the pass moved since the last frame
   let planetWarm = false;
@@ -2543,13 +2544,15 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
       g.disable(g.SCISSOR_TEST);
     }
-    if (fly.kind >= 0 && planet) {
-      const Z = 1 + 0.85 * fly.t;
-      const seen = smooth(Math.max(0, Math.min(1, (2.3 - fly.t) / 0.8))) * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
+    for (let kind = 0; kind < 3 && planet; kind++) {
+      const t = passes[kind];
+      if (t > 8) continue;
+      const Z = 1 + 0.85 * t;
+      const seen = smooth(Math.max(0, Math.min(1, (2.3 - t) / 0.8))) * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
       if (seen > 0.003) {
         const tallFrame = h > w * 1.1;
-        const at = tallFrame ? [0.32, 0.1] : fly.kind === 1 ? [0.66, -0.66] : [0.7, -0.74];
-        const size = (tallFrame ? [0.22, 0.15, 0.16] : [0.4, 0.28, 0.27])[fly.kind];
+        const at = tallFrame ? [0.32, 0.1] : kind === 1 ? [0.66, -0.66] : [0.7, -0.74];
+        const size = (tallFrame ? [0.22, 0.15, 0.16] : [0.4, 0.28, 0.27])[kind];
         const lx = aspect / F, ly = 1 / F;
         const X = (at[0] - lens[0]) * lx, Y = (at[1] - lens[1]) * ly; // the line the planet is on, per unit of depth
         g.useProgram(planet.p);
@@ -2569,10 +2572,10 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
         g.uniform3f(u.u_L, sx / sd / kl, sy / sd / kl, kz / kl);
         // The pole stands up the frame, leaning a little to one side and tipped towards the lens, so the belts run
         // across the face and Saturn's rings open to about 24 degrees, as they do from Earth at their widest.
-        const tip = [0.14, 0.42, 0.3][fly.kind], lean = [-0.12, -0.32, 0.22][fly.kind];
+        const tip = [0.14, 0.42, 0.3][kind], lean = [-0.12, -0.32, 0.22][kind];
         g.uniform3f(u.u_pole, Math.sin(lean) * Math.cos(tip), Math.cos(lean) * Math.cos(tip), Math.sin(tip));
-        g.uniform1f(u.u_kind, fly.kind);
-        g.uniform1f(u.u_spin, clock * [0.05, 0.04, 0.03][fly.kind]);
+        g.uniform1f(u.u_kind, kind);
+        g.uniform1f(u.u_spin, clock * [0.05, 0.04, 0.03][kind]);
         g.uniform1f(u.u_pix, (2 * ly) / canvas.height);
         g.uniform1f(u.u_a, seen);
         g.bindVertexArray(mFar.vao);
@@ -2784,19 +2787,19 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       resting = on;
     },
     flyby(name, t) {
-      fly.kind = name ? KINDS[name] : -1;
-      fly.t = t;
-      // Its program is built the first time a planet is near, in idle time if there is any.
-      if (name && !planet && gl) {
+      const k = KINDS[name];
+      if (passes[k] === t) return;
+      // In the pass, or just out of it: the scene draws this frame.
+      if (t < 8 || passes[k] < 8) flying = true;
+      passes[k] = t;
+      // Its program is normally built in idle time; if a planet is near first, it is built now.
+      if (t < 8 && !planet && gl) {
         try {
           planet = compile(gl, VS_FAR, FS_PLANET);
         } catch (e) {
           console.error(e);
-          fly.kind = -1;
         }
       }
-      if (fly.kind >= 0 && fly.t !== fly.shown) flying = true;
-      fly.shown = fly.t;
     },
     mark(name, v) {
       marked[name] = Math.max(0, Math.min(1, v));

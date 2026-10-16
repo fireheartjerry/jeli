@@ -99,6 +99,7 @@ function init(layer: HTMLElement) {
   // Where the page puts the camera on its way out: at the cover's end, then at
   // each passage's place as it is centred. Past the last, it holds.
   let stops: { y: number; r: number }[] = [];
+  let slopes: number[] = [];
   let roaming = false; // the page is under way between the cover and the footer
   let under = 0; // how far the page has come up over the sky after the cover, 0 to 1
   let box = { w: 1, h: 1 }; // the canvas, CSS px
@@ -297,6 +298,10 @@ function init(layer: HTMLElement) {
     stops = [{ y: coverEnd, r: 0 }];
     for (const it of interludes) if (it.el.dataset.reach) stops.push({ y: it.top + it.h / 2 - vh / 2, r: +it.el.dataset.reach });
     if (stops.length < 2 || !hold) stops = [];
+    // The curve's slope at each place (Fritsch and Carlson, so it never overshoots a place): the mean of the
+    // stretches either side, at rest at the last place, and at the first carrying on as the first stretch begins.
+    const d = stops.slice(1).map((b, i) => (b.r - stops[i].r) / Math.max(1, b.y - stops[i].y));
+    slopes = stops.map((_, i) => (i === 0 ? d[0] : i === stops.length - 1 ? 0 : d[i - 1] * d[i] <= 0 ? 0 : (2 * d[i - 1] * d[i]) / (d[i - 1] + d[i])));
   };
   let landed = false;
   const track = (y: number) => {
@@ -313,10 +318,16 @@ function init(layer: HTMLElement) {
     if (stops.length) {
       const last = stops[stops.length - 1];
       reach = last.r;
+      // A smooth curve through the places, not straight lines between them: the
+      // zoom never changes speed with a jolt at a passage, and it comes to rest
+      // at the last place instead of stopping there.
       for (let i = 1; i < stops.length; i++) {
         const a = stops[i - 1], b = stops[i];
         if (y < b.y) {
-          reach = a.r + (b.r - a.r) * Math.max(0, Math.min(1, (y - a.y) / Math.max(1, b.y - a.y)));
+          const span = Math.max(1, b.y - a.y), u = Math.max(0, Math.min(1, (y - a.y) / span));
+          const ma = slopes[i - 1] * span, mb = slopes[i] * span;
+          const u2 = u * u, u3 = u2 * u;
+          reach = (2 * u3 - 3 * u2 + 1) * a.r + (u3 - 2 * u2 + u) * ma + (-2 * u3 + 3 * u2) * b.r + (u3 - u2) * mb;
           break;
         }
       }
@@ -343,15 +354,13 @@ function init(layer: HTMLElement) {
     // The open stretches: the sky is unveiled as one comes to the middle of the window, and a star goes off in the middle of one.
     const vh = window.innerHeight;
     open = 0;
-    // The planet nearest its pass, if any is: 0 with its passage centred, less before, more after.
-    let flyName: "jupiter" | "saturn" | "neptune" | null = null, flyT = 9;
+    // Each planet's place in its pass: 0 with its passage centred, less before, more after; 9 when it is out of it.
     for (const it of interludes) {
       const o = it.el.dataset.orbit;
       if (o !== "jupiter" && o !== "saturn" && o !== "neptune") continue;
       const t = (y + vh / 2 - (it.top + it.h / 2)) / vh / 0.9;
-      if (t > -1.6 && t < 2.6 && Math.abs(t) < Math.abs(flyT)) (flyName = o), (flyT = t);
+      cosmos.flyby(o, t > -1.6 && t < 2.6 ? t : 9);
     }
-    cosmos.flyby(flyName, flyName ? flyT : 0);
     for (const it of interludes) {
       const off = Math.abs(it.top + it.h / 2 - (y + vh / 2)) / vh;
       open = Math.max(open, 1 - Math.min(1, Math.max(0, (off - 0.12) / 0.5)));
@@ -396,10 +405,14 @@ function init(layer: HTMLElement) {
   // while one of those two is on screen.
   const seen = new Set<Element>();
   const sync = () => cosmos.run(!document.hidden && (root.dataset.theme !== "light" || seen.size > 0));
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target);
-    sync();
-  });
+  // Half a screen early, so by day the camera is already under way when a stretch of sky comes up, not setting off as it does.
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target);
+      sync();
+    },
+    { rootMargin: "50% 0px" },
+  );
   for (const el of [hold ?? hero, foot, ...interludes.map((it) => it.el)]) if (el) io.observe(el);
   document.addEventListener("visibilitychange", sync);
   document.addEventListener("themechange", sync);

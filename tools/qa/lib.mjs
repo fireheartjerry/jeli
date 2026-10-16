@@ -205,6 +205,7 @@ export const geometry = (page) =>
       sections: [...document.querySelectorAll("[data-section]")].map((el) => ({ id: el.id, ...box(el) })),
       entries: [...document.querySelectorAll(".entry")].map((el, i) => ({ i, title: el.querySelector("h3")?.textContent.trim(), ...box(el) })),
       figs: [...document.querySelectorAll("[data-fig]")].map((el) => ({ name: el.dataset.fig, ...box(el) })),
+      passages: [...document.querySelectorAll(".passage")].map((el) => ({ orbit: el.dataset.orbit, ...box(el) })),
     };
   });
 

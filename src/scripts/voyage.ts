@@ -354,10 +354,10 @@ function init(layer: HTMLElement) {
     // The open stretches: the sky is unveiled as one comes to the middle of the window, and a star goes off in the middle of one.
     const vh = window.innerHeight;
     open = 0;
-    // Each planet's place in its pass: 0 with its passage centred, less before, more after; 9 when it is out of it.
+    // Each body's place in its pass (the planets, and the probe at the heliopause): 0 with its passage centred, less before, more after; 9 when it is out of it.
     for (const it of interludes) {
       const o = it.el.dataset.orbit;
-      if (o !== "jupiter" && o !== "saturn" && o !== "neptune") continue;
+      if (o !== "jupiter" && o !== "saturn" && o !== "neptune" && o !== "heliopause") continue;
       const t = (y + vh / 2 - (it.top + it.h / 2)) / vh / 0.9;
       cosmos.flyby(o, t > -1.6 && t < 2.6 ? t : 9);
     }

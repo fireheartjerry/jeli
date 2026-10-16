@@ -166,5 +166,5 @@ Drafted on 13 Oct 2026 after Jerry asked for an intro that states his interests,
 - Jupiter's Trojans at 60° ahead of and behind Jupiter; "may hold about as many large bodies as the main belt" (Jewitt, Trujillo & Luu 2000 estimate a population comparable to the main belt's). Hohmann transfer from 2.7 AU to 1 AU: a = 1.85 AU, half of 1.85^1.5 yr ≈ 1.26 yr, "about fifteen months".
 - Saturn's orbital period 29.46 yr. Scene: 60,000 collectors on Kepler orbits solved in the vertex shader (cosmos.ts).
 - Neptune at 30.07 AU; light time 30 × 499 s ≈ 4.2 h. Kuiper belt to about 50 AU; more than 100,000 objects over 100 km is the usual estimate.
-- Voyager 1 crossed the heliopause on 25 August 2012 at about 121.6 AU. Light time to 140 AU: 140 × 499 s ≈ 19.4 h.
+- Voyager 1 crossed the heliopause on 25 August 2012 at about 121.6 AU. Pale Blue Dot: 14 February 1990, about 40 AU (6 billion km); the Earth filled less than a pixel (0.12 px). Voyager's high-gain antenna is 3.66 m across; its magnetometer boom is 13 m. Light time to 140 AU: 140 × 499 s ≈ 19.4 h.
 - The odometer reads the camera's real distance; each passage's place is where scripts/voyage.ts puts the camera when it is centred (wide screens).

@@ -148,7 +148,7 @@ export interface Cosmos {
    * behind the camera), more after (it falls away towards the Sun). Each
    * planet keeps its own, so one can still be falling away as the next comes in.
    */
-  flyby(name: "jupiter" | "saturn" | "neptune", t: number): void;
+  flyby(name: "jupiter" | "saturn" | "neptune" | "heliopause", t: number): void;
   /** Stop drawing (something opaque covers the whole window), or start again. */
   rest(on: boolean): void;
   /** A star goes off at (nx, ny) on the screen now; `size` scales it. */
@@ -453,6 +453,104 @@ void main() {
   }
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
   o = vec4(max(col + (n - 0.5) / 255.0, 0.0), a) * u_a;
+}`;
+
+// ---- a probe flown past at the heliopause: Voyager, to its real proportions ----
+// Ray-marched in the probe's own frame, in metres: the 3.7 m dish and its feed,
+// the ten-sided bus under it, the 13 m magnetometer boom, the boom carrying the
+// three RTGs, and the science boom with its scan platform. Lit like the planets:
+// from the Sun's side of the frame, and rimmed by the Sun almost behind it.
+const FS_PROBE = FRAG_HEAD + `
+in vec2 v_q;
+uniform vec4 u_lens;
+uniform vec3 u_c; // its centre, camera frame
+uniform float u_m; // camera-frame units per metre
+uniform mat3 u_R; // its frame to the camera's
+uniform vec3 u_L;
+uniform vec3 u_S;
+uniform float u_pix;
+uniform float u_a;
+float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h) - r; }
+float cyl(vec3 p, float r, float hh) { vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, hh); return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)); }
+float box(vec3 p, vec3 b) { vec3 q = abs(p) - b; return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0); }
+float prism10(vec3 p, float r, float hh) {
+  // A ten-sided prism about y: fold into one sector, then a slab.
+  float a = atan(p.z, p.x), s = 6.2831853 / 10.0;
+  a = mod(a + s * 0.5, s) - s * 0.5;
+  vec2 q = length(p.xz) * vec2(cos(a), sin(a));
+  vec2 d = vec2(q.x - r, abs(p.y) - hh);
+  return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+}
+// Which part was hit: 0 dish, 1 bus, 2 boom, 3 RTG, 4 platform.
+vec2 map(vec3 p) {
+  // The dish: a shallow bowl 3.66 m across, open towards +y.
+  vec3 q = p - vec3(0.0, 0.55, 0.0);
+  q.y -= dot(q.xz, q.xz) * 0.115;
+  vec2 r = vec2(cyl(q, 1.83, 0.035) * 0.8, 0.0);
+  float feed = min(capsule(p, vec3(0.0, 0.6, 0.0), vec3(0.0, 1.45, 0.0), 0.05), length(p - vec3(0.0, 1.5, 0.0)) - 0.16);
+  if (feed < r.x) r = vec2(feed, 0.0);
+  float bus = prism10(p - vec3(0.0, 0.05, 0.0), 0.89, 0.24);
+  if (bus < r.x) r = vec2(bus, 1.0);
+  // The magnetometer boom, 13 m out, very thin; it sags a little.
+  float mag = capsule(p, vec3(0.6, 0.0, 0.3), vec3(13.0, -0.6, 3.2), 0.035);
+  if (mag < r.x) r = vec2(mag, 2.0);
+  // The RTG boom and its three generators, finned cylinders end to end.
+  vec3 rb = vec3(-1.0, -0.1, -0.35);
+  float rtg = capsule(p, vec3(-0.7, 0.0, -0.25), vec3(-3.2, -0.3, -1.1), 0.05);
+  if (rtg < r.x) r = vec2(rtg, 2.0);
+  vec3 axis = normalize(vec3(-2.5, -0.3, -0.85));
+  for (int k = 0; k < 3; k++) {
+    vec3 c = vec3(-1.9, -0.16, -0.65) + axis * float(k) * 0.55;
+    float g = capsule(p, c, c + axis * 0.45, 0.2);
+    if (g < r.x) r = vec2(g, 3.0);
+  }
+  // The science boom, with the scan platform at its end.
+  float sci = capsule(p, vec3(0.5, -0.1, -0.5), vec3(2.0, -0.4, -2.3), 0.05);
+  if (sci < r.x) r = vec2(sci, 2.0);
+  float plat = box(p - vec3(2.15, -0.45, -2.5), vec3(0.35, 0.22, 0.28));
+  if (plat < r.x) r = vec2(plat, 4.0);
+  return r;
+}
+vec3 normalAt(vec3 p) {
+  vec2 e = vec2(0.004, 0.0);
+  return normalize(vec3(map(p + e.xyy).x - map(p - e.xyy).x, map(p + e.yxy).x - map(p - e.yxy).x, map(p + e.yyx).x - map(p - e.yyx).x));
+}
+void main() {
+  vec3 rd = normalize(vec3((v_q.x - u_lens.z) * u_lens.x, (v_q.y - u_lens.w) * u_lens.y, -1.0));
+  // Into its frame: the ray from the camera, in metres.
+  vec3 ro = transpose(u_R) * (-u_c) / u_m, d = transpose(u_R) * rd;
+  // Its bounding sphere, round the middle of the dish and the boom.
+  vec3 bc = vec3(5.0, 0.0, 1.0);
+  float b = dot(bc - ro, d), c2 = dot(bc - ro, bc - ro) - b * b;
+  if (b < 0.0 || c2 > 9.5 * 9.5) discard;
+  float t = max(0.0, b - 9.5), hit = -1.0, part = 0.0, near = 1e9;
+  float tol = u_pix * length(u_c) / u_m * 0.5; // half a pixel, in metres, at its distance
+  for (int i = 0; i < 90; i++) {
+    vec2 h = map(ro + d * t);
+    near = min(near, h.x / max(t, 1e-3));
+    if (h.x < tol) { hit = t; part = h.y; break; }
+    t += h.x;
+    if (t > b + 9.5) break;
+  }
+  vec3 L = transpose(u_R) * u_L, S = transpose(u_R) * u_S;
+  float back = pow(max(dot(d, S), 0.0), 5.0);
+  if (hit < 0.0) {
+    // The thinnest parts, narrower than a pixel, still catch the light along their length.
+    float glint = smoothstep(tol * 3.0 / max(t, 1.0), 0.0, near) * (0.15 + 0.6 * back);
+    o = vec4(vec3(1.0, 0.9, 0.75) * glint, 0.0) * u_a;
+    return;
+  }
+  vec3 p = ro + d * hit, n = normalAt(p);
+  float ndl = max(dot(n, L), 0.0);
+  vec3 alb = part < 0.5 ? vec3(0.78, 0.77, 0.74) : part < 1.5 ? vec3(0.62, 0.48, 0.24) : part < 2.5 ? vec3(0.5, 0.5, 0.52) : part < 3.5 ? vec3(0.32, 0.3, 0.3) : vec3(0.7, 0.6, 0.4);
+  // Gold foil on the bus throws a hard highlight; the dish is matte white paint.
+  vec3 h = normalize(L - d);
+  float spec = pow(max(dot(n, h), 0.0), part > 0.5 && part < 1.5 ? 40.0 : 12.0) * (part > 0.5 && part < 1.5 ? 0.9 : 0.15);
+  float rim = pow(1.0 - max(dot(n, -d), 0.0), 3.0) * (0.3 + 1.8 * back);
+  // The dish is a bowl: light falls across its face from the rim nearest the Sun.
+  vec3 col = alb * (0.02 + 1.15 * ndl * ndl) + vec3(1.0, 0.9, 0.75) * (spec * ndl + rim * 0.6);
+  float n_ = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  o = vec4(col + (n_ - 0.5) / 255.0, 1.0) * u_a;
 }`;
 
 // ---- deep sky: what the camera finds out past the planets ----
@@ -1624,8 +1722,19 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const marked: Record<string, number> = {}, lit: Record<string, number> = {};
   let glowing = false; // an orbit is still coming up or going down, so the scene keeps drawing every frame
   // The planet being flown past, and its program, built the first time one is near.
-  const KINDS = { jupiter: 0, saturn: 1, neptune: 2 } as const;
-  const passes = [9, 9, 9]; // each planet's place in its pass; 9 is out of it
+  const KINDS = { jupiter: 0, saturn: 1, neptune: 2, heliopause: 3 } as const;
+  const passes = [9, 9, 9, 9]; // each body's place in its pass (the three planets, then the probe); 9 is out of it
+  let probe: Prog | null = null;
+  const probeR = (() => {
+    const n = (v: number[]) => { const l = Math.hypot(v[0], v[1], v[2]); return v.map((x) => x / l); };
+    const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const y = n([0.3, 0.5, 0.81]); // the dish's axis: turned up and right, towards the gold star it came from, and three-quarters to the lens
+    const x = n(cross(y, [0.25, 0.1, -1])).map((v) => -v); // the magnetometer boom's side: out to the right, away from the card
+    const z = cross(x, y);
+    return new Float32Array([...x, ...y, ...z]);
+  })();
+  // On a tall screen the card is under it, so it is turned half round its dish's axis: the boom points up, away from the type.
+  const probeRTall = new Float32Array([-probeR[0], -probeR[1], -probeR[2], probeR[3], probeR[4], probeR[5], -probeR[6], -probeR[7], -probeR[8]]);
   let planet: Prog | null = null;
   let flying = false; // the pass moved since the last frame
   let planetWarm = false;
@@ -2582,6 +2691,33 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
         g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
       }
     }
+    // The probe at the heliopause: the same pass, a smaller thing seen closer.
+    const tp = passes[3];
+    if (tp < 8 && probe) {
+      const Z = 1 + 0.85 * tp;
+      const seen = smooth(Math.max(0, Math.min(1, (2.3 - tp) / 0.8))) * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
+      if (seen > 0.003) {
+        const tallFrame = h > w * 1.1;
+        const lx = aspect / F, ly = 1 / F;
+        const at = tallFrame ? [0.0, 0.18] : [0.42, -0.42];
+        g.useProgram(probe.p);
+        const u = probe.u;
+        g.uniform4f(u.u_lens, lx, ly, lens[0], lens[1]);
+        g.uniform3f(u.u_c, (at[0] - lens[0]) * lx, (at[1] - lens[1]) * ly, -Z);
+        // About 22 m across the frame's height at the mark: the dish a sixth of it, the boom reaching most of the way across.
+        g.uniform1f(u.u_m, (tallFrame ? 0.06 : 0.09) * ly);
+        g.uniformMatrix3fv(u.u_R, false, tallFrame ? probeRTall : probeR);
+        const sl = Math.hypot(view[12], view[13], view[14]) || 1;
+        g.uniform3f(u.u_S, view[12] / sl, view[13] / sl, view[14] / sl);
+        const cx = lens[0] + (at[0] - lens[0]) / Z, cy = lens[1] + (at[1] - lens[1]) / Z;
+        const sx = (sun.nx - cx) * lx, sy = (sun.ny - cy) * ly, sd = Math.hypot(sx, sy) || 1;
+        g.uniform3f(u.u_L, (sx / sd) * 0.97, (sy / sd) * 0.97, 0.12);
+        g.uniform1f(u.u_pix, (2 * ly) / canvas.height);
+        g.uniform1f(u.u_a, seen);
+        g.bindVertexArray(mFar.vao);
+        g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+      }
+    }
     g.bindVertexArray(null);
 
     if (opts.onFrame) {
@@ -2735,6 +2871,14 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
         }
         return idle(dig);
       }
+      if (!probe) {
+        try {
+          probe = compile(gl!, VS_FAR, FS_PROBE);
+        } catch (e) {
+          console.error(e);
+        }
+        return idle(dig);
+      }
       const done = rock ? shape(4) : (quarry(4), false);
       if (!done) idle(dig);
     };
@@ -2793,9 +2937,10 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       if (t < 8 || passes[k] < 8) flying = true;
       passes[k] = t;
       // Its program is normally built in idle time; if a planet is near first, it is built now.
-      if (t < 8 && !planet && gl) {
+      if (t < 8 && gl && !(k === 3 ? probe : planet)) {
         try {
-          planet = compile(gl, VS_FAR, FS_PLANET);
+          if (k === 3) probe = compile(gl, VS_FAR, FS_PROBE);
+          else planet = compile(gl, VS_FAR, FS_PLANET);
         } catch (e) {
           console.error(e);
         }

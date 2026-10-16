@@ -110,7 +110,7 @@ const { name, n, title, label, readout = "", class: cls, size = "default", scree
     flex-direction: column;
     height: 100%;
     background: var(--panel);
-    border: 1px solid var(--hair);
+    border: 1px solid transparent;
     border-radius: 14px;
     box-shadow: var(--plate-shadow);
   }
@@ -289,6 +289,8 @@ const { name, n, title, label, readout = "", class: cls, size = "default", scree
     border: 0 solid var(--ink-4);
     pointer-events: none;
   }
+  .plot.screen::before,
+  .plot.screen::after { display: none; }
   .plot.screen::before { top: 6px; left: 6px; border-top-width: 1px; border-left-width: 1px; }
   .plot.screen::after { bottom: 6px; right: 6px; border-bottom-width: 1px; border-right-width: 1px; }
   .readout {
@@ -321,7 +323,6 @@ const { name, n, title, label, readout = "", class: cls, size = "default", scree
   figcaption {
     margin-top: auto;
     padding-top: 12px;
-    border-top: 1px solid var(--hair);
     font-size: 13px;
     line-height: 1.5;
     color: var(--ink-3);

@@ -59,6 +59,10 @@ const seedHex = hex(fingerprint(SEED));
         I like AI agents, simulation and space. I build software, run experiments, and think about
         megastructures like the one on this page.
       </p>
+      <p class="now">
+        <span class="lamp" aria-hidden="true"></span><span class="k">Now</span>
+        <span>Software at <a class="ln" href="https://mathos.ai" target="_blank" rel="noopener">Mathos AI</a> (YC W24), and software lead at <a class="ln" href="https://waterloodefence.ca" target="_blank" rel="noopener">Waterloo Defence</a></span>
+      </p>
     </div>
 
 
@@ -276,6 +280,41 @@ const seedHex = hex(fingerprint(SEED));
   :global(html[data-motion]:not([data-voyage]):not([data-go])) .hero *,
   :global(html[data-motion]:not([data-voyage]):not([data-go])) .hero *::before {
     animation-play-state: paused;
+  }
+  /* What he is doing now: one quiet line, with a lamp that is lit and breathing. */
+  .now {
+    margin-top: clamp(14px, 2.2svh, 22px);
+    max-width: 52ch;
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--ink-3);
+    animation: rise-in var(--t-arrive) var(--ease-out) 0.7s backwards;
+  }
+  .now .k {
+    margin-right: 0.6em;
+    color: var(--ink-2);
+  }
+  .now a {
+    color: var(--ink-2);
+    padding-block: 6px;
+  }
+  .lamp {
+    display: inline-block;
+    vertical-align: 0.12em;
+    margin-right: 0.6em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #e6bd7c;
+    box-shadow: 0 0 0 0 rgb(230 189 124 / 0.5);
+    animation: breathe 3.2s var(--ease-io) infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 2px 0 rgb(230 189 124 / 0.55); opacity: 0.85; }
+    50% { box-shadow: 0 0 10px 3px rgb(230 189 124 / 0.28); opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lamp { animation: none; }
   }
   .lede {
     margin-top: clamp(18px, 3svh, 30px);

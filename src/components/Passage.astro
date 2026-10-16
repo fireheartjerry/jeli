@@ -1,0 +1,176 @@
+---
+/**
+ * A stretch of open sky between two parts of the page, where the camera's
+ * voyage out is seen with nothing over it but a title card: where it is now,
+ * and one line on how that place answers the part of the page that follows.
+ * scripts/voyage.ts takes the camera to `reach` (its share of the way out, in
+ * the logarithm of the distance) as the stretch comes to the middle of the
+ * window, and lifts the veil over the sky while it is there.
+ *
+ * Under the line, the flight log: what is actually out there, said plainly.
+ * It is closed until asked for, and one switch opens it in every passage.
+ *
+ * It is only there where the scene runs (html[data-motion], the same test the
+ * cover's hold makes before first paint). Without it there is nothing to look
+ * at, and the page closes up over it.
+ */
+interface Props {
+  /** The camera's share of the way out when this stretch is centred, 0 to 1. */
+  reach: number;
+  /** The orbit the scene lights while this stretch is near: jupiter, saturn, neptune or heliopause. */
+  orbit?: string;
+  /** Its number in the flight log. */
+  n?: number;
+  /** Where the camera is, as the odometer would put it. */
+  place: string;
+  /** How this place answers the part of the page that follows. */
+  line: string;
+  /** What is out there. */
+  log: string;
+}
+const { reach, orbit, n, place, line, log } = Astro.props;
+---
+
+<aside class="passage" data-interlude="passage" data-reach={reach} data-orbit={orbit} aria-label={place}>
+  <div class="card wrap" data-reveal="passage">
+    <p class="place cm">{n && <span class="no">Log {String(n).padStart(2, "0")}</span>}{place}</p>
+    <p class="line">{line}</p>
+    <button class="toggle" type="button" data-log-toggle aria-pressed="false">
+      <span class="dot" aria-hidden="true"></span><span class="label">Flight log</span>
+    </button>
+    <div class="log"><p>{log}</p></div>
+  </div>
+</aside>
+
+<script>
+  // One switch for every passage, remembered for the next visit. Closed until asked for.
+  const root = document.documentElement;
+  const KEY = "flightlog";
+  const set = (on: boolean) => {
+    root.toggleAttribute("data-log", on);
+    for (const b of document.querySelectorAll<HTMLElement>("[data-log-toggle]")) b.setAttribute("aria-pressed", String(on));
+    try {
+      on ? localStorage.setItem(KEY, "1") : localStorage.removeItem(KEY);
+    } catch {}
+  };
+  let saved = false;
+  try {
+    saved = localStorage.getItem(KEY) === "1";
+  } catch {}
+  set(saved);
+  for (const b of document.querySelectorAll<HTMLElement>("[data-log-toggle]")) b.addEventListener("click", () => set(!root.hasAttribute("data-log")));
+</script>
+
+<style>
+  .passage {
+    display: none;
+    position: relative;
+  }
+  :global(html[data-motion]:not([data-flat])) .passage {
+    display: block;
+    height: 96svh;
+  }
+  .card {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    translate: 0 -50%;
+  }
+  .place {
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+    /* The gold of the orbit the scene lights while this card is up. */
+    color: #e6bd7c;
+    margin-bottom: 14px;
+  }
+  .no {
+    margin-right: 0.9em;
+    color: var(--ink-3);
+  }
+  .line {
+    max-width: 30ch;
+    font-size: clamp(22px, 2.3vw, 30px);
+    line-height: 1.28;
+    letter-spacing: -0.016em;
+    color: var(--ink);
+    text-wrap: balance;
+    text-shadow: 0 0 28px rgb(6 8 13 / 0.85), 0 0 6px rgb(6 8 13 / 0.6);
+  }
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 22px;
+    padding: 8px 0;
+    font-size: 13px;
+    color: var(--ink-3);
+    transition: color var(--t-press) var(--ease-io);
+  }
+  .toggle:hover,
+  .toggle[aria-pressed="true"] {
+    color: var(--ink-2);
+  }
+  /* A lamp: dark when the log is closed, lit in the accent when it is open. */
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ink-4);
+    transition:
+      background var(--t-state) var(--ease-io),
+      box-shadow var(--t-state) var(--ease-io);
+  }
+  .toggle[aria-pressed="true"] .dot {
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+  }
+  /* The log opens to its own height and comes into focus as it does. */
+  .log {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    filter: blur(6px);
+    transition:
+      grid-template-rows var(--t-arrive) var(--ease-out),
+      opacity var(--t-arrive) var(--ease-out),
+      filter var(--t-arrive) var(--ease-out);
+  }
+  .log > p {
+    min-height: 0;
+    overflow: hidden;
+    max-width: 48ch;
+    padding-top: 6px;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    text-shadow: 0 0 18px rgb(6 8 13 / 0.9), 0 0 4px rgb(6 8 13 / 0.8);
+  }
+  :global(html[data-log]) .log {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    filter: none;
+  }
+  /* By day too the stretch is open sky: it is the scene's own night, so its type is night type. */
+  .passage {
+    --ink: #ecebe6;
+    --ink-2: #c9c7bf;
+    --ink-3: #8f8e88;
+    --ink-4: #4a4a47;
+  }
+  @media (max-width: 880px) {
+    :global(html[data-motion]:not([data-flat])) .passage {
+      height: 84svh;
+    }
+    .card {
+      top: auto;
+      bottom: 10svh;
+      translate: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .log {
+      transition: none;
+    }
+  }
+</style>

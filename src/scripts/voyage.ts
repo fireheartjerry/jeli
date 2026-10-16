@@ -96,6 +96,12 @@ function init(layer: HTMLElement) {
   // The stretches of open sky between parts of the page (Interlude.astro), and how open the sky is now: 1 with one centred.
   const interludes = [...document.querySelectorAll<HTMLElement>("[data-interlude]")].map((el) => ({ el, kind: el.dataset.interlude!, top: 0, h: 1, fired: false }));
   let open = 0;
+  // Where the page puts the camera on its way out: at the cover's end, then at
+  // each passage's place as it is centred. Past the last, it holds.
+  let stops: { y: number; r: number }[] = [];
+  let slopes: number[] = [];
+  let roaming = false; // the page is under way between the cover and the footer
+  let under = 0; // how far the page has come up over the sky after the cover, 0 to 1
   let box = { w: 1, h: 1 }; // the canvas, CSS px
   let away = 0; // as the scene last drew it
   let narrow = !wide();
@@ -122,11 +128,12 @@ function init(layer: HTMLElement) {
     // when it is home again, and an even one over the whole sky in between.
     fade("cover", home ? 0 : 1 - s.away);
     fade("end", home ? 1 - s.away : 0);
-    fade("deep", s.away * (1 - 0.82 * open));
+    // While the page is under way its type is over the sky wherever the camera is, so the sky is held down from the first screen past the cover; only a passage lifts it.
+    fade("deep", Math.max(s.away, under) * (1 - 0.82 * open));
 
     const sun = s.labels.sun;
     // Names are for the camera at the sphere. Home on a narrow screen there is no clear sky to put one on.
-    const naming = s.away < 0.3 && !(home && narrow);
+    const naming = s.away < 0.3 && !roaming && !(home && narrow);
     for (const [name, el] of Object.entries(tags)) {
       const at = s.labels[name];
       if (!at) continue;
@@ -288,6 +295,13 @@ function init(layer: HTMLElement) {
       }
       if (it.kind === "wormhole") cosmos.stage("wormhole", cruise, ch, tallScreen ? 0 : 0.08, tallScreen ? 0.12 : 0.1);
     }
+    stops = [{ y: coverEnd, r: 0 }];
+    for (const it of interludes) if (it.el.dataset.reach) stops.push({ y: it.top + it.h / 2 - vh / 2, r: +it.el.dataset.reach });
+    if (stops.length < 2 || !hold) stops = [];
+    // The curve's slope at each place (Fritsch and Carlson, so it never overshoots a place): the mean of the
+    // stretches either side, at rest at the last place, and at the first carrying on as the first stretch begins.
+    const d = stops.slice(1).map((b, i) => (b.r - stops[i].r) / Math.max(1, b.y - stops[i].y));
+    slopes = stops.map((_, i) => (i === 0 ? d[0] : i === stops.length - 1 ? 0 : d[i - 1] * d[i] <= 0 ? 0 : (2 * d[i - 1] * d[i]) / (d[i - 1] + d[i])));
   };
   let landed = false;
   const track = (y: number) => {
@@ -296,11 +310,39 @@ function init(layer: HTMLElement) {
     const held = hold ? Math.max(0, Math.min(1, (y - holdTop) / holdLen)) : 1;
     const cruise = Math.max(0, Math.min(1, past / body));
     const arrive = foot ? Math.max(0, Math.min(1, (y - (max - land)) / land)) : 0;
-    home = cruise > 0.5;
+    // The page sets the way out itself: the camera goes from
+    // one passage's place to the next at a steady zoom, and the far end of the
+    // cruise is kept for the stretch after the last, so the turn for home is
+    // made where nothing near can be seen.
+    let reach: number | undefined, run = cruise;
+    if (stops.length) {
+      const last = stops[stops.length - 1];
+      reach = last.r;
+      // A smooth curve through the places, not straight lines between them: the
+      // zoom never changes speed with a jolt at a passage, and it comes to rest
+      // at the last place instead of stopping there.
+      for (let i = 1; i < stops.length; i++) {
+        const a = stops[i - 1], b = stops[i];
+        if (y < b.y) {
+          const span = Math.max(1, b.y - a.y), u = Math.max(0, Math.min(1, (y - a.y) / span));
+          const ma = slopes[i - 1] * span, mb = slopes[i] * span;
+          const u2 = u * u, u3 = u2 * u;
+          reach = (2 * u3 - 3 * u2 + 1) * a.r + (u3 - 2 * u2 + u) * ma + (-2 * u3 + 3 * u2) * b.r + (u3 - u2) * mb;
+          break;
+        }
+      }
+      run = y <= last.y ? 0.45 * Math.max(0, (y - coverEnd) / Math.max(1, last.y - coverEnd)) : 0.45 + 0.55 * Math.min(1, (y - last.y) / Math.max(1, max - last.y));
+    }
+    home = run > 0.5;
+    roaming = past > 0.2 * window.innerHeight && arrive <= 0;
+    under = Math.max(0, Math.min(1, past / (0.6 * window.innerHeight))) * (1 - arrive);
     cosmos.setVoyage({
-      cover: narrow ? Math.min(1, held / 0.55) : held,
-      depart: !hero ? 1 : narrow ? Math.max(0, (held - 0.55) / 0.45) : Math.max(0, Math.min(1, past / leave)),
-      cruise,
+      // (Staged, a narrow screen builds over the whole hold too: the leaving is no longer played inside it.)
+      cover: narrow && reach === undefined ? Math.min(1, held / 0.55) : held,
+      // Staged, the camera is "away" (far enough that the scene is drawn for distance) by about Saturn.
+      depart: !hero ? 1 : reach !== undefined ? Math.min(1, reach / 0.3) : narrow ? Math.max(0, (held - 0.55) / 0.45) : Math.max(0, Math.min(1, past / leave)),
+      cruise: run,
+      reach,
       arrive,
       // On a narrow screen the sphere comes up with the footer, so the footer's caption never has to cross it.
       lift: narrow && home ? Math.max(0, max - y) / box.h : 0,
@@ -312,11 +354,20 @@ function init(layer: HTMLElement) {
     // The open stretches: the sky is unveiled as one comes to the middle of the window, and a star goes off in the middle of one.
     const vh = window.innerHeight;
     open = 0;
+    // Each body's place in its pass (the planets, and the probe at the heliopause): 0 with its passage centred, less before, more after; 9 when it is out of it.
+    for (const it of interludes) {
+      const o = it.el.dataset.orbit;
+      if (o !== "jupiter" && o !== "saturn" && o !== "neptune" && o !== "heliopause") continue;
+      const t = (y + vh / 2 - (it.top + it.h / 2)) / vh / 0.9;
+      cosmos.flyby(o, t > -1.6 && t < 2.6 ? t : 9);
+    }
     for (const it of interludes) {
       const off = Math.abs(it.top + it.h / 2 - (y + vh / 2)) / vh;
       open = Math.max(open, 1 - Math.min(1, Math.max(0, (off - 0.12) / 0.5)));
       // A far thing is out there only while its own stretch of sky is near: it comes up over the screen before, and goes over the screen after.
       const near = 1 - Math.min(1, Math.max(0, (off - 0.7) / 0.9));
+      // A passage lights the orbit it names while it is near the middle of the window.
+      if (it.el.dataset.orbit) cosmos.mark(it.el.dataset.orbit, 1 - Math.min(1, Math.max(0, (off - 0.15) / 0.55)));
       if (it.kind === "hole" || it.kind === "quasar" || it.kind === "wormhole") cosmos.show(it.kind, near);
       if (it.kind === "quasar") cosmos.show("nebula", near);
       if (it.kind === "nova") {
@@ -354,10 +405,14 @@ function init(layer: HTMLElement) {
   // while one of those two is on screen.
   const seen = new Set<Element>();
   const sync = () => cosmos.run(!document.hidden && (root.dataset.theme !== "light" || seen.size > 0));
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target);
-    sync();
-  });
+  // Half a screen early, so by day the camera is already under way when a stretch of sky comes up, not setting off as it does.
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target);
+      sync();
+    },
+    { rootMargin: "50% 0px" },
+  );
   for (const el of [hold ?? hero, foot, ...interludes.map((it) => it.el)]) if (el) io.observe(el);
   document.addEventListener("visibilitychange", sync);
   document.addEventListener("themechange", sync);

@@ -129,6 +129,23 @@ for (const id of ["work", "research", "projects", "record"]) {
     },
   });
 }
+// Each passage at a reading pace, from the end of the section before it into
+// the section after: the card's arrival and leaving, the camera reaching the
+// passage's distance, the orbit lighting, and the planet flown past.
+for (const orbit of ["jupiter", "saturn", "neptune", "heliopause"])
+  take({
+    id: `home.pass.${orbit}`,
+    covers: ["passage", "voyage:cruise", "reveal:passage"],
+    about: `The ${orbit} passage, crossed at a reading pace: the card, the camera, the lit orbit${orbit === "heliopause" ? "" : " and the flyby"}.`,
+    track: { card: `.passage[data-orbit="${orbit}"] .card`, line: `.passage[data-orbit="${orbit}"] .line`, crumb: "[data-crumb]" },
+    run: async ({ m, g }) => {
+      const p = g.passages.find((p) => p.orbit === orbit);
+      const mid = p.y + p.h / 2 - g.vh / 2;
+      await m.place(mid - g.vh * 1.15, 1.5);
+      await m.scroll(Math.min(g.max, mid + g.vh * 1.2), 420, orbit);
+      await m.hold(1.2, "rest");
+    },
+  });
 take({
   id: "home.record.rows",
   covers: ["reveal:rows"],
@@ -315,19 +332,6 @@ take({
     await m.hold(1.5, "home");
   },
 });
-// The two sequences, scrolled through from end to end.
-for (const [name, secs] of [["supernova", 8], ["deeptime", 7]])
-  take({
-    id: `home.seq.${name}`,
-    covers: [`sequence:${name}`],
-    about: `The ${name} sequence, start to finish.`,
-    run: async ({ m, page }) => {
-      const at = await page.evaluate((n) => { const e = document.querySelector(`[data-seq="${n}"]`); const r = e.getBoundingClientRect(); return { top: r.top + scrollY, len: r.height - innerHeight }; }, name);
-      await m.place(at.top, 1.5);
-      await m.scroll(at.top + at.len, Math.round(at.len / secs), "play");
-      await m.hold(1, "end");
-    },
-  });
 
 // One page giving way to another is not recorded here. With the clock held,
 // Chrome draws every picture of the page being left as a white sheet, so a

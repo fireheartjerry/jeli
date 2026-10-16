@@ -39,6 +39,9 @@ const unsettled = () =>
     .filter((el) => {
       if (el.closest("svg, [aria-hidden='true'], .figure") && !el.parentElement?.matches("[data-reveal='plate']")) return false;
       if (el.matches(".edge, .edge *, [data-reveal='read'] *")) return false; // the read-along is tied to the scroll; it is judged on its own
+      // A passage's card comes up and leaves again with the scroll, like a title in a film, and its log is closed until asked
+      // for; without the scene there is no passage at all. Its takes (home.pass.*) judge it.
+      if (el.closest("[data-reveal='passage']")) return false;
       // A section's title sinks behind its line as it goes under the bar (it is handed to the breadcrumb): above there it is meant to be down.
       if (el.matches("h2") && el.closest("[data-reveal='title']") && el.getBoundingClientRect().top < 140) return false;
       const cs = getComputedStyle(el);

@@ -88,6 +88,14 @@ export interface Voyage {
    * screen the sphere comes up with it.
    */
   lift?: number;
+  /**
+   * How far out the camera is, as the share of the way from the end of the
+   * cover's shot to the edge of the take, counted in the logarithm of the
+   * distance. Given, it sets the distance on its own, so the page can put each
+   * of its parts at its own place on the way out; left out, the leaving and
+   * the cruise set it.
+   */
+  reach?: number;
 }
 
 export interface CosmosOptions {
@@ -132,6 +140,15 @@ export interface Cosmos {
   stage(kind: "hole" | "quasar" | "wormhole" | "nebula", cruise: number, ch: number, nx: number, ny: number): void;
   /** How much of a staged far thing is shown, 0 to 1. */
   show(kind: "hole" | "quasar" | "wormhole" | "nebula", v: number): void;
+  /** Light one orbit (jupiter, saturn, neptune, or the heliopause) in gold, 0 to 1: the page is crossing it. */
+  mark(name: string, v: number): void;
+  /**
+   * Fly past a planet: `t` is where the page is in the pass, 0 when the
+   * planet is where its card wants it, less before (it is still beside or
+   * behind the camera), more after (it falls away towards the Sun). Each
+   * planet keeps its own, so one can still be falling away as the next comes in.
+   */
+  flyby(name: "jupiter" | "saturn" | "neptune" | "heliopause", t: number): void;
   /** Stop drawing (something opaque covers the whole window), or start again. */
   rest(on: boolean): void;
   /** A star goes off at (nx, ny) on the screen now; `size` scales it. */
@@ -240,22 +257,31 @@ void main() {
   // Star clouds, and the knots inside them.
   float clouds = fbm3(q * 4.0, 5);
   float knots = pow(fbm3(q * 9.0 + 3.0, 4), 2.0);
-  float light = (disc * (0.3 + 1.3 * clouds) + haze) * (0.7 + 1.1 * knots) + bulge * 0.85;
+  // A thick disc of old stars round the thin one, and the core's glow spilling well past the bulge.
+  float thick = exp(-pow(mid / (wide * 3.2), 2.0)) * 0.11 * mix(0.45, 1.0, toward);
+  float glow = exp(-(lon * lon * 0.5 + lat * lat * 3.2)) * 0.32;
+  float light = (disc * (0.3 + 1.3 * clouds) + haze) * (0.7 + 1.1 * knots) + bulge * 1.05 + thick + glow;
   // Dust: dark lanes drawn out along the plane, and one long rift through the middle.
   float ridge = 1.0 - abs(2.0 * fbm3(q * vec3(5.0, 12.0, 5.0) + 1.7, 4) - 1.0);
   float lanes = smoothstep(0.6, 0.9, ridge + 0.25 * fbm3(q * 14.0, 3)) * exp(-pow((mid + 0.01) / (wide * 0.8), 2.0));
   float rift = smoothstep(0.42, 0.66, fbm3(q * vec3(2.2, 6.5, 2.2) + 9.0, 4)) * exp(-pow(mid / (wide * 0.5), 2.0));
-  light *= 1.0 - 0.82 * clamp(lanes + rift, 0.0, 1.0);
+  float dust = clamp(lanes + rift, 0.0, 1.0);
+  // Dust takes the blue out before it takes the light: the edges of every lane glow warm.
+  float fringe = smoothstep(0.0, 0.5, dust) * (1.0 - smoothstep(0.5, 1.0, dust));
+  light *= 1.0 - 0.86 * dust;
   // Old yellow stars at the centre, young blue ones out along the arms.
-  vec3 col = mix(vec3(0.72, 0.81, 1.0), vec3(1.0, 0.85, 0.64), clamp(bulge * 1.5 + 0.3 * toward, 0.0, 1.0));
+  vec3 col = mix(vec3(0.72, 0.81, 1.0), vec3(1.0, 0.85, 0.64), clamp(bulge * 1.5 + glow + 0.3 * toward, 0.0, 1.0));
+  col *= mix(vec3(1.0), vec3(1.08, 0.86, 0.66), fringe * 0.5);
+  // Where young stars are being born the hydrogen round them glows red, in knots strung along the arms, just off the dust.
+  float born = smoothstep(0.66, 0.86, fbm3(q * 16.0 + 5.0, 4)) * smoothstep(0.55, 0.8, clouds) * exp(-pow(mid / (wide * 0.9), 2.0)) * (1.0 - 0.7 * dust);
   float edge = smoothstep(1.0, 0.78, abs(v_uv.y - 0.5) * 2.0);
-  o = vec4(col * light * edge, 1.0);
+  o = vec4((col * light + vec3(1.0, 0.32, 0.42) * born * 0.55) * edge, 1.0);
 }`;
 const VS_FAR = `#version 300 es
 in vec2 a_q;
 out vec2 v_q;
 void main() { v_q = a_q; gl_Position = vec4(a_q, 0.0, 1.0); }`;
-const FS_FAR = FRAG_HEAD + `
+const FS_FAR = FRAG_HEAD + NOISE + `
 in vec2 v_q;
 uniform sampler2D u_sky;
 uniform mat3 u_look; // from the camera's frame to the galaxy's
@@ -268,6 +294,10 @@ void main() {
   float lat = asin(clamp(d.y, -1.0, 1.0));
   if (abs(lat) > ${GALAXY.lat.toFixed(3)}) discard;
   vec3 c = texture(u_sky, vec2(atan(d.z, d.x) / 6.2831853 + 0.5, lat / ${(2 * GALAXY.lat).toFixed(3)} + 0.5)).rgb * u_gain;
+  // Finer than the painted strip can hold: a grain in the star clouds at
+  // about the size of a few pixels, so the band keeps its texture however
+  // close the lens is to it. Fixed on the sky.
+  c *= 0.84 + 0.32 * fbm3(d * 260.0, 2);
   // The band is not smoke. It is stars, too faint and too many to keep one by
   // one: so the sky is cut into cells a seventh of a degree across, each cell
   // is given one star at a place and a brightness of its own, and there are as
@@ -286,6 +316,241 @@ void main() {
   // Under one level of noise, so the faint end does not band.
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
   o = vec4(max(c + (n - 0.5) / 255.0, 0.0), 0.0);
+}`;
+
+// ---- a planet flown past: Jupiter, Saturn with its rings, or Neptune ----
+// Ray-traced in the camera's frame on one screen-filling pass that gives up at
+// once outside the body's circle. The camera faces the Sun, so a planet passed
+// on the way out is lit from behind: a crescent, its atmosphere glowing round
+// the limb, and Saturn's rings lit through, as Cassini saw them.
+const FS_PLANET = FRAG_HEAD + NOISE + `
+in vec2 v_q;
+uniform vec4 u_lens;
+uniform vec3 u_c; // centre, camera frame
+uniform float u_r; // radius
+uniform vec3 u_L; // the light on its face: from the Sun's side of the frame, turned a little towards the lens
+uniform vec3 u_S; // straight towards the Sun, which sets how much the air and the rings glow from behind
+uniform vec3 u_pole; // spin axis (and the rings' normal)
+uniform float u_kind; // 0 Jupiter, 1 Saturn, 2 Neptune
+uniform float u_spin;
+uniform float u_pix; // a pixel's angular size
+uniform float u_a; // how much of it is there
+const float RI = 1.24, RO = 2.27; // the rings, in planetary radii: the C ring's inner edge to the A ring's outer
+float hash1(float x) { return fract(sin(x * 91.17) * 43758.5453); }
+// How much of the light the rings stop at a radius: C faint, B dense, the Cassini division, A, and Encke's gap.
+float ringDensity(float r) {
+  if (r < RI || r > RO) return 0.0;
+  float d = r < 1.53 ? 0.12 + 0.06 * smoothstep(1.24, 1.53, r)
+          : r < 1.95 ? 0.58 + 0.2 * smoothstep(1.53, 1.75, r)
+          : r < 2.03 ? 0.05
+          : 0.4 - 0.12 * smoothstep(2.03, 2.27, r);
+  // Thousands of ringlets.
+  d *= 0.72 + 0.5 * noise3(vec3(r * 140.0, 0.0, 0.0)) + 0.18 * noise3(vec3(r * 610.0, 3.0, 0.0));
+  d *= 1.0 - smoothstep(0.0, 0.004, 0.004 - abs(r - 2.214)); // Encke
+  return clamp(d * smoothstep(RI, RI + 0.02, r) * smoothstep(RO, RO - 0.015, r), 0.0, 0.97);
+}
+vec3 surface(vec3 n) {
+  // The body's own frame, turning about its pole.
+  vec3 e1 = normalize(cross(u_pole, abs(u_pole.z) < 0.9 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)));
+  vec3 e2 = cross(u_pole, e1);
+  float cs = cos(u_spin), sn = sin(u_spin);
+  vec3 q = vec3(dot(n, e1) * cs - dot(n, e2) * sn, dot(n, u_pole), dot(n, e1) * sn + dot(n, e2) * cs);
+  float y = q.y;
+  // Turbulence drawn out along the latitudes: the belts and zones shear past each other.
+  float turb = fbm3(vec3(q.x * 2.6, y * 26.0, q.z * 2.6) + u_kind * 11.0, 5);
+  if (u_kind < 0.5) {
+    // A dozen belts and zones of uneven width, and finer ones inside them, all torn by the same turbulence.
+    float band = sin(y * 19.0 + turb * 3.2 + 0.8 * sin(y * 7.0)) + 0.45 * sin(y * 53.0 + turb * 6.0) + 0.25 * sin(y * 131.0 + turb * 9.0);
+    vec3 col = mix(vec3(0.6, 0.45, 0.33), vec3(0.93, 0.88, 0.78), smoothstep(-0.7, 0.8, band));
+    // Festoons and eddies along the edges of the belts.
+    float eddy = fbm3(vec3(q.x * 7.0, y * 60.0, q.z * 7.0) + turb * 2.0, 4);
+    col = mix(col, vec3(0.7, 0.55, 0.42), 0.4 * smoothstep(0.45, 0.8, eddy));
+    col = mix(col, vec3(0.98, 0.95, 0.88), 0.25 * smoothstep(0.62, 0.85, eddy));
+    col = mix(col, vec3(0.55, 0.53, 0.52), smoothstep(0.82, 0.97, abs(y)));
+    // The Great Red Spot, 22 degrees south.
+    vec2 g = vec2(atan(q.z, q.x) - 0.9, (y + 0.37) * 2.3);
+    col = mix(col, vec3(0.78, 0.4, 0.27), 0.85 * exp(-dot(g, g) * 30.0));
+    return col;
+  }
+  if (u_kind < 1.5) {
+    float band = sin(y * 17.0 + turb * 1.6) + 0.4 * sin(y * 61.0 + turb * 3.0);
+    vec3 col = mix(vec3(0.78, 0.67, 0.48), vec3(0.94, 0.87, 0.7), smoothstep(-0.9, 0.9, band));
+    return mix(col, vec3(0.6, 0.62, 0.66), smoothstep(0.78, 0.98, abs(y)));
+  }
+  float band = sin(y * 9.0 + turb * 1.6);
+  vec3 col = mix(vec3(0.13, 0.27, 0.72), vec3(0.28, 0.48, 0.92), smoothstep(-0.7, 0.7, band));
+  // High white clouds in long streaks, and a dark storm.
+  float streak = smoothstep(0.62, 0.82, fbm3(vec3(q.x * 3.0, y * 40.0, q.z * 3.0) + 7.0, 4)) * smoothstep(0.75, 0.3, abs(abs(y) - 0.45));
+  col = mix(col, vec3(0.92, 0.95, 1.0), streak * 0.8);
+  vec2 g = vec2(atan(q.z, q.x) + 1.4, (y + 0.3) * 2.5);
+  return mix(col, vec3(0.06, 0.12, 0.35), 0.7 * exp(-dot(g, g) * 45.0));
+}
+void main() {
+  vec3 rd = normalize(vec3((v_q.x - u_lens.z) * u_lens.x, (v_q.y - u_lens.w) * u_lens.y, -1.0));
+  float b = dot(rd, u_c);
+  float reach = u_kind > 0.5 && u_kind < 1.5 ? RO * 1.02 : 1.6;
+  float perp = sqrt(max(dot(u_c, u_c) - b * b, 0.0));
+  if (b <= 0.0 || perp > u_r * reach) discard;
+  vec3 atmCol = u_kind < 0.5 ? vec3(1.0, 0.82, 0.6) : u_kind < 1.5 ? vec3(1.0, 0.86, 0.62) : vec3(0.45, 0.72, 1.0);
+  float back = pow(max(dot(rd, u_S), 0.0), 5.0); // looking towards the light
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  // The disc, with its edge smoothed over one pixel.
+  float px = u_pix * b;
+  float cover = clamp((u_r - perp) / px + 0.5, 0.0, 1.0);
+  float tS = 1e9;
+  if (cover > 0.0) {
+    float h = sqrt(max(u_r * u_r - perp * perp, 0.0));
+    tS = b - h;
+    vec3 n = normalize(rd * tS - u_c);
+    float ndl = dot(n, u_L);
+    float mu = max(dot(n, -rd), 0.0);
+    // A soft terminator (the light is bent and scattered round by the air), and the limb darkened.
+    float day = smoothstep(-0.12, 0.3, ndl) * max(ndl + 0.06, 0.0);
+    vec3 base = surface(n);
+    vec3 lit = base * (1.45 * day * pow(mu, 0.45) + 0.012);
+    // Shadow of the rings on the globe.
+    if (u_kind > 0.5 && u_kind < 1.5) {
+      vec3 pt = rd * tS;
+      float dl = dot(u_L, u_pole);
+      if (abs(dl) > 1e-3) {
+        float t = dot(u_c - pt, u_pole) / dl;
+        if (t > 0.0) lit *= 1.0 - 0.85 * ringDensity(length(pt + u_L * t - u_c) / u_r);
+      }
+    }
+    // The air at the limb, brightest when the Sun is behind.
+    float rim = pow(1.0 - mu, 3.0);
+    lit += atmCol * rim * (0.4 * smoothstep(-0.35, 0.4, ndl) + 0.9 * back * (0.35 + 0.65 * smoothstep(-0.5, 0.4, ndl)));
+    col = lit * cover;
+    a = cover;
+  }
+  // The air beyond the edge: a thin halo, lit through from behind.
+  float off = (perp - u_r) / u_r;
+  if (off > -0.02) col += atmCol * exp(-max(off, 0.0) / (u_kind > 1.5 ? 0.05 : 0.035)) * (0.06 + 1.1 * back) * (1.0 - cover * 0.5);
+  // The rings.
+  if (u_kind > 0.5 && u_kind < 1.5) {
+    float dn = dot(rd, u_pole);
+    if (abs(dn) > 1e-4) {
+      float t = dot(u_c, u_pole) / dn;
+      vec3 rp = rd * t - u_c;
+      float r = length(rp) / u_r;
+      float dens = t > 0.0 ? ringDensity(r) : 0.0;
+      if (dens > 0.0) {
+        // The globe's shadow across them.
+        vec3 o = rd * t;
+        float bb = dot(u_L, u_c - o), cc = dot(u_c - o, u_c - o) - u_r * u_r;
+        float shadow = (bb > 0.0 && bb * bb - cc > 0.0) ? 0.08 : 1.0;
+        // The face towards the Sun is lit; from the far side light comes through, most where they are thin.
+        bool sunSide = dot(u_pole, u_L) * dot(u_pole, -rd) > 0.0;
+        vec3 ice = vec3(0.88, 0.8, 0.66) * (0.85 + 0.3 * noise3(vec3(r * 37.0, 1.0, 0.0)));
+        vec3 rc = sunSide ? ice * (0.06 + 0.62 * abs(dot(u_pole, u_L))) : ice * (1.0 - dens) * 1.8 * (0.1 + 1.3 * back);
+        rc *= shadow;
+        float ra = dens;
+        if (t < tS) { col = rc * ra + col * (1.0 - ra); a = ra + a * (1.0 - ra); }
+        else if (a < 1.0) { col += rc * ra * (1.0 - a); a += ra * (1.0 - a); }
+      }
+    }
+  }
+  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  o = vec4(max(col + (n - 0.5) / 255.0, 0.0), a) * u_a;
+}`;
+
+// ---- a probe flown past at the heliopause: Voyager, to its real proportions ----
+// Ray-marched in the probe's own frame, in metres: the 3.7 m dish and its feed,
+// the ten-sided bus under it, the 13 m magnetometer boom, the boom carrying the
+// three RTGs, and the science boom with its scan platform. Lit like the planets:
+// from the Sun's side of the frame, and rimmed by the Sun almost behind it.
+const FS_PROBE = FRAG_HEAD + `
+in vec2 v_q;
+uniform vec4 u_lens;
+uniform vec3 u_c; // its centre, camera frame
+uniform float u_m; // camera-frame units per metre
+uniform mat3 u_R; // its frame to the camera's
+uniform vec3 u_L;
+uniform vec3 u_S;
+uniform float u_pix;
+uniform float u_a;
+float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h) - r; }
+float cyl(vec3 p, float r, float hh) { vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, hh); return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)); }
+float box(vec3 p, vec3 b) { vec3 q = abs(p) - b; return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0); }
+float prism10(vec3 p, float r, float hh) {
+  // A ten-sided prism about y: fold into one sector, then a slab.
+  float a = atan(p.z, p.x), s = 6.2831853 / 10.0;
+  a = mod(a + s * 0.5, s) - s * 0.5;
+  vec2 q = length(p.xz) * vec2(cos(a), sin(a));
+  vec2 d = vec2(q.x - r, abs(p.y) - hh);
+  return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+}
+// Which part was hit: 0 dish, 1 bus, 2 boom, 3 RTG, 4 platform.
+vec2 map(vec3 p) {
+  // The dish: a shallow bowl 3.66 m across, open towards +y.
+  vec3 q = p - vec3(0.0, 0.55, 0.0);
+  q.y -= dot(q.xz, q.xz) * 0.115;
+  vec2 r = vec2(cyl(q, 1.83, 0.035) * 0.8, 0.0);
+  float feed = min(capsule(p, vec3(0.0, 0.6, 0.0), vec3(0.0, 1.45, 0.0), 0.05), length(p - vec3(0.0, 1.5, 0.0)) - 0.16);
+  if (feed < r.x) r = vec2(feed, 0.0);
+  float bus = prism10(p - vec3(0.0, 0.05, 0.0), 0.89, 0.24);
+  if (bus < r.x) r = vec2(bus, 1.0);
+  // The magnetometer boom, 13 m out, very thin; it sags a little.
+  float mag = capsule(p, vec3(0.6, 0.0, 0.3), vec3(13.0, -0.6, 3.2), 0.035);
+  if (mag < r.x) r = vec2(mag, 2.0);
+  // The RTG boom and its three generators, finned cylinders end to end.
+  vec3 rb = vec3(-1.0, -0.1, -0.35);
+  float rtg = capsule(p, vec3(-0.7, 0.0, -0.25), vec3(-3.2, -0.3, -1.1), 0.05);
+  if (rtg < r.x) r = vec2(rtg, 2.0);
+  vec3 axis = normalize(vec3(-2.5, -0.3, -0.85));
+  for (int k = 0; k < 3; k++) {
+    vec3 c = vec3(-1.9, -0.16, -0.65) + axis * float(k) * 0.55;
+    float g = capsule(p, c, c + axis * 0.45, 0.2);
+    if (g < r.x) r = vec2(g, 3.0);
+  }
+  // The science boom, with the scan platform at its end.
+  float sci = capsule(p, vec3(0.5, -0.1, -0.5), vec3(2.0, -0.4, -2.3), 0.05);
+  if (sci < r.x) r = vec2(sci, 2.0);
+  float plat = box(p - vec3(2.15, -0.45, -2.5), vec3(0.35, 0.22, 0.28));
+  if (plat < r.x) r = vec2(plat, 4.0);
+  return r;
+}
+vec3 normalAt(vec3 p) {
+  vec2 e = vec2(0.004, 0.0);
+  return normalize(vec3(map(p + e.xyy).x - map(p - e.xyy).x, map(p + e.yxy).x - map(p - e.yxy).x, map(p + e.yyx).x - map(p - e.yyx).x));
+}
+void main() {
+  vec3 rd = normalize(vec3((v_q.x - u_lens.z) * u_lens.x, (v_q.y - u_lens.w) * u_lens.y, -1.0));
+  // Into its frame: the ray from the camera, in metres.
+  vec3 ro = transpose(u_R) * (-u_c) / u_m, d = transpose(u_R) * rd;
+  // Its bounding sphere, round the middle of the dish and the boom.
+  vec3 bc = vec3(5.0, 0.0, 1.0);
+  float b = dot(bc - ro, d), c2 = dot(bc - ro, bc - ro) - b * b;
+  if (b < 0.0 || c2 > 9.5 * 9.5) discard;
+  float t = max(0.0, b - 9.5), hit = -1.0, part = 0.0, near = 1e9;
+  float tol = u_pix * length(u_c) / u_m * 0.5; // half a pixel, in metres, at its distance
+  for (int i = 0; i < 90; i++) {
+    vec2 h = map(ro + d * t);
+    near = min(near, h.x / max(t, 1e-3));
+    if (h.x < tol) { hit = t; part = h.y; break; }
+    t += h.x;
+    if (t > b + 9.5) break;
+  }
+  vec3 L = transpose(u_R) * u_L, S = transpose(u_R) * u_S;
+  float back = pow(max(dot(d, S), 0.0), 5.0);
+  if (hit < 0.0) {
+    // The thinnest parts, narrower than a pixel, still catch the light along their length.
+    float glint = smoothstep(tol * 3.0 / max(t, 1.0), 0.0, near) * (0.15 + 0.6 * back);
+    o = vec4(vec3(1.0, 0.9, 0.75) * glint, 0.0) * u_a;
+    return;
+  }
+  vec3 p = ro + d * hit, n = normalAt(p);
+  float ndl = max(dot(n, L), 0.0);
+  vec3 alb = part < 0.5 ? vec3(0.78, 0.77, 0.74) : part < 1.5 ? vec3(0.62, 0.48, 0.24) : part < 2.5 ? vec3(0.5, 0.5, 0.52) : part < 3.5 ? vec3(0.32, 0.3, 0.3) : vec3(0.7, 0.6, 0.4);
+  // Gold foil on the bus throws a hard highlight; the dish is matte white paint.
+  vec3 h = normalize(L - d);
+  float spec = pow(max(dot(n, h), 0.0), part > 0.5 && part < 1.5 ? 40.0 : 12.0) * (part > 0.5 && part < 1.5 ? 0.9 : 0.15);
+  float rim = pow(1.0 - max(dot(n, -d), 0.0), 3.0) * (0.3 + 1.8 * back);
+  // The dish is a bowl: light falls across its face from the rim nearest the Sun.
+  vec3 col = alb * (0.02 + 1.15 * ndl * ndl) + vec3(1.0, 0.9, 0.75) * (spec * ndl + rim * 0.6);
+  float n_ = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  o = vec4(col + (n_ - 0.5) / 255.0, 1.0) * u_a;
 }`;
 
 // ---- deep sky: what the camera finds out past the planets ----
@@ -572,11 +837,17 @@ void main() {
   if (u_mode > 4.5) {
     // The whole sphere from far out: one gold star. A tight core in a soft
     // halo, and the fine cross a lens puts on any point bright enough.
+    // (The quad is about 118 px each way from the middle, so 0.0085 is a pixel.)
     float d = length(v_q);
-    float core = exp(-d * d * 1100.0) * 1.7 + exp(-d * 30.0) * 0.42 + 0.01 / (d + 0.035);
-    float glint = max(exp(-abs(v_q.x) * 190.0) * exp(-abs(v_q.y) * 3.4), exp(-abs(v_q.y) * 190.0) * exp(-abs(v_q.x) * 3.4));
-    float m = (core + glint * 0.62) * smoothstep(1.0, 0.55, d) * u_gain;
-    o = vec4(mix(vec3(1.0, 0.8, 0.52), vec3(1.0, 0.97, 0.9), smoothstep(0.25, 1.3, core)) * m, 0.0);
+    float core = exp(-d * d * 4200.0) * 2.6 + exp(-d * d * 520.0) * 0.5 + exp(-d * 16.0) * 0.1;
+    // The first ring of the lens's own diffraction, barely there.
+    float ring = exp(-pow((d - 0.052) / 0.007, 2.0)) * 0.07;
+    float spikes = max(exp(-abs(v_q.y) * 260.0) * exp(-abs(v_q.x) * 2.4), exp(-abs(v_q.x) * 260.0) * exp(-abs(v_q.y) * 2.4));
+    vec2 r = vec2(v_q.x + v_q.y, v_q.y - v_q.x) * 0.7071;
+    spikes += 0.22 * max(exp(-abs(r.y) * 300.0) * exp(-abs(r.x) * 7.5), exp(-abs(r.x) * 300.0) * exp(-abs(r.y) * 7.5));
+    float m = (core + ring + spikes * 0.7) * smoothstep(1.0, 0.6, d) * u_gain;
+    // White-hot where it is brightest, gold as it falls away.
+    o = vec4(mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.98, 0.94), smoothstep(0.2, 1.8, core)) * m, 0.0);
     return;
   }
   if (u_mode > 3.5) {
@@ -779,6 +1050,7 @@ in vec4 a_e1; // a, e, inclination, node
 in vec4 a_e2; // argument of perihelion, mean anomaly at t=0, size, random
 in vec4 a_e3; // colour rgb, kind (0 belt rock, 1 keeps forever, 2 planet)
 uniform float u_far; // how far out the camera is, 0 to 1
+uniform float u_gone; // the share of the rocks too small to see from here: 0 inside about 12 AU, all of them by 140
 out vec3 v_l; out vec3 v_c; out float v_seed; out float v_px;
 void main() {
   float M = a_e2.y + u_time * TAU / pow(a_e1.x, 1.5);
@@ -786,7 +1058,7 @@ void main() {
   vec4 pv = u_view * vec4(p, 1.0);
   vec4 clip = u_proj * pv;
   // The belt is the quarry: it thins as the swarm fills.
-  if (a_e3.w < 0.5 && a_e2.w < u_p * 0.82) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 0.0; return; }
+  if ((a_e3.w < 0.5 && a_e2.w < u_p * 0.82) || (a_e3.w < 1.5 && fract(a_e2.w * 7.31) < u_gone)) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 0.0; return; }
   gl_Position = clip;
   v_px = clamp(u_px * a_e2.z * 3.6 / clip.w, 1.3 * u_px, a_e3.w > 0.5 ? 40.0 : 15.0 * u_px);
   gl_PointSize = v_px;
@@ -996,6 +1268,7 @@ void main() {
 const VS_LINE = HEAD + `
 in vec3 a_p;
 void main() { gl_Position = u_proj * u_view * vec4(a_p, 1.0); }`;
+
 const FS_LINE = FRAG_HEAD + `
 uniform vec4 u_col;
 void main() { o = u_col; }`;
@@ -1197,7 +1470,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   function paintSky() {
     const g = gl!;
     painted = true;
-    const gw = light ? 1024 : 2048, gh = gw / 4;
+    const gw = light ? 2048 : 4096, gh = gw / 4;
     const tex = g.createTexture()!;
     g.bindTexture(g.TEXTURE_2D, tex);
     g.texStorage2D(g.TEXTURE_2D, 1, g.RGBA8, gw, gh);
@@ -1445,16 +1718,36 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   // ---------- hairlines: two orbits and the AU grid ----------
   // `far` is 0 for a line of the inner system, which goes out as the camera
   // leaves, and 1 for one of the outer system, which only comes up then.
-  const loops: { m: ReturnType<typeof mesh>; alpha: number; far: number }[] = [];
+  const loops: { m: ReturnType<typeof mesh>; alpha: number; far: number; name?: string }[] = [];
+  // How lit each named orbit is (the page is crossing it), and how lit it is drawn: the second follows the first.
+  const marked: Record<string, number> = {}, lit: Record<string, number> = {};
+  let glowing = false; // an orbit is still coming up or going down, so the scene keeps drawing every frame
+  // The planet being flown past, and its program, built the first time one is near.
+  const KINDS = { jupiter: 0, saturn: 1, neptune: 2, heliopause: 3 } as const;
+  const passes = [9, 9, 9, 9]; // each body's place in its pass (the three planets, then the probe); 9 is out of it
+  let probe: Prog | null = null;
+  const probeR = (() => {
+    const n = (v: number[]) => { const l = Math.hypot(v[0], v[1], v[2]); return v.map((x) => x / l); };
+    const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const y = n([0.3, 0.5, 0.81]); // the dish's axis: turned up and right, towards the gold star it came from, and three-quarters to the lens
+    const x = n(cross(y, [0.25, 0.1, -1])).map((v) => -v); // the magnetometer boom's side: out to the right, away from the card
+    const z = cross(x, y);
+    return new Float32Array([...x, ...y, ...z]);
+  })();
+  // On a tall screen the card is under it, so it is turned half round its dish's axis: the boom points up, away from the type.
+  const probeRTall = new Float32Array([-probeR[0], -probeR[1], -probeR[2], probeR[3], probeR[4], probeR[5], -probeR[6], -probeR[7], -probeR[8]]);
+  let planet: Prog | null = null;
+  let flying = false; // the pass moved since the last frame
+  let planetWarm = false;
   const P3 = new Float32Array(3);
-  const orbit = (pl: (typeof PLANETS)[keyof typeof PLANETS], alpha: number, far: number, seg = SEG) => {
+  const orbit = (pl: (typeof PLANETS)[keyof typeof PLANETS], alpha: number, far: number, seg = SEG, name?: string) => {
     const pts = new Float32Array(seg * 3);
     for (let i = 0; i < seg; i++) {
       // Even steps of mean anomaly crowd the points a little at aphelion; on orbits this round it does not show.
       keplerCPU(pl.a, pl.e, pl.i, pl.node, pl.peri, (i / seg) * TAU, P3);
       pts.set(P3, i * 3);
     }
-    loops.push({ m: mesh(prog.line.p, pts, [["a_p", 3]]), alpha, far });
+    loops.push({ m: mesh(prog.line.p, pts, [["a_p", 3]]), alpha, far, name });
   };
   const ring = (r: number, alpha: number, far: number, seg = SEG) => {
     const pts = new Float32Array(seg * 3);
@@ -1462,16 +1755,20 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     loops.push({ m: mesh(prog.line.p, pts, [["a_p", 3]]), alpha, far });
   };
   orbit(PLANETS.mars, 0.17, 0);
-  orbit(PLANETS.jupiter, 0.17, 0.5); // Jupiter's is seen from both
+  orbit(PLANETS.jupiter, 0.17, 0.5, SEG, "jupiter"); // Jupiter's is seen from both
   for (const r of [2, 3, 4]) ring(r, 0.06, 0);
   // Long arcs cross the whole frame, so they are cut finer.
-  orbit(PLANETS.saturn, 0.15, 1, 240);
+  orbit(PLANETS.saturn, 0.15, 1, 240, "saturn");
   orbit(PLANETS.uranus, 0.13, 1, 320);
-  orbit(PLANETS.neptune, 0.13, 1, 400);
+  orbit(PLANETS.neptune, 0.13, 1, 400, "neptune");
   // The scale out here, in powers of ten: 10 AU and 100 AU.
   ring(10, 0.045, 1, 240);
   ring(100, 0.045, 1, 480);
   ring(1000, 0.04, 1, 480);
+  // Where the Sun's wind gives way, about where Voyager 1 crossed it. Not a circle in truth (it is blown back
+  // into a long tail), and not drawn at all until the page says the camera is past it.
+  ring(121, 0, 1, 480);
+  loops[loops.length - 1].name = "heliopause";
 
   // ---------- camera ----------
   const view = new Float32Array(16), proj = new Float32Array(16);
@@ -1480,7 +1777,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   let deepWarm = false;
   let resting = false; // something opaque covers the window: the scene is not drawn
   let fresh = true; // nothing to compare the first frame with, or the frame after a cut
-  const F = F0;
+  // The lens: a touch wider while the camera is travelling fast, as a camera
+  // rushing backwards seems to, and back to its own focal length as it slows.
+  let F = F0, warp = 0, warpAt = -1, lastLr = 0;
   // The shot: from just outside the shell, above its first band, back to
   // beyond the belt on 16 Psyche's orbit (2.92 AU) once the sphere is closed.
   const NEAR = { r: 1.27, el: 0.68 }, WIDE = { r: WIDE_R, el: 0.42 };
@@ -1491,7 +1790,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   let scroll = from.cover ?? 0; // 0..1 through the cover
   let shot = scroll; // the same, a moment behind: the camera follows the scroll instead of jumping with it
   // The rest of the take: where the scroll puts the camera, and where it has got to.
-  const aim = { depart: from.depart ?? 0, cruise: from.cruise ?? 0, arrive: from.arrive ?? 0, lift: 0 };
+  const aim = { depart: from.depart ?? 0, cruise: from.cruise ?? 0, arrive: from.arrive ?? 0, lift: 0, reach: from.reach ?? -1 };
   const leg = { ...aim };
   // The chapter the page is in, as a heading: where it is turning from and to, and since when.
   const chapter = { from: 0, to: 0, at: -99, now: 0 };
@@ -1579,6 +1878,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const smooth = (t: number) => t * t * (3 - 2 * t);
 
   function camera() {
+    F = F0 * (1 - 0.055 * warp);
     const s = smooth(shot);
     pull = s;
     const tall = h > w * 1.1 ? 1.22 : 1;
@@ -1601,9 +1901,25 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     // the cover left it, so the footer's caption has clear sky over it.
     const off = tall > 1 && leg.cruise > 0.5 ? 1 + HOME_TALL * (1 - away) : 1;
     // Out and back: nothing at either end of the page, everything in the middle, and at rest at all three.
-    const deep = Math.sin(Math.PI * leg.cruise) ** 2 * away;
-    const dist = (NEAR.r + (WIDE.r - NEAR.r) * pulled) * (1 + (tall - 1) * (0.35 + 0.65 * s)) * (1 - ARRIVE.closer * late) * off * (FAR.r / WIDE.r) ** left * (FAR.deep / FAR.r) ** deep;
+    // Or, where the page has given its own places on the way out, the way out is those, and goes no further than FAR.r.
+    const staged = aim.reach >= 0;
+    const deep = staged ? 0 : Math.sin(Math.PI * leg.cruise) ** 2 * away;
+    const gone = staged ? Math.max(0, leg.reach) * (1 - home) : left;
+    // (A tall screen holds the camera further off so the sphere fits; on a staged way out that is let go by the first place, so the distance there is the place's own.)
+    const room = staged ? Math.max(0, 1 - gone / 0.08) : 1;
+    const dist = (NEAR.r + (WIDE.r - NEAR.r) * pulled) * (1 + (tall - 1) * (0.35 + 0.65 * s) * room) * (1 - ARRIVE.closer * late) * off * (FAR.r / WIDE.r) ** gone * (FAR.deep / FAR.r) ** deep;
     range = dist;
+    // How fast the camera is travelling, in the logarithm of its distance per second: a reading pace is under the
+    // threshold and leaves the lens alone; a fast fling down the page opens it a little, and it eases back.
+    const lr = Math.log(Math.max(1e-3, dist));
+    if (warpAt >= 0) {
+      const rate = Math.abs(lr - lastLr) / Math.max(1 / 240, clock - warpAt);
+      const want = smooth(Math.max(0, Math.min(1, (rate - 0.25) / 1.1)));
+      warp += (want - warp) * (want > warp ? 0.1 : 0.045);
+      if (warp < 1e-4) warp = 0;
+    }
+    warpAt = clock;
+    lastLr = lr;
     stop = ((NEAR.r + (WIDE.r - NEAR.r) * pulled) / WIDE.r) ** 1.9;
     // Far out it rises over the ecliptic, and the orbits open from lines into rings.
     const el = Math.max(0.05, Math.min(1.35, NEAR.el + (WIDE.el - NEAR.el) * s + (FAR.el - WIDE.el) * away + dragEl + look.el + ARRIVE.el * late));
@@ -1843,7 +2159,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     spot.cover = opts.place(w, h);
     spot.end = opts.placeEnd?.(w, h) ?? spot.cover;
     // Far out the Sun rides high and to the right, clear of the reading column.
-    spot.far = opts.placeFar?.(w, h) ?? (w > h ? { x: 0.86, y: 0.2 } : { x: 0.8, y: 0.15 });
+    spot.far = opts.placeFar?.(w, h) ?? (w > h ? { x: 0.74, y: 0.4 } : { x: 0.8, y: 0.15 });
     if (!running) draw();
   }
 
@@ -2063,7 +2379,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.uniform1f(prog.far.u.u_smear, smeared);
       g.uniformMatrix3fv(prog.far.u.u_look, false, lookG);
       g.uniform4f(prog.far.u.u_lens, aspect / F, 1 / F, lens[0], lens[1]);
-      g.uniform1f(prog.far.u.u_gain, GALAXY.gain * night * (1 + 0.5 * away));
+      g.uniform1f(prog.far.u.u_gain, GALAXY.gain * night * (1 + 0.65 * away));
       g.uniform1i(prog.far.u.u_sky, 0);
       g.activeTexture(g.TEXTURE0);
       g.bindTexture(g.TEXTURE_2D, galaxy);
@@ -2095,7 +2411,8 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
       g.disable(g.SCISSOR_TEST);
     }
-    if (galaxy && deepK > 0.002) {
+    // (With nothing hung on the sky and no star going off it draws nothing, so it is not drawn.)
+    if (galaxy && deepK > 0.002 && (Object.keys(staged).length > 0 || novae.some((n) => clock - n.at < NOVA))) {
       for (const [k, at] of Object.entries(staged)) deepSky[k as Far] = skyAt(at!.cruise, at!.ch, at!.nx, at!.ny);
       const dp = prog.deep;
       g.useProgram(dp.p);
@@ -2137,10 +2454,20 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
 
     let u = use(prog.line);
     const outer = smooth(Math.min(1, away * 1.7));
+    glowing = false;
     for (const l of loops) {
-      const al = l.alpha * (l.far === 0 ? 1 - outer : l.far === 1 ? outer : 1);
+      // A lit orbit is the one being crossed: it comes up gold, over whatever it is drawn at otherwise.
+      let k = 0;
+      if (l.name) {
+        const to = marked[l.name] ?? 0;
+        k = lit[l.name] = (lit[l.name] ?? 0) + (to - (lit[l.name] ?? 0)) * 0.06;
+        if (Math.abs(to - k) > 0.002) glowing = true;
+      }
+      const base = l.alpha * (l.far === 0 ? 1 - outer : l.far === 1 ? outer : 1);
+      const al = base + (0.72 - base) * k;
       if (al < 0.004) continue;
-      g.uniform4f(u.u_col, 0.94 * al, 0.93 * al, 0.9 * al, al);
+      const gold = k;
+      g.uniform4f(u.u_col, (0.94 + 0.06 * gold) * al, (0.93 - 0.17 * gold) * al, (0.9 - 0.42 * gold) * al, al);
       g.bindVertexArray(l.m.vao);
       g.drawArrays(g.LINE_LOOP, 0, l.m.count);
     }
@@ -2180,10 +2507,13 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     u = use(prog.rock);
     g.uniform1f(u.u_fade, 1);
     g.uniform1f(u.u_far, smooth(Math.min(1, away * 2.4)));
+    // From far out a rock cannot be seen at all, and a dark speck held up against the star would read as dirt on the lens.
+    g.uniform1f(u.u_gone, smooth(Math.max(0, Math.min(1, Math.log(range / 12) / Math.log(FAR.r / 12)))));
     g.bindVertexArray(mRock.vao);
     g.drawArrays(g.POINTS, 0, mRock.count);
     if (outer > 0.01) {
       g.uniform1f(u.u_far, 0);
+      g.uniform1f(u.u_gone, 0);
       g.uniform1f(u.u_fade, outer);
       g.bindVertexArray(mKuiper.vao);
       g.drawArrays(g.POINTS, 0, mKuiper.count);
@@ -2224,7 +2554,6 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.uniform1f(u.u_fill, 1);
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
     g.uniform1f(u.u_fill, 0);
-
 
     if (share > 0.003) leaving(px, sun, share, count);
 
@@ -2316,6 +2645,93 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.bindVertexArray(mBeam.vao);
       g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
     }
+    // A planet flown past. It is hung in the camera's own frame on a straight
+    // line out of the frame's corner: the camera pulls back from it towards
+    // the Sun, so it comes in large past the lens, settles where the card
+    // wants it, and falls away, shrinking, towards the point the camera is
+    // backing away from. Far larger than it is (as the Sun is), so the pass
+    // takes a screen of scroll and not a pixel of one.
+    // A driver finishes a program the first time it draws: once, into one pixel, before any planet is near.
+    if (planet && !planetWarm) {
+      planetWarm = true;
+      g.enable(g.SCISSOR_TEST);
+      g.scissor(0, 0, 1, 1);
+      g.useProgram(planet.p);
+      g.uniform4f(planet.u.u_lens, 1, 1, 0, 0);
+      g.uniform3f(planet.u.u_c, 0, 0, -1);
+      g.uniform1f(planet.u.u_r, 0.5);
+      g.uniform3f(planet.u.u_pole, 0, 1, 0);
+      g.uniform1f(planet.u.u_kind, 1);
+      g.uniform1f(planet.u.u_a, 0);
+      g.bindVertexArray(mFar.vao);
+      g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+      g.disable(g.SCISSOR_TEST);
+    }
+    for (let kind = 0; kind < 3 && planet; kind++) {
+      const t = passes[kind];
+      if (t > 8) continue;
+      const Z = 1 + 0.85 * t;
+      const seen = smooth(Math.max(0, Math.min(1, (2.3 - t) / 0.8))) * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
+      if (seen > 0.003) {
+        const tallFrame = h > w * 1.1;
+        const at = tallFrame ? [0.32, 0.1] : kind === 1 ? [0.66, -0.66] : [0.7, -0.74];
+        const size = (tallFrame ? [0.22, 0.15, 0.16] : [0.4, 0.28, 0.27])[kind];
+        const lx = aspect / F, ly = 1 / F;
+        const X = (at[0] - lens[0]) * lx, Y = (at[1] - lens[1]) * ly; // the line the planet is on, per unit of depth
+        g.useProgram(planet.p);
+        const u = planet.u;
+        g.uniform4f(u.u_lens, lx, ly, lens[0], lens[1]);
+        g.uniform3f(u.u_c, X, Y, -Z);
+        g.uniform1f(u.u_r, size * ly);
+        // Towards the Sun, in the camera's frame.
+        const sl = Math.hypot(view[12], view[13], view[14]) || 1;
+        g.uniform3f(u.u_S, view[12] / sl, view[13] / sl, view[14] / sl);
+        // The Sun is nearly behind it, which would leave a black disc in a ring of light. So its face is lit from the
+        // Sun's side of the frame, turned partly towards the lens: a crescent that shows the cloud bands, as a camera a
+        // little off the line to the Sun would see it.
+        const cx = lens[0] + (at[0] - lens[0]) / Z, cy = lens[1] + (at[1] - lens[1]) / Z;
+        const sx = (sun.nx - cx) * lx, sy = (sun.ny - cy) * ly, sd = Math.hypot(sx, sy) || 1;
+        const kz = 0.18, kl = Math.hypot(1, kz);
+        g.uniform3f(u.u_L, sx / sd / kl, sy / sd / kl, kz / kl);
+        // The pole stands up the frame, leaning a little to one side and tipped towards the lens, so the belts run
+        // across the face and Saturn's rings open to about 24 degrees, as they do from Earth at their widest.
+        const tip = [0.14, 0.42, 0.3][kind], lean = [-0.12, -0.32, 0.22][kind];
+        g.uniform3f(u.u_pole, Math.sin(lean) * Math.cos(tip), Math.cos(lean) * Math.cos(tip), Math.sin(tip));
+        g.uniform1f(u.u_kind, kind);
+        g.uniform1f(u.u_spin, clock * [0.05, 0.04, 0.03][kind]);
+        g.uniform1f(u.u_pix, (2 * ly) / canvas.height);
+        g.uniform1f(u.u_a, seen);
+        g.bindVertexArray(mFar.vao);
+        g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+      }
+    }
+    // The probe at the heliopause: the same pass, a smaller thing seen closer.
+    const tp = passes[3];
+    if (tp < 8 && probe) {
+      const Z = 1 + 0.85 * tp;
+      const seen = smooth(Math.max(0, Math.min(1, (2.3 - tp) / 0.8))) * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
+      if (seen > 0.003) {
+        const tallFrame = h > w * 1.1;
+        const lx = aspect / F, ly = 1 / F;
+        const at = tallFrame ? [0.0, 0.18] : [0.42, -0.42];
+        g.useProgram(probe.p);
+        const u = probe.u;
+        g.uniform4f(u.u_lens, lx, ly, lens[0], lens[1]);
+        g.uniform3f(u.u_c, (at[0] - lens[0]) * lx, (at[1] - lens[1]) * ly, -Z);
+        // About 22 m across the frame's height at the mark: the dish a sixth of it, the boom reaching most of the way across.
+        g.uniform1f(u.u_m, (tallFrame ? 0.06 : 0.09) * ly);
+        g.uniformMatrix3fv(u.u_R, false, tallFrame ? probeRTall : probeR);
+        const sl = Math.hypot(view[12], view[13], view[14]) || 1;
+        g.uniform3f(u.u_S, view[12] / sl, view[13] / sl, view[14] / sl);
+        const cx = lens[0] + (at[0] - lens[0]) / Z, cy = lens[1] + (at[1] - lens[1]) / Z;
+        const sx = (sun.nx - cx) * lx, sy = (sun.ny - cy) * ly, sd = Math.hypot(sx, sy) || 1;
+        g.uniform3f(u.u_L, (sx / sd) * 0.97, (sy / sd) * 0.97, 0.12);
+        g.uniform1f(u.u_pix, (2 * ly) / canvas.height);
+        g.uniform1f(u.u_a, seen);
+        g.bindVertexArray(mFar.vao);
+        g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+      }
+    }
     g.bindVertexArray(null);
 
     if (opts.onFrame) {
@@ -2358,29 +2774,13 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     shot += (scroll - shot) * follow;
     if (Math.abs(scroll - shot) < 1e-4) shot = scroll;
     let moving = shot !== scroll;
-    for (const k of ["depart", "cruise", "arrive", "lift"] as const) {
+    for (const k of ["depart", "cruise", "arrive", "lift", "reach"] as const) {
       leg[k] += (aim[k] - leg[k]) * follow;
       if (Math.abs(aim[k] - leg[k]) < 1e-4) leg[k] = aim[k];
       else moving = true;
     }
-    if (clock - chapter.at < CHAPTER.seconds) moving = true;
-    // Far out, now and then, a star somewhere in frame goes off.
-    if (away > 0.9) {
-      novaNext -= dt;
-      if (novaNext <= 0) {
-        nova();
-        novaNext = 22 + rnd() * 16;
-      }
-    }
-    // And now and then a comet crosses the frame, from one side towards the other.
-    if (away > 0.9) {
-      cometNext -= dt;
-      if (cometNext <= 0 && w) {
-        const left = rnd() < 0.5, y0 = -0.5 + rnd() * 1.1;
-        comet = { d0: along(B, left ? -1.15 : 1.15, y0, lens[0], lens[1]), d1: along(B, left ? 0.35 : -0.35, y0 + (rnd() - 0.6) * 0.5, lens[0], lens[1]), at: clock };
-        cometNext = 45 + rnd() * 30;
-      }
-    }
+    if (clock - chapter.at < CHAPTER.seconds || glowing || flying || warp > 0) moving = true;
+    flying = false;
     if (comet && clock - comet.at < COMET) moving = true;
     // A supernova in view keeps the scene drawing every frame.
     if (novae.some((n) => clock - n.at < NOVA)) moving = true;
@@ -2476,6 +2876,23 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
         paintSky();
         return idle(dig);
       }
+      // The planets' program, so the first one met on the way out does not cost a frame.
+      if (!planet) {
+        try {
+          planet = compile(gl!, VS_FAR, FS_PLANET);
+        } catch (e) {
+          console.error(e);
+        }
+        return idle(dig);
+      }
+      if (!probe) {
+        try {
+          probe = compile(gl!, VS_FAR, FS_PROBE);
+        } catch (e) {
+          console.error(e);
+        }
+        return idle(dig);
+      }
       const done = rock ? shape(4) : (quarry(4), false);
       if (!done) idle(dig);
     };
@@ -2505,6 +2922,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     setVoyage(v) {
       for (const k of ["depart", "cruise", "arrive"] as const) if (v[k] !== undefined) aim[k] = Math.max(0, Math.min(1, v[k]!));
       if (v.lift !== undefined) aim.lift = Math.max(0, v.lift);
+      aim.reach = v.reach === undefined ? -1 : Math.max(0, Math.min(1, v.reach));
+      if (aim.reach < 0) leg.reach = -1;
+      else if (leg.reach < 0) leg.reach = aim.reach;
       if (v.cover !== undefined) scroll = Math.max(0, Math.min(1, v.cover));
       if (!running) {
         // Stopped (out of sight, or a still frame): the camera is simply where the
@@ -2524,6 +2944,25 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     rest(on) {
       resting = on;
     },
+    flyby(name, t) {
+      const k = KINDS[name];
+      if (passes[k] === t) return;
+      // In the pass, or just out of it: the scene draws this frame.
+      if (t < 8 || passes[k] < 8) flying = true;
+      passes[k] = t;
+      // Its program is normally built in idle time; if a planet is near first, it is built now.
+      if (t < 8 && gl && !(k === 3 ? probe : planet)) {
+        try {
+          if (k === 3) probe = compile(gl, VS_FAR, FS_PROBE);
+          else planet = compile(gl, VS_FAR, FS_PLANET);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    },
+    mark(name, v) {
+      marked[name] = Math.max(0, Math.min(1, v));
+    },
     show(kind, v) {
       seenFar[kind] = Math.max(0, Math.min(1, v));
     },
@@ -2536,11 +2975,6 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       chapter.from = chapter.now;
       chapter.to = to;
       chapter.at = clock;
-      // A new part of the page, far out: something goes off to mark it.
-      if (away > 0.9 && n > 0) {
-        nova();
-        novaNext = 22 + rnd() * 16;
-      }
     },
     snap(settled) {
       fresh = true;

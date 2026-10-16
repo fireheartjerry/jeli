@@ -238,7 +238,8 @@ const kinds: Record<string, Kind> = {
       gsap.fromTo(
         h,
         { yPercent: 0, clipPath: "inset(-30% -10% 0% -10%)" },
-        { yPercent: 100, clipPath: "inset(-30% -10% 100% -10%)", ease: "none", immediateRender: false, scrollTrigger: { trigger: h, start: "top 132px", end: "top 44px", scrub: true } },
+        // Eased at both ends, so the title does not set off down its line, or stop there, with a jolt.
+        { yPercent: 100, clipPath: "inset(-30% -10% 100% -10%)", ease: "sine.inOut", immediateRender: false, scrollTrigger: { trigger: h, start: "top 132px", end: "top 44px", scrub: true } },
       );
     }
   },
@@ -344,84 +345,51 @@ const kinds: Record<string, Kind> = {
   },
 
   /**
-   * A figure's plate is plotted, the way a pen plotter would: its top edge is
-   * ruled from the status light as it comes into the window, and then two
-   * pens run down its sides at the line where it is coming in, the sheet let
-   * out from the top between them, until the bottom edge closes it. All of it
-   * follows the scroll, by the same hand that then draws the figure.
+   * A title card over open sky (Passage.astro), played like one in a film: it
+   * comes up out of focus as its stretch of sky reaches the middle of the
+   * window, holds there, and drifts on and out as the stretch goes, all on the
+   * scroll. The line's words come in a little after the place, one by one.
+   */
+  passage(root) {
+    const place = root.querySelector<HTMLElement>(".place");
+    const line = root.querySelector<HTMLElement>(".line");
+    const rest = root.querySelectorAll<HTMLElement>(".toggle, .log");
+    if (!place || !line) return;
+    const said = words(line);
+    const tl = gsap.timeline({
+      defaults: { ease: "none" },
+      scrollTrigger: { trigger: root.parentElement!, start: "top 70%", end: "bottom 30%", scrub: trail(0.8) },
+    });
+    tl.fromTo(place, { opacity: 0, y: 26, filter: "blur(6px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.24, ease: "arrive" }, 0)
+      .fromTo(said, { opacity: 0, y: 18, filter: "blur(8px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.2, stagger: 0.012, ease: "arrive" }, 0.04)
+      .fromTo(rest, { opacity: 0 }, { opacity: 1, duration: 0.14 }, 0.22)
+      .to([place, said, ...rest], { opacity: 0, y: -22, filter: "blur(6px)", duration: 0.22, stagger: 0.004, ease: "swap" }, 0.78);
+  },
+
+  /**
+   * A figure's plate surfaces out of the dark as it is scrolled to: it rises,
+   * comes into focus and out of the sky, all following the scroll, so it is
+   * never cut in or outlined; the figure on it then draws by the same hand.
    */
   plate(root) {
     const sheet = root.querySelector<HTMLElement>(":scope > .sheet");
-    const line = { a: root.querySelector<SVGRectElement>("[data-edge='a']"), b: root.querySelector<SVGRectElement>("[data-edge='b']") };
-    const pen = { a: root.querySelector<SVGRectElement>("[data-pen='a']"), b: root.querySelector<SVGRectElement>("[data-pen='b']") };
-    const bar = root.querySelector<SVGLineElement>("[data-bar]");
-    if (!sheet || !line.a || !line.b || !pen.a || !pen.b || !bar) return;
-    root.toggleAttribute("data-plate", true);
-
-    // The edge is one rounded rectangle whose length is counted as 1. From its
-    // start the path runs along the top, down the right side and back along
-    // the bottom; its last stretch is the left side, coming up. `top` is the
-    // share of the path taken by the top (and the bottom) edge, `side` by one
-    // side with its two corners.
-    const LEAD = 0.05; // of the window's height: the stretch of scroll the top edge, and the bottom, are ruled over
-    const PEN = 26; // px of bright stroke at each head
-    let H = 1, top = 0.2, side = 0.3, lead = 40, nib = 0.01;
-    const measure = () => {
-      const W = root.offsetWidth, r = parseFloat(getComputedStyle(root).borderTopLeftRadius) || 14;
-      H = root.offsetHeight;
-      const flat = W - 1 - 2 * r, down = H - 1 - 2 * r, turn = (Math.PI * r) / 2;
-      const all = 2 * flat + 2 * down + 4 * turn;
-      top = flat / all;
-      side = (down + 2 * turn) / all;
-      nib = PEN / all;
-      lead = LEAD * window.innerHeight;
-    };
-    const st = { k: 0 };
-    const plot = () => {
-      const s = st.k * (2 * lead + H);
-      // How far down the plate the pens are, and how far each line has got.
-      const y = Math.max(0, Math.min(H, s - lead));
-      const a = s < lead ? (s / lead) * top : top + side * (y / H) + (s > lead + H ? ((s - lead - H) / lead) * top : 0);
-      const b = side * (y / H);
-      line.a!.style.strokeDasharray = `${a.toFixed(5)} 1`;
-      line.b!.style.strokeDasharray = `${b.toFixed(5)} 1`;
-      line.b!.style.strokeDashoffset = (b - 1).toFixed(5);
-      const on = st.k > 0.0005 && st.k < 0.9995 ? Math.min(1, st.k * 40, (1 - st.k) * 30) : 0;
-      pen.a!.style.opacity = pen.b!.style.opacity = on.toFixed(3);
-      if (on) {
-        pen.a!.style.strokeDasharray = pen.b!.style.strokeDasharray = `${nib.toFixed(5)} 1`;
-        pen.a!.style.strokeDashoffset = (-Math.max(0, a - nib)).toFixed(5);
-        pen.b!.style.strokeDashoffset = (b - 1).toFixed(5);
-      }
-      // The bar they ride on, only while they are on the sides.
-      const riding = on && s > lead && s < lead + H ? Math.min(1, (s - lead) / 30, (lead + H - s) / 30) : 0;
-      bar.style.opacity = (riding * 0.3).toFixed(3);
-      if (riding) bar.style.transform = `translateY(${(y + 1).toFixed(1)}px)`;
-      // The sheet, let out as far as the pens have got. (The margin is room for its shadow, which the last stretch lets in below.)
-      const cut = s > lead + H ? -60 * ((s - lead - H) / lead) : H - y;
-      sheet.style.clipPath = st.k >= 0.9995 ? "" : `inset(-60px -60px ${cut.toFixed(1)}px -60px)`;
-    };
-    measure();
-    plot();
-    const tween = gsap.to(st, {
-      k: 1,
-      ease: "none",
-      onUpdate: plot,
-      scrollTrigger: {
-        trigger: root,
-        start: "top 99%",
-        end: () => `+=${Math.round(2 * LEAD * window.innerHeight + root.offsetHeight)}`,
-        scrub: trail(0.3),
-        invalidateOnRefresh: true,
-        onRefresh() {
-          measure();
-          plot();
-        },
+    if (!sheet) return;
+    const tween = gsap.fromTo(
+      root,
+      { opacity: 0, y: 56, scale: 0.97, filter: "blur(10px)" },
+      {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        filter: "blur(0px)",
+        ease: "arrive",
+        scrollTrigger: { trigger: root, start: "top 100%", end: "top 62%", scrub: trail(0.6) },
+        onComplete: () => gsap.set(root, { clearProps: "filter" }),
       },
-    });
-    // The keyboard may reach a control on a plate the scroll has not yet let out: it is then let out at once.
+    );
+    // The keyboard may reach a control on a plate the scroll has not yet brought up: it is then brought up at once.
     root.addEventListener("focusin", () => {
-      if (st.k < 0.999) tween.progress(1);
+      if (tween.progress() < 0.999) tween.progress(1);
     });
   },
 };

@@ -2740,9 +2740,12 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       const t = passes[kind];
       if (t > 8) continue;
       const Z = 1 + 0.85 * t;
-      const seen = smooth(Math.max(0, Math.min(1, (2.3 - t) / 0.8))) * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
+      const tallFrame = h > w * 1.1;
+      // On a tall screen the page's type runs the full width, with no open side for a planet to fall away into:
+      // there it is seen only while its own passage holds the window.
+      const window_ = tallFrame ? smooth(Math.max(0, Math.min(1, (0.62 - Math.abs(t)) / 0.22))) : smooth(Math.max(0, Math.min(1, (2.3 - t) / 0.8)));
+      const seen = window_ * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
       if (seen > 0.003) {
-        const tallFrame = h > w * 1.1;
         const at = tallFrame ? [0.32, 0.1] : kind === 1 ? [0.66, -0.66] : [0.7, -0.74];
         const size = (tallFrame ? [0.22, 0.15, 0.16] : [0.4, 0.28, 0.27])[kind];
         const lx = aspect / F, ly = 1 / F;
@@ -2778,9 +2781,10 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     const tp = passes[3];
     if (tp < 8 && probe) {
       const Z = 1 + 0.85 * tp;
-      const seen = smooth(Math.max(0, Math.min(1, (2.3 - tp) / 0.8))) * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
+      const tallFrame = h > w * 1.1;
+      const window_ = tallFrame ? smooth(Math.max(0, Math.min(1, (0.62 - Math.abs(tp)) / 0.22))) : smooth(Math.max(0, Math.min(1, (2.3 - tp) / 0.8)));
+      const seen = window_ * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
       if (seen > 0.003) {
-        const tallFrame = h > w * 1.1;
         const lx = aspect / F, ly = 1 / F;
         const at = tallFrame ? [0.0, 0.18] : [0.42, -0.42];
         g.useProgram(probe.p);

@@ -257,7 +257,8 @@ const kinds: Record<string, Kind> = {
     );
     hold(parts);
     if (rule) gsap.set(rule, { scaleX: 0 });
-    once(root, 0.86, (late) => {
+    // As soon as it is in the window, and quickly: a page read at speed must never show a title with nothing under it.
+    once(root, 1.0, (late) => {
       if (late) {
         show(parts);
         if (rule) gsap.set(rule, { scaleX: 1 });
@@ -266,7 +267,7 @@ const kinds: Record<string, Kind> = {
       const seconds = T.arrive / hurry();
       if (rule) gsap.to(rule, { scaleX: 1, duration: seconds, ease: "arrive" });
       if (pen) gsap.timeline().fromTo(pen, { "--k": 0, opacity: 1 }, { "--k": 1, duration: seconds, ease: "arrive" }).to(pen, { opacity: 0, duration: seconds * 0.3 }, seconds * 0.7);
-      rise(parts, { delay: 0.08 });
+      rise(parts, { delay: 0, each: 0.025, seconds: 0.6 });
     });
   },
 

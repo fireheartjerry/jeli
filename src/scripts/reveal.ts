@@ -238,7 +238,8 @@ const kinds: Record<string, Kind> = {
       gsap.fromTo(
         h,
         { yPercent: 0, clipPath: "inset(-30% -10% 0% -10%)" },
-        { yPercent: 100, clipPath: "inset(-30% -10% 100% -10%)", ease: "none", immediateRender: false, scrollTrigger: { trigger: h, start: "top 132px", end: "top 44px", scrub: true } },
+        // Eased at both ends, so the title does not set off down its line, or stop there, with a jolt.
+        { yPercent: 100, clipPath: "inset(-30% -10% 100% -10%)", ease: "sine.inOut", immediateRender: false, scrollTrigger: { trigger: h, start: "top 132px", end: "top 44px", scrub: true } },
       );
     }
   },

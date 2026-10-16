@@ -140,6 +140,8 @@ export interface Cosmos {
   stage(kind: "hole" | "quasar" | "wormhole" | "nebula", cruise: number, ch: number, nx: number, ny: number): void;
   /** How much of a staged far thing is shown, 0 to 1. */
   show(kind: "hole" | "quasar" | "wormhole" | "nebula", v: number): void;
+  /** Open the cosmic string across the sky, 0 (none) to 1. */
+  seam(v: number): void;
   /** Light one orbit (jupiter, saturn, neptune, or the heliopause) in gold, 0 to 1: the page is crossing it. */
   mark(name: string, v: number): void;
   /**
@@ -288,9 +290,15 @@ uniform mat3 u_look; // from the camera's frame to the galaxy's
 uniform vec4 u_lens; // aspect / F, 1 / F, and the lens shift
 uniform float u_gain;
 uniform float u_smear; // how far the sky moved across the frame while the shutter was open, device px
+uniform vec3 u_strN; uniform vec3 u_strA; uniform float u_strD; // the cosmic string, in the galaxy's frame (see VS_SKY)
+vec3 rotA(vec3 v, vec3 k, float a) { float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
 float cellHash(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 void main() {
   vec3 d = u_look * normalize(vec3((v_q.x - u_lens.z) * u_lens.x, (v_q.y - u_lens.w) * u_lens.y, -1.0));
+  // Space round a cosmic string is a cone with a slice cut out. Light passing either side of it is turned by half the
+  // missing angle, so each side of the line shows the sky from nearer the line, and a strip of what is behind it twice.
+  float side = sign(dot(d, u_strN));
+  if (u_strD > 0.0) d = rotA(d, u_strA, -side * 0.5 * u_strD);
   float lat = asin(clamp(d.y, -1.0, 1.0));
   if (abs(lat) > ${GALAXY.lat.toFixed(3)}) discard;
   vec3 c = texture(u_sky, vec2(atan(d.z, d.x) / 6.2831853 + 0.5, lat / ${(2 * GALAXY.lat).toFixed(3)} + 0.5)).rgb * u_gain;
@@ -312,6 +320,9 @@ void main() {
   // A camera that is turning smears these into the haze they came from: stars
   // this faint do not leave streaks, only the ones kept one by one do.
   dot_ *= 1.0 - 0.88 * smoothstep(1.2, 6.0, u_smear);
+  // A string moving across the line of sight blueshifts the sky behind it on one side and reddens it on the
+  // other (Kaiser and Stebbins): a faint step in brightness and colour along the seam.
+  if (u_strD > 0.0) c *= 1.0 + side * (u_strD / 0.05) * vec3(0.055, 0.075, 0.12);
   c = c * 0.82 + mix(vec3(1.0, 0.9, 0.78), vec3(0.8, 0.88, 1.0), cellHash(cell + 2.2)) * dot_ * (0.035 + lum * 1.5) * u_gain;
   // Under one level of noise, so the faint end does not band.
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
@@ -777,16 +788,27 @@ in float a_t; // tint: 0 warm, 1 cool
 uniform float u_gain;
 uniform mat4 u_was; // the view one frame ago
 uniform vec2 u_half; // half the frame, device px
+// A cosmic string across the sky: the plane it lies in (its normal, and its own direction), the angle space is
+// missing round it, and which side of it this drawing of the stars is for. Each star is seen where light passing
+// that side of the string brings it, and only if that is on that side: so a star behind the string is seen twice.
+uniform vec3 u_strN; uniform vec3 u_strA; uniform float u_strD; uniform float u_side;
+vec3 rotA(vec3 v, vec3 k, float a) { float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
 out float v_b; out float v_t; out vec3 v_m; // v_m: the way the star moved this frame, and how much of the sprite that is
 out float v_big; // whether it is one of the few bright ones, judged before its light is spread along a streak
 void main() {
-  vec3 d = mat3(u_view) * a_s.xyz;
+  vec3 dir = a_s.xyz;
+  if (u_strD > 0.0) {
+    vec3 im = rotA(dir, u_strA, u_side * 0.5 * u_strD);
+    if (dot(im, u_strN) * u_side < 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; v_b = 0.0; v_t = 0.0; v_m = vec3(1.0, 0.0, 0.0); v_big = 0.0; return; }
+    dir = im;
+  }
+  vec3 d = mat3(u_view) * dir;
   gl_Position = u_proj * vec4(d * 200.0, 1.0);
   // The few brightest get a larger sprite, to carry their glint.
   float size = u_px * (0.85 + a_s.w * 2.1 + smoothstep(0.55, 1.0, a_s.w) * 13.0);
   // The shutter is open for half of each frame. A camera that is turning
   // draws every star out along the way it turned, by half of how far.
-  vec4 was = u_proj * vec4(mat3(u_was) * a_s.xyz * 200.0, 1.0);
+  vec4 was = u_proj * vec4(mat3(u_was) * dir * 200.0, 1.0);
   vec2 moved = (gl_Position.xy / gl_Position.w - was.xy / was.w) * u_half * 0.5;
   float len = min(length(moved), 28.0 * u_px);
   gl_PointSize = size + len;
@@ -1737,6 +1759,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   // On a tall screen the card is under it, so it is turned half round its dish's axis: the boom points up, away from the type.
   const probeRTall = new Float32Array([-probeR[0], -probeR[1], -probeR[2], probeR[3], probeR[4], probeR[5], -probeR[6], -probeR[7], -probeR[8]]);
   let planet: Prog | null = null;
+  // The cosmic string: how open, and where it lies on the sky (world frame), fixed when it first opens.
+  const seam = { open: 0, n: [0, 0, 1], a: [1, 0, 0] };
+  const SEAM_DEFICIT = 0.05; // radians, about 3 degrees: thousands of times what the microwave background allows, so it can be seen
   let flying = false; // the pass moved since the last frame
   let planetWarm = false;
   const P3 = new Float32Array(3);
@@ -2372,8 +2397,30 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     const night = (0.22 + 0.78 * pull) * big.seen;
     // How far the sky moved across the frame while the shutter was open (half the frame's turn), device px.
     const smear = fresh ? 0 : Math.hypot(view[2] - viewWas[2], view[6] - viewWas[6], view[10] - viewWas[10], view[1] - viewWas[1], view[5] - viewWas[5], view[9] - viewWas[9]) * F * (canvas.height / 2) * 0.5 * 0.7;
+    // The string is laid across the frame, steeply, where the page leaves open sky. (It is held there as the camera
+    // drifts, not fixed on the sky: out here the camera hardly turns, and a line that slid out of frame would be lost.)
+    if (seam.open > 0) {
+      const lx = aspect / F, ly = 1 / F, tallF = h > w * 1.1;
+      const e1 = tallF ? [0.15, 1] : [0.4, 1], e2 = tallF ? [0.65, -1] : [0.8, -1];
+      const P1 = [(e1[0] - lens[0]) * lx, (e1[1] - lens[1]) * ly, -1], P2 = [(e2[0] - lens[0]) * lx, (e2[1] - lens[1]) * ly, -1];
+      const cr = (u: number[], v: number[]) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const nz = (v: number[]) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return v.map((x) => x / l); };
+      const nV = nz(cr(P1, P2)), mid = nz([P1[0] + P2[0], P1[1] + P2[1], -2]), aV = nz(cr(mid, nV));
+      // From the camera's frame to the world's: the transpose of the view's rotation.
+      const toW = (v: number[]) => [view[0] * v[0] + view[1] * v[1] + view[2] * v[2], view[4] * v[0] + view[5] * v[1] + view[6] * v[2], view[8] * v[0] + view[9] * v[1] + view[10] * v[2]];
+      seam.n = toW(nV);
+      seam.a = toW(aV);
+    }
+    const seamD = seam.open > 0 ? SEAM_DEFICIT * smooth(seam.open) : 0;
+    // The same, in the galaxy's frame, for the painted band.
+    const toV = (v: number[]) => [view[0] * v[0] + view[4] * v[1] + view[8] * v[2], view[1] * v[0] + view[5] * v[1] + view[9] * v[2], view[2] * v[0] + view[6] * v[1] + view[10] * v[2]];
+    const toG = (v: number[]) => [0, 1, 2].map((j) => lookG[j] * v[0] + lookG[3 + j] * v[1] + lookG[6 + j] * v[2]);
+    const nG = toG(toV(seam.n)), aG = toG(toV(seam.a));
     if (galaxy) {
       g.useProgram(prog.far.p);
+      g.uniform3f(prog.far.u.u_strN, nG[0], nG[1], nG[2]);
+      g.uniform3f(prog.far.u.u_strA, aG[0], aG[1], aG[2]);
+      g.uniform1f(prog.far.u.u_strD, seamD);
       // Eased over a few frames, so a camera coming to rest does not bring the faint stars back all at once.
       smeared += (smear - smeared) * (smear > smeared ? 0.6 : 0.18);
       g.uniform1f(prog.far.u.u_smear, smeared);
@@ -2391,8 +2438,17 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.uniform1f(u0.u_gain, 0.62 + 0.38 * night);
     g.uniformMatrix4fv(u0.u_was, false, fresh ? view : viewWas);
     g.uniform2f(u0.u_half, canvas.width / 2, canvas.height / 2);
+    g.uniform3f(u0.u_strN, seam.n[0], seam.n[1], seam.n[2]);
+    g.uniform3f(u0.u_strA, seam.a[0], seam.a[1], seam.a[2]);
+    g.uniform1f(u0.u_strD, seamD);
+    g.uniform1f(u0.u_side, 1);
     g.bindVertexArray(mSky.vao);
     g.drawArrays(g.POINTS, 0, mSky.count);
+    // With the string open the stars are drawn again for its other side.
+    if (seamD > 0) {
+      g.uniform1f(u0.u_side, -1);
+      g.drawArrays(g.POINTS, 0, mSky.count);
+    }
     viewWas.set(view);
     fresh = false;
 
@@ -2959,6 +3015,11 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
           console.error(e);
         }
       }
+    },
+    seam(v) {
+      const was = seam.open;
+      seam.open = Math.max(0, Math.min(1, v));
+      if (seam.open !== was) flying = true;
     },
     mark(name, v) {
       marked[name] = Math.max(0, Math.min(1, v));

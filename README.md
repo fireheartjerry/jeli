@@ -31,6 +31,11 @@ npm run build    # static output in dist/
   lights the orbit the card names in gold, and flies the camera past the planet itself (`FS_PLANET`:
   Jupiter, Saturn with its rings, Neptune, ray-traced in the camera's frame and lit as a crescent). A
   flight log under each card, off until asked for, says what is out there.
+  At the far end, over the record and a fifth card, a cosmic string opens across the sky: no light of
+  its own, only the sky either side of a line turned by half its deficit angle (in `FS_FAR`, and the
+  stars drawn twice, once for each side, in `VS_SKY`), so what lies behind it is seen twice, with the
+  faint Kaiser–Stebbins step in brightness across it. A Voyager-class probe (`FS_PROBE`) is flown past
+  at the heliopause.
 - The footer is the same move run backwards, home to the closed sphere. The pointer leans the
   camera, and a drag on the cover or the footer swings it before it returns to its mark. 16 Psyche
   and the boulders near it are real meshes (`src/scripts/geo/psyche.ts`), built from the seed in

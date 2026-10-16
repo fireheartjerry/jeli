@@ -100,6 +100,8 @@ function init(layer: HTMLElement) {
   // each passage's place as it is centred. Past the last, it holds.
   let stops: { y: number; r: number }[] = [];
   let slopes: number[] = [];
+  const recordEl = document.querySelector<HTMLElement>("#record");
+  let recordTop = Infinity;
   let roaming = false; // the page is under way between the cover and the footer
   let under = 0; // how far the page has come up over the sky after the cover, 0 to 1
   let box = { w: 1, h: 1 }; // the canvas, CSS px
@@ -295,9 +297,12 @@ function init(layer: HTMLElement) {
       }
       if (it.kind === "wormhole") cosmos.stage("wormhole", cruise, ch, tallScreen ? 0 : 0.08, tallScreen ? 0.12 : 0.1);
     }
+    if (recordEl) recordTop = recordEl.getBoundingClientRect().top + window.scrollY;
     stops = [{ y: coverEnd, r: 0 }];
     for (const it of interludes) if (it.el.dataset.reach) stops.push({ y: it.top + it.h / 2 - vh / 2, r: +it.el.dataset.reach });
     if (stops.length < 2 || !hold) stops = [];
+    // The way home starts after the last passage has had the middle of the window, not under it.
+    if (stops.length) land = Math.max(0.5 * vh, Math.min(land, max - stops[stops.length - 1].y - 0.2 * vh));
     // The curve's slope at each place (Fritsch and Carlson, so it never overshoots a place): the mean of the
     // stretches either side, at rest at the last place, and at the first carrying on as the first stretch begins.
     const d = stops.slice(1).map((b, i) => (b.r - stops[i].r) / Math.max(1, b.y - stops[i].y));
@@ -354,6 +359,8 @@ function init(layer: HTMLElement) {
     // The open stretches: the sky is unveiled as one comes to the middle of the window, and a star goes off in the middle of one.
     const vh = window.innerHeight;
     open = 0;
+    // The cosmic string opens over the record, the far end of the voyage, and closes as the camera comes home.
+    cosmos.seam(Math.max(0, Math.min(1, (y + vh * 0.3 - recordTop) / (vh * 0.9))) * (1 - Math.min(1, arrive * 1.6)));
     // Each body's place in its pass (the planets, and the probe at the heliopause): 0 with its passage centred, less before, more after; 9 when it is out of it.
     for (const it of interludes) {
       const o = it.el.dataset.orbit;

@@ -132,11 +132,11 @@ for (const id of ["work", "research", "projects", "record"]) {
 // Each passage at a reading pace, from the end of the section before it into
 // the section after: the card's arrival and leaving, the camera reaching the
 // passage's distance, the orbit lighting, and the planet flown past.
-for (const orbit of ["jupiter", "saturn", "neptune", "heliopause"])
+for (const orbit of ["jupiter", "saturn", "neptune", "heliopause", "seam"])
   take({
     id: `home.pass.${orbit}`,
     covers: ["passage", "voyage:cruise", "reveal:passage"],
-    about: `The ${orbit} passage, crossed at a reading pace: the card, the camera, the lit orbit${orbit === "heliopause" ? "" : " and the flyby"}.`,
+    about: `The ${orbit} passage, crossed at a reading pace: the card, the camera, the lit orbit${orbit === "heliopause" || orbit === "seam" ? "" : " and the flyby"}.`,
     track: { card: `.passage[data-orbit="${orbit}"] .card`, line: `.passage[data-orbit="${orbit}"] .line`, crumb: "[data-crumb]" },
     run: async ({ m, g }) => {
       const p = g.passages.find((p) => p.orbit === orbit);

@@ -12,17 +12,31 @@ import Palette from "../components/Palette.astro";
 import { paper } from "../data/paper";
 
 // Distinctions, most recent first; contest results follow in the figure beside them.
-const record = [
-  { what: "Schulich Leader Scholarship", detail: "$100K+, to study computer science at the University of Waterloo", when: "2026" },
-  { what: "NeurIPS 2026 workshops", detail: "Sole author; accepted at both workshops it was sent to", when: "2026" },
-  { what: "Best Manuscript", detail: "Journal of High School Science, for the second binary-star paper", when: "2026" },
-  { what: "Best Non-GenAI Hack", detail: "JAMHacks 10, for Daedalus", when: "2026" },
-  { what: "Featured", detail: "Chrome Web Store, for Drift", when: "2026" },
-  { what: "USACO", detail: "Platinum, with a perfect 1,000 on Gold" },
-  { what: "AAPT PhysicsBowl", detail: "1st in Canada, 7th in the world" },
-  { what: "Sir Isaac Newton Exam", detail: "4th in Canada, 9th in the world" },
-  { what: "AIME", detail: "Qualified three times" },
-  { what: "Tokenboard", detail: "1st worldwide, August 2026; over 100 billion tokens with coding agents" },
+type Row = { what: string; detail: string; when?: string };
+const record: { group: string; rows: Row[] }[] = [
+  {
+    group: "Honours",
+    rows: [
+      { what: "Schulich Leader Scholarship", detail: "$100K+, to study computer science at the University of Waterloo", when: "2026" },
+      { what: "NeurIPS 2026 workshops", detail: "Sole author; accepted at both workshops it was sent to", when: "2026" },
+      { what: "Best Manuscript", detail: "Journal of High School Science, for the second binary-star paper", when: "2026" },
+      { what: "Best Non-GenAI Hack", detail: "JAMHacks 10, for Daedalus", when: "2026" },
+      { what: "Featured", detail: "Chrome Web Store, for Drift", when: "2026" },
+    ],
+  },
+  {
+    group: "Competitions",
+    rows: [
+      { what: "USACO", detail: "Platinum, with a perfect 1,000 on Gold" },
+      { what: "AAPT PhysicsBowl", detail: "1st in Canada, 7th in the world" },
+      { what: "Sir Isaac Newton Exam", detail: "4th in Canada, 9th in the world" },
+      { what: "AIME", detail: "Qualified three times" },
+    ],
+  },
+  {
+    group: "Elsewhere",
+    rows: [{ what: "Tokenboard", detail: "1st worldwide, August 2026; over 100 billion tokens with coding agents" }],
+  },
 ];
 ---
 
@@ -50,6 +64,7 @@ const record = [
     <Passage
       reach={0.08}
       orbit="jupiter"
+      n={1}
       place="5.2 AU · Jupiter's orbit"
       line="Everything in the swarm was mined out here and hauled in, one load at a time. That is how I like to build: ship it, then keep shipping."
       log="Jupiter's Trojans, two clouds of asteroids that lead and trail the planet by 60 degrees, may hold about as many large bodies as the main belt. The tugs in this scene carry cargo down to the swarm on Hohmann transfers, about fifteen months each way from the belt."
@@ -73,6 +88,7 @@ const record = [
     <Passage
       reach={0.25}
       orbit="saturn"
+      n={2}
       place="9.5 AU · Saturn's orbit"
       line="Nothing out here is drawn by hand: every orbit is solved from its real elements. Research is where I check an answer instead of trusting it."
       log="Saturn takes 29.5 years to go round the Sun. Every body in this scene, down to each of the 60,000 collectors, moves on its own Kepler orbit, solved on the graphics card every frame. Distances and periods are to scale; sizes are not."
@@ -95,6 +111,7 @@ const record = [
     <Passage
       reach={0.57}
       orbit="neptune"
+      n={3}
       place="30 AU · Neptune, and the Kuiper belt"
       line="Past Neptune are thousands of small, cold worlds, each unlike the next. These are the small things I built because I wanted them."
       log="Neptune is 30 times as far from the Sun as the Earth; sunlight takes about four hours to get here. Beyond it the Kuiper belt runs out to about 50 AU, with more than 100,000 bodies over 100 km across by most estimates."
@@ -124,25 +141,33 @@ const record = [
     <Passage
       reach={1}
       orbit="heliopause"
+      n={4}
       place="140 AU · Past the heliopause"
       line="Looking back, the whole swarm is one gold star. This is how far it has come."
       log="Voyager 1 crossed the heliopause, where the Sun's wind gives way to the gas between the stars, at about 121 AU in 2012. In 1990, from about 40 AU, it turned its camera back and caught the Earth as less than a pixel. The probe here is drawn to its proportions: a 3.7 m dish and a 13 m boom. Sunlight takes about 19 hours to reach this far."
     />
 
     <Section id="record" title="Record" lede="Scholarships, papers and contest results.">
-      <dl class="record" data-reveal="rows">
-        {record.map((r) => (
-          <div>
-            <dt>{r.what}</dt>
-            <dd>{r.detail}</dd>
-            {r.when && <dd class="when cm">{r.when}</dd>}
-          </div>
-        ))}
-        <div>
-          <dt>Elsewhere</dt>
-          <dd>9,000+ followers on <a class="ln" href="https://www.linkedin.com/in/fireheartjerry/" target="_blank" rel="noopener">LinkedIn</a></dd>
+      {record.map((g) => (
+        <div class="group">
+          <p class="group-k">{g.group}</p>
+          <dl class="record" data-reveal="rows">
+            {g.rows.map((r) => (
+              <div>
+                <dt>{r.what}</dt>
+                <dd>{r.detail}</dd>
+                {r.when && <dd class="when cm">{r.when}</dd>}
+              </div>
+            ))}
+            {g.group === "Elsewhere" && (
+              <div>
+                <dt>LinkedIn</dt>
+                <dd>9,000+ followers on <a class="ln" href="https://www.linkedin.com/in/fireheartjerry/" target="_blank" rel="noopener">LinkedIn</a></dd>
+              </div>
+            )}
+          </dl>
         </div>
-      </dl>
+      ))}
     </Section>
   </main>
 
@@ -166,8 +191,16 @@ const record = [
   .papers a {
     padding-block: 6px;
   }
+  .group {
+    margin-top: 28px;
+  }
+  .group-k {
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    color: #e6bd7c;
+  }
   .record {
-    margin: 12px 0 0;
+    margin: 4px 0 0;
   }
   .record > div {
     display: grid;

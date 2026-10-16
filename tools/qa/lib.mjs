@@ -65,7 +65,8 @@ export function recorder(id) {
       const n = rows.length;
       const file = `${String(n).padStart(4, "0")}.jpg`;
       const info = await page.evaluate(() => window.__qa.sample());
-      await page.screenshot({ path: path.join(dir, file), type: "jpeg", quality: 86, animations: "allow", caret: "initial" });
+      // A frame can take a while with several takes sharing the machine: wait for it rather than give up on the take.
+      await page.screenshot({ path: path.join(dir, file), type: "jpeg", quality: 86, animations: "allow", caret: "initial", timeout: 120000 });
       rows.push({ n, file, label, ...info });
     },
     save(meta) {

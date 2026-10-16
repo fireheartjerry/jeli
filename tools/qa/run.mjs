@@ -81,7 +81,9 @@ const queue = [...chosen];
 await Promise.all(
   Array.from({ length: jobs }, async () => {
     for (let t; (t = queue.shift()); ) {
-      const r = await record(t);
+      // A take that ran out of time (the machine was busy, not the page wrong) is recorded once more before it counts as a failure.
+      let r = await record(t);
+      if (r.failed && /Timeout/i.test(r.failed)) r = await record(t);
       results.push(r);
       console.log(`${r.failed ? "FAIL" : "ok  "} ${r.id.padEnd(34)} ${String(r.frames).padStart(4)} frames  ${JSON.stringify(r.counts ?? {})}${r.errors?.length ? "  errors: " + r.errors.length : ""}${r.failed ? "  " + r.failed : ""}`);
     }

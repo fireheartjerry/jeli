@@ -1268,6 +1268,7 @@ void main() {
 const VS_LINE = HEAD + `
 in vec3 a_p;
 void main() { gl_Position = u_proj * u_view * vec4(a_p, 1.0); }`;
+
 const FS_LINE = FRAG_HEAD + `
 uniform vec4 u_col;
 void main() { o = u_col; }`;
@@ -1776,7 +1777,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   let deepWarm = false;
   let resting = false; // something opaque covers the window: the scene is not drawn
   let fresh = true; // nothing to compare the first frame with, or the frame after a cut
-  const F = F0;
+  // The lens: a touch wider while the camera is travelling fast, as a camera
+  // rushing backwards seems to, and back to its own focal length as it slows.
+  let F = F0, warp = 0, warpAt = -1, lastLr = 0;
   // The shot: from just outside the shell, above its first band, back to
   // beyond the belt on 16 Psyche's orbit (2.92 AU) once the sphere is closed.
   const NEAR = { r: 1.27, el: 0.68 }, WIDE = { r: WIDE_R, el: 0.42 };
@@ -1875,6 +1878,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const smooth = (t: number) => t * t * (3 - 2 * t);
 
   function camera() {
+    F = F0 * (1 - 0.055 * warp);
     const s = smooth(shot);
     pull = s;
     const tall = h > w * 1.1 ? 1.22 : 1;
@@ -1905,6 +1909,17 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     const room = staged ? Math.max(0, 1 - gone / 0.08) : 1;
     const dist = (NEAR.r + (WIDE.r - NEAR.r) * pulled) * (1 + (tall - 1) * (0.35 + 0.65 * s) * room) * (1 - ARRIVE.closer * late) * off * (FAR.r / WIDE.r) ** gone * (FAR.deep / FAR.r) ** deep;
     range = dist;
+    // How fast the camera is travelling, in the logarithm of its distance per second: a reading pace is under the
+    // threshold and leaves the lens alone; a fast fling down the page opens it a little, and it eases back.
+    const lr = Math.log(Math.max(1e-3, dist));
+    if (warpAt >= 0) {
+      const rate = Math.abs(lr - lastLr) / Math.max(1 / 240, clock - warpAt);
+      const want = smooth(Math.max(0, Math.min(1, (rate - 0.25) / 1.1)));
+      warp += (want - warp) * (want > warp ? 0.1 : 0.045);
+      if (warp < 1e-4) warp = 0;
+    }
+    warpAt = clock;
+    lastLr = lr;
     stop = ((NEAR.r + (WIDE.r - NEAR.r) * pulled) / WIDE.r) ** 1.9;
     // Far out it rises over the ecliptic, and the orbits open from lines into rings.
     const el = Math.max(0.05, Math.min(1.35, NEAR.el + (WIDE.el - NEAR.el) * s + (FAR.el - WIDE.el) * away + dragEl + look.el + ARRIVE.el * late));
@@ -2540,7 +2555,6 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
     g.uniform1f(u.u_fill, 0);
 
-
     if (share > 0.003) leaving(px, sun, share, count);
 
     if (star > 0.003) {
@@ -2765,7 +2779,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       if (Math.abs(aim[k] - leg[k]) < 1e-4) leg[k] = aim[k];
       else moving = true;
     }
-    if (clock - chapter.at < CHAPTER.seconds || glowing || flying) moving = true;
+    if (clock - chapter.at < CHAPTER.seconds || glowing || flying || warp > 0) moving = true;
     flying = false;
     if (comet && clock - comet.at < COMET) moving = true;
     // A supernova in view keeps the scene drawing every frame.

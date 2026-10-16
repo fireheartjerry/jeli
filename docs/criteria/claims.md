@@ -23,7 +23,8 @@ table it should not be on the site.
 | Schulich Leader Scholarship, $100K+ | cover, Record; résumé says $100,000+ | R listed $100,000; "$100K+" is Jerry's wording (11 Oct 2026) |
 | NeurIPS 2026 workshops, sole author | cover, Research, Record, résumé, social card, BibTeX | Jerry, 13 Oct 2026: "I am the only author". Acceptance from L: "my first-authored paper got accepted to every workshop I applied to in NeurIPS 2026" |
 | TopsOJ, founder, 100,000+ users | cover, Work | GA: 101,950 users; R |
-| Waterloo Defence, Software Lead | cover, Work, résumé | WD team page; L experience |
+| Waterloo Defence, co-founder and software lead | cover, Work, résumé | Jerry, 16 Oct 2026: asked to be listed as co-founder; WD team page lists him as Software Lead |
+| Detector beats fine-tuned Ultralytics YOLO and Roboflow RF-DETR | Work, résumé | Team repo `cuas-sim-tracker-integrity`: `research/held-out-looks.md` row 7 (LRDDv3 test AP50 0.873 vs YOLO26m 0.800; FRED test 0.672 vs best YOLO 0.559; YOLOv8m, YOLO11m, YOLO26m per `docs/icarus/17-why-not-yolo.md`) and `docs/icarus/team/changelog.md` 14 Oct (RF-DETR Large on LRDDv3 val, AP50 0.747 vs ICARUS 0.881; validation only, no test look) |
 | Mathos AI (YC W24), software engineering intern | cover, Work | R; L |
 
 ## About (the intro in his own voice)

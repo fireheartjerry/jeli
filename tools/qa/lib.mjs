@@ -47,6 +47,8 @@ export async function open(browser, { url, view = "desk", scheme = "dark", reduc
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && !/Outdated Optimize Dep|\[vite\]/.test(m.text()) && errors.push(m.text()));
+  // A shader that fails to build leaves the page on its still frame with only a warning: that is a failure here.
+  page.on("console", (m) => m.type() === "warning" && /shaders unavailable/.test(m.text()) && errors.push(m.text().split("\n")[0]));
   await page.goto(site.base + url, { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready.then(() => true));
   return { ctx, page, errors, view: v };

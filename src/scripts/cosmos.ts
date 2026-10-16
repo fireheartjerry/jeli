@@ -1258,7 +1258,7 @@ void main() {
 }`;
 const FS_BEAM = FRAG_HEAD + `
 in vec2 v_q;
-uniform float u_gain; uniform float u_wide; uniform float u_flow;
+uniform float u_gain; uniform float u_wide; uniform float u_flow; uniform float u_len;
 uniform float u_k; // the sphere's size on screen, against its size when the cover ends
 uniform float u_pulse; // how far up the beam a pulse has got, in the beam's own units; below zero, none
 uniform vec3 u_thin; // the quad's half-width in device px; the core's true half-width in the quad's units; how fast the beam falls off along its length
@@ -1283,7 +1283,20 @@ void main() {
   vec3 c = mix(vec3(0.62, 0.76, 1.0), vec3(1.0), smoothstep(0.25, 1.4, core + foot));
   // Nothing at the quad's own edges.
   float inside = smoothstep(1.0, 0.55, x) * smoothstep(-u_wide, -u_wide * 0.4, t);
-  o = vec4(c * (core * smoothstep(0.0, 0.03 * u_k, t) + foot) * inside * u_gain, 0.0);
+  // Light sails riding the beam: grams of reflective film, launched one after another and pushed outward by the
+  // light itself, so each gathers speed as it climbs (under a steady push, distance grows as the square of time).
+  // Each is a glint where the beam strikes it, with the short cross a bright point makes on a lens.
+  float ppx = u_wide / u_thin.x; // the beam's units per device pixel, along its length
+  float sails = 0.0;
+  for (int k = 0; k < 3; k++) {
+    float ph = fract(u_flow * 0.0135 + float(k) / 3.0);
+    float at = ph * ph * min(u_len, 1.7 * u_k); // seen over the stretch just above the sphere, then lost to distance
+    float dy = (t - at) / ppx;
+    float r2 = px * px + dy * dy;
+    float glint = exp(-r2 / 6.0) * 4.0 + exp(-r2 / 60.0) * 0.5 + (exp(-abs(dy) * 0.35) * exp(-px * px / 0.5) + exp(-px * 0.35) * exp(-dy * dy / 0.5)) * 0.6;
+    sails += glint * smoothstep(0.0, 0.06, ph) * (1.0 - smoothstep(0.55, 0.9, ph));
+  }
+  o = vec4((c * (core * smoothstep(0.0, 0.03 * u_k, t) + foot) * inside + vec3(1.0, 0.78, 0.46) * sails * smoothstep(1.0, 0.7, x)) * u_gain, 0.0);
 }`;
 
 // ---- orbits and the AU grid: hairlines in the ecliptic ----

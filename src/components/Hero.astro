@@ -47,7 +47,7 @@ const seedHex = hex(fingerprint(SEED));
         {/* The legend is below the fold on a narrow screen while the swarm is built, so its first line is said here too. */}
         <span class="live cm" aria-hidden="true"><span data-v="n">21,600</span> <i>/ <span data-v="total">60,000</span> collectors</i></span>
       </p>
-      <p class="eyebrow">Computer science, University of Waterloo</p>
+      <p class="eyebrow readout">Computer science · University of Waterloo</p>
       <h1 id="hero-h" aria-label="Jerry Li">
         {["Jerry", "Li"].map((word, w) => (
           <span class="word" aria-hidden="true">
@@ -60,7 +60,7 @@ const seedHex = hex(fingerprint(SEED));
         megastructures like the one on this page.
       </p>
       <p class="now">
-        <span class="lamp" aria-hidden="true"></span><span class="k">Now</span>
+        <span class="lamp" aria-hidden="true"></span><span class="k readout">Now</span>
         <span>Software at <a class="ln" href="https://mathos.ai" target="_blank" rel="noopener">Mathos AI</a> (YC W24), and software lead at <a class="ln" href="https://waterloodefence.ca" target="_blank" rel="noopener">Waterloo Defence</a></span>
       </p>
     </div>
@@ -178,18 +178,24 @@ const seedHex = hex(fingerprint(SEED));
   /* Telemetry: what the simulation is doing right now. */
   .tele {
     margin: 14px 0 0;
-    border-top: 1px solid var(--hair);
+  }
+  /* The legend reads like an instrument panel: labels as readouts, values in the mono as they are. */
+  .tele dt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
   .tele div {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     gap: 12px;
-    padding-block: 5px;
-    border-bottom: 1px solid var(--hair);
+    padding-block: 4px;
   }
   .tele dt {
-    font-size: 12.5px;
+    font-size: 10.5px;
   }
   .tele dd {
     font-size: 15px;
@@ -224,8 +230,6 @@ const seedHex = hex(fingerprint(SEED));
     padding-top: 28px;
   }
   .eyebrow {
-    font-size: 15px;
-    color: var(--ink-3);
     margin-bottom: clamp(6px, 1.4svh, 14px);
     animation: rise-in var(--t-arrive) var(--ease-out) 0.25s backwards;
   }
@@ -368,7 +372,15 @@ const seedHex = hex(fingerprint(SEED));
     .frame { padding-top: calc(var(--bar) + 14px); padding-bottom: 20px; }
     .fine { display: none; }
     .tele { margin-top: 10px; }
-    .tele div { padding-block: 3px; }
+    /* The legend reads like an instrument panel: labels as readouts, values in the mono as they are. */
+  .tele dt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .tele div { padding-block: 3px; }
     .id { padding-top: 16px; }
     h1 { font-size: clamp(72px, min(12.6vw, 18svh), 196px); }
     .lede { margin-top: 14px; font-size: 17px; }

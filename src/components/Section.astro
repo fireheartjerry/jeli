@@ -3,13 +3,16 @@ interface Props {
   id: string;
   title: string;
   lede?: string;
+  /** Its place in the page, as a mission's log would number it. */
+  index?: number;
 }
-const { id, title, lede } = Astro.props;
+const { id, title, lede, index } = Astro.props;
 ---
 
 <section id={id} aria-labelledby={`${id}-h`} class="wrap" data-section={title} data-ground>
   <header class="sec-h" data-reveal="title">
     <h2 id={`${id}-h`}>{title}</h2>
+    {index && <p class="idx readout" aria-hidden="true">{String(index).padStart(2, "0")} / 05</p>}
     {lede && <p>{lede}</p>}
   </header>
   <slot />
@@ -33,7 +36,12 @@ const { id, title, lede } = Astro.props;
     line-height: 1;
     letter-spacing: -0.038em;
   }
-  .sec-h p {
+  /* The index sits over the title, though it comes after it in the page, so it arrives after the title does. */
+  .sec-h .idx {
+    order: -1;
+    margin-bottom: -2px;
+  }
+  .sec-h p:not(.idx) {
     font-size: 17px;
     color: var(--ink-3);
     max-width: 46ch;

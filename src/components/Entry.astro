@@ -8,8 +8,10 @@ interface Props {
   href?: string;
   role?: string;
   period?: string;
+  /** The one figure that says what it came to, read off like telemetry. */
+  stat?: string;
 }
-const { title, href, role, period } = Astro.props;
+const { title, href, role, period, stat } = Astro.props;
 // Links within the site stay in this tab.
 const external = !!href && /^https?:/.test(href);
 ---
@@ -25,6 +27,7 @@ const external = !!href && /^https?:/.test(href);
     <p class="meta">
       {role && <span>{role}</span>}
       {period && <span class="num">{period}</span>}
+      {stat && <span class="stat readout">{stat}</span>}
     </p>
     <div class="body"><slot /></div>
   </div>
@@ -47,7 +50,7 @@ const external = !!href && /^https?:/.test(href);
   .meta {
     display: contents;
   }
-  .meta > span:not(.num) {
+  .meta > span:not(.num, .stat) {
     grid-column: 1;
     grid-row: 2;
     margin-top: 2px;
@@ -56,8 +59,17 @@ const external = !!href && /^https?:/.test(href);
     grid-column: 2;
     grid-row: 1;
     align-self: baseline;
+    font-family: var(--mono);
+    font-size: 12.5px !important;
+    letter-spacing: 0.04em;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+  .meta > .stat {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin-top: 10px;
+    color: #e6bd7c;
   }
   .body {
     grid-column: 1 / -1;

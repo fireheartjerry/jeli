@@ -3,7 +3,10 @@
 ---
 
 <section id="about" class="wrap about" aria-labelledby="about-h" data-section="About" data-ground>
-  <h2 id="about-h" data-reveal="title">About</h2>
+  <header class="about-h" data-reveal="title">
+    <h2 id="about-h">About</h2>
+    <p class="idx readout" aria-hidden="true">01 / 05</p>
+  </header>
   <div class="say" data-reveal="read">
     <p class="first">
       I'm Jerry. I'm from Toronto, and I study computer science at the University of Waterloo as a
@@ -30,6 +33,14 @@
   }
   .about > * {
     max-width: 560px;
+  }
+  .about-h {
+    display: grid;
+    row-gap: 14px;
+  }
+  .about-h .idx {
+    order: -1;
+    margin-bottom: -2px;
   }
   h2 {
     font-size: clamp(40px, 5vw, 68px);

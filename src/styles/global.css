@@ -1,4 +1,6 @@
 @import "@fontsource-variable/instrument-sans/wght.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
 
 /* KaTeX's Computer Modern cuts: math in figure labels, and every numeral that matters. */
 @font-face {
@@ -61,6 +63,8 @@
   --sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --math: "CM Math", "Latin Modern Math", "Times New Roman", serif;
   --cm: "CM Main", "Latin Modern Roman", "Times New Roman", serif;
+  /* What an instrument would display: every number, label and readout. */
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --gutter: clamp(20px, 4vw, 56px);
   --measure: 1180px;
@@ -299,11 +303,24 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* Computer Modern for the numerals that carry weight. */
+/* Numerals that carry weight are read off an instrument: set in the mono, a touch smaller than the type around them. */
 .cm {
-  font-family: var(--cm);
+  font-family: var(--mono);
+  font-size: 0.88em;
+  font-variant-numeric: tabular-nums;
   font-feature-settings: normal;
   letter-spacing: 0;
+}
+
+/* A readout's label: small, spaced, upper case, in the mono. */
+.readout {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 /* Wide windows get a wider page, so the column is not an island in the middle of a large screen. */

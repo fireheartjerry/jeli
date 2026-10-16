@@ -70,17 +70,17 @@ const record: { group: string; rows: Row[] }[] = [
       log="Jupiter's Trojans, two clouds of asteroids that lead and trail the planet by 60 degrees, may hold about as many large bodies as the main belt. The tugs in this scene carry cargo down to the swarm on Hohmann transfers, about fifteen months each way from the belt. What goes out goes up the beam: light sails, metres across and weighing grams, pushed by light alone. Breakthrough Starshot proposed driving such sails with a 100-gigawatt laser to a fifth of the speed of light in minutes; a beam with the Sun's output behind it could push far heavier ones."
     />
 
-    <Section id="work" title="Work" lede="Software people use: AI video at a YC startup, a counter-drone turret, and a math judge in 182 countries.">
-      <Entry title="Mathos AI" href="https://mathos.ai" role="Software engineering intern" period="2026 to now">
+    <Section id="work" index={2} title="Work" lede="Software people use: AI video at a YC startup, a counter-drone turret, and a math judge in 182 countries.">
+      <Entry title="Mathos AI" stat="YC W24 · AI video lessons" href="https://mathos.ai" role="Software engineering intern" period="2026 to now">
         <p>Shipped video export, the email pipeline, and an MCP server that lets people make Mathos lessons from inside ChatGPT and Claude.</p>
       </Entry>
-      <Entry title="Waterloo Defence" href="https://waterloodefence.ca" role="Software Lead" period="2026 to now">
+      <Entry title="Waterloo Defence" stat="Counter-UAS · DND CUAS Sandbox 2027" href="https://waterloodefence.ca" role="Software Lead" period="2026 to now">
         <p>Leading the software for a student-built autonomous counter-drone turret: finding the drone, tracking it, and aiming ahead of it.</p>
       </Entry>
-      <Entry title="TopsOJ" href="https://topsoj.com" role="Founder" period="2023 to now">
+      <Entry title="TopsOJ" stat="100,000+ users · 182 countries" href="https://topsoj.com" role="Founder" period="2023 to now">
         <p>A judge for competitive math I started in high school. Over 100,000 people in 182 countries have used it.</p>
       </Entry>
-      <Entry title="Quoted Tech Computers" role="Software engineering intern" period="Summer 2025">
+      <Entry title="Quoted Tech Computers" stat="−70% manual processing" role="Software engineering intern" period="Summer 2025">
         <p>Automated label printing and competitor pricing, cutting manual processing time by 70%.</p>
       </Entry>
     </Section>
@@ -94,11 +94,11 @@ const record: { group: string; rows: Row[] }[] = [
       log="Saturn takes 29.5 years to go round the Sun. Every body in this scene, down to each of the 60,000 collectors, moves on its own Kepler orbit, solved on the graphics card every frame. Distances and periods are to scale; sizes are not."
     />
 
-    <Section id="research" title="Research" lede="Four sole-authored papers, on coding agents and on binary stars.">
-      <Entry title={paper.title} href={paper.href} role="NeurIPS 2026 workshops" period="2026">
+    <Section id="research" index={3} title="Research" lede="Four sole-authored papers, on coding agents and on binary stars.">
+      <Entry title={paper.title} stat="NeurIPS 2026 · Two workshops" href={paper.href} role="NeurIPS 2026 workshops" period="2026">
         <p>Do more coding agents fix more bugs? In controlled experiments, trees of agents spent 6 to 12 times the tokens for no gain.</p>
       </Entry>
-      <Entry title="Mass transfer in binary stars" role="With Dr. Alexander Mushtukov, Oxford" period="2024 to 2026">
+      <Entry title="Mass transfer in binary stars" stat="Three papers · Best Manuscript" role="With Dr. Alexander Mushtukov, Oxford" period="2024 to 2026">
         <p>Three papers showing that gas passed between two stars shrinks their orbit, where the textbook says it usually widens.</p>
         <ol class="papers">
           <li><a class="ln" href="https://doi.org/10.3847/2515-5172/ae4513" target="_blank" rel="noopener">Research Notes of the AAS</a></li>
@@ -117,7 +117,7 @@ const record: { group: string; rows: Row[] }[] = [
       log="Neptune is 30 times as far from the Sun as the Earth; sunlight takes about four hours to get here. Beyond it the Kuiper belt runs out to about 50 AU, with more than 100,000 bodies over 100 km across by most estimates."
     />
 
-    <Section id="projects" title="Projects" lede="Hackathon builds and things I made because I wanted them.">
+    <Section id="projects" index={4} title="Projects" lede="Hackathon builds and things I made because I wanted them.">
       <Entry title="Cardboard Cockpit" href="https://devpost.com/software/wad" role="Hack the North" period="2026">
         <p>A flight simulator you fly from a cardboard cockpit and a webcam.</p>
       </Entry>
@@ -147,10 +147,10 @@ const record: { group: string; rows: Row[] }[] = [
       log="Voyager 1 crossed the heliopause, where the Sun's wind gives way to the gas between the stars, at about 121 AU in 2012. In 1990, from about 40 AU, it turned its camera back and caught the Earth as less than a pixel. The probe here is drawn to its proportions: a 3.7 m dish and a 13 m boom. Sunlight takes about 19 hours to reach this far."
     />
 
-    <Section id="record" title="Record" lede="Scholarships, papers and contest results.">
+    <Section id="record" index={5} title="Record" lede="Scholarships, papers and contest results.">
       {record.map((g) => (
         <div class="group">
-          <p class="group-k">{g.group}</p>
+          <p class="group-k readout">{g.group}</p>
           <dl class="record" data-reveal="rows">
             {g.rows.map((r) => (
               <div>
@@ -204,8 +204,6 @@ const record: { group: string; rows: Row[] }[] = [
     margin-top: 28px;
   }
   .group-k {
-    font-size: 13px;
-    letter-spacing: 0.02em;
     color: #e6bd7c;
   }
   .record {

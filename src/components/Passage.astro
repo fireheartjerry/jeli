@@ -33,7 +33,7 @@ const { reach, orbit, n, place, line, log } = Astro.props;
 
 <aside class="passage" data-interlude="passage" data-reach={reach} data-orbit={orbit} aria-label={place}>
   <div class="card wrap" data-reveal="passage">
-    <p class="place cm">{n && <span class="no">Log {String(n).padStart(2, "0")}</span>}{place}</p>
+    <p class="place readout">{n && <span class="no">Log {String(n).padStart(2, "0")}</span>}{place}</p>
     <p class="line">{line}</p>
     <button class="toggle" type="button" data-log-toggle aria-pressed="false">
       <span class="dot" aria-hidden="true"></span><span class="label">Flight log</span>
@@ -78,8 +78,6 @@ const { reach, orbit, n, place, line, log } = Astro.props;
     translate: 0 -50%;
   }
   .place {
-    font-size: 12.5px;
-    letter-spacing: 0.02em;
     /* The gold of the orbit the scene lights while this card is up. */
     color: #e6bd7c;
     margin-bottom: 14px;

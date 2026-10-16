@@ -385,8 +385,10 @@ const loupe = `polygon(0 0, ${edge.join(", ")}, 0 ${2 * REACH}px)`;
   /* The odometer: the camera's distance from the Sun, in the numerals every instrument here uses. */
   .odo {
     margin-right: auto;
-    min-width: 7ch;
-    font-size: 15px;
+    min-width: 22ch;
+    font-size: 12.5px;
+    letter-spacing: 0.04em;
+    white-space: pre;
     font-variant-numeric: tabular-nums;
     color: var(--ink-3);
     white-space: nowrap;

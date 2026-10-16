@@ -122,7 +122,10 @@ function init(layer: HTMLElement) {
     put("tugs", String(s.tugs));
     // The bar's odometer: how far the camera is from the Sun.
     if (odo) {
-      const text = `${s.range < 9.995 ? s.range.toFixed(2) : s.range < 99.95 ? s.range.toFixed(1) : Math.round(s.range)} AU`;
+      // Range from the Sun, and how long its light takes to get here (499.005 s per AU), as a ground station would read them.
+      const lt = Math.round(s.range * 499.005);
+      const light = lt < 3600 ? `${Math.floor(lt / 60)}m ${String(lt % 60).padStart(2, "0")}s` : `${Math.floor(lt / 3600)}h ${String(Math.floor((lt % 3600) / 60)).padStart(2, "0")}m`;
+      const text = `${s.range < 99.95 ? s.range.toFixed(2) : s.range.toFixed(1)} AU  ·  LT ${light}`;
       if (shown.range !== text) odo.textContent = shown.range = text;
     }
 

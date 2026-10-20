@@ -34,6 +34,16 @@ const record: { group: string; rows: Row[] }[] = [
     ],
   },
   {
+    group: "Toolkit",
+    rows: [
+      { what: "Languages", detail: "Python, C/C++, TypeScript, JavaScript, Swift, Java, SQL, Bash, LaTeX" },
+      { what: "ML and AI", detail: "PyTorch, CUDA, TensorRT, ONNX Runtime, OpenCV, Ultralytics YOLO, RF-DETR, Hugging Face, MuJoCo, Amazon Bedrock AgentCore, MCP" },
+      { what: "Backend", detail: "FastAPI, Flask, Node.js, Express, Celery, Temporal, PostgreSQL, SQLAlchemy, SQLite, Firebase, Supabase" },
+      { what: "Frontend and mobile", detail: "React, Next.js, Astro, SwiftUI, ARKit, Apple Vision, Metal, Three.js, WebGL, GSAP, Tailwind" },
+      { what: "Cloud and DevOps", detail: "AWS (EC2, Lambda, Fargate, Batch, DynamoDB, S3, SES, CDK), Terraform, Docker, Kubernetes, GitHub Actions, Vercel" },
+    ],
+  },
+  {
     group: "Elsewhere",
     rows: [{ what: "Tokenboard", detail: "1st worldwide, August 2026; over 100 billion tokens with coding agents" }],
   },
@@ -147,7 +157,7 @@ const record: { group: string; rows: Row[] }[] = [
       log="Voyager 1 crossed the heliopause, where the Sun's wind gives way to the gas between the stars, at about 121 AU in 2012. In 1990, from about 40 AU, it turned its camera back and caught the Earth as less than a pixel. The probe here is drawn to its proportions: a 3.7 m dish and a 13 m boom. Sunlight takes about 19 hours to reach this far."
     />
 
-    <Section id="record" index={5} title="Record" lede="Scholarships, papers and contest results.">
+    <Section id="record" index={5} title="Record" lede="Scholarships, papers, contest results, and what I build with.">
       {record.map((g) => (
         <div class="group">
           <p class="group-k readout">{g.group}</p>

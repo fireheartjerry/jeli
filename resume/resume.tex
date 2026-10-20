@@ -15,9 +15,18 @@
 \usepackage[english]{babel}
 \usepackage{tabularx}
 \usepackage{iftex}
+% pdfLaTeX (Overleaf) maps ligatures back to plain letters through glyphtounicode.
+% XeTeX (the site's tectonic build) would write fi, fl and ff as single ligature
+% characters that ATS parsers misread, so that build keeps the letters apart.
 \ifPDFTeX
   \input{glyphtounicode}
   \pdfgentounicode=1
+\else
+  \XeTeXinterchartokenstate=1
+  \newXeTeXintercharclass\ligF \XeTeXcharclass`f=\ligF
+  \newXeTeXintercharclass\ligX \XeTeXcharclass`i=\ligX \XeTeXcharclass`l=\ligX
+  \XeTeXinterchartoks\ligF\ligX={\kern0pt}
+  \XeTeXinterchartoks\ligF\ligF={\kern0pt}
 \fi
 
 \pagestyle{fancy}
@@ -167,9 +176,9 @@
 \section{Technical Skills}
 \begin{entries}
   \item\small
-  \textbf{Languages:} Python, C/C++, TypeScript, JavaScript, Swift, Java, SQL, Bash, LaTeX\\[1pt]
-  \textbf{ML \& AI:} PyTorch, CUDA, TensorRT, ONNX Runtime, OpenCV, Hugging Face, MuJoCo, Amazon Bedrock, MCP\\[1pt]
-  \textbf{Web, Mobile \& Cloud:} React, Next.js, Node.js, FastAPI, PostgreSQL, SwiftUI, AWS, Terraform, Docker, Kubernetes
+  \textbf{Languages:} Python, C++, C, Java, TypeScript, JavaScript, Swift, SQL, Bash, HTML/CSS\\[1pt]
+  \textbf{Machine Learning:} PyTorch, CUDA, TensorRT, OpenCV, Hugging Face, Computer Vision, Deep Learning, LLMs\\[1pt]
+  \textbf{Frameworks \& Cloud:} React, Next.js, Node.js, FastAPI, PostgreSQL, AWS, Docker, Kubernetes, Git, Linux, CI/CD
 \end{entries}
 
 \end{document}

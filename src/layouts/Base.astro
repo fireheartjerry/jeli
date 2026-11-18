@@ -17,7 +17,7 @@ interface Props {
 const {
   title = "Jerry Li",
   noindex = false,
-  description = "Jerry (Yuze) Li studies computer science at the University of Waterloo as a Schulich Leader. Sole author of a paper at two NeurIPS 2026 workshops, software engineering intern at Mathos AI (YC W24), founder of TopsOJ, and co-founder of Waterloo Defence.",
+  description = "Jerry (Yuze) Li studies computer science at the University of Waterloo as a Schulich Leader. Sole author of a paper at two NeurIPS 2026 workshops, founder of TopsOJ, co-founder of Waterloo Defence, and formerly a software engineering intern at Mathos AI (YC W24).",
   jsonld = [],
   theme,
 } = Astro.props;
@@ -35,7 +35,6 @@ const person = {
   affiliation: { "@type": "CollegeOrUniversity", name: "University of Waterloo" },
   award: ["Schulich Leader Scholarship", "USACO Platinum"],
   worksFor: [
-    { "@type": "Organization", name: "Mathos AI", url: "https://mathos.ai" },
     { "@type": "Organization", name: "Waterloo Defence", url: "https://waterloodefence.ca" },
   ],
   knowsAbout: ["AI agents", "software engineering", "computer vision", "machine learning", "iOS development", "cloud infrastructure", "computational astrophysics", "competitive programming"],

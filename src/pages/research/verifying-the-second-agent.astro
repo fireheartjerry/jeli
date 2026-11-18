@@ -35,7 +35,8 @@ import { paper, bibtex } from "../../data/paper";
       <p class="sub">{paper.subtitle}</p>
       <p class="meta">
         Jerry Li, sole author. Accepted at two NeurIPS 2026 workshops in Sydney:{" "}
-        {paper.workshops[0].full}, and {paper.workshops[1].full}.
+        <a class="ln" href={paper.workshops[0].openreview} target="_blank" rel="noopener">{paper.workshops[0].full}</a>, and{" "}
+        <a class="ln" href={paper.workshops[1].openreview} target="_blank" rel="noopener">{paper.workshops[1].full}</a>. Both on OpenReview.
       </p>
     </header>
 

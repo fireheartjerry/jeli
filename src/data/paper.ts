@@ -7,8 +7,8 @@ export const paper = {
   year: 2026,
   venue: "NeurIPS 2026 workshops, Sydney",
   workshops: [
-    { short: "Who Verifies the Agents?", full: "Who Verifies the Agents? Toward Reliable Agent Development" },
-    { short: "Managing Agents that Manage Agents", full: "Managing Agents that Manage Agents" },
+    { short: "Who Verifies the Agents?", full: "Who Verifies the Agents? Toward Reliable Agent Development", openreview: "https://openreview.net/forum?id=NUTxvM1q3H" },
+    { short: "Managing Agents that Manage Agents", full: "Managing Agents that Manage Agents", openreview: "https://openreview.net/forum?id=SdOyXkODbB" },
   ],
 };
 

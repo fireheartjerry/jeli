@@ -513,7 +513,7 @@ const rows = groups.map((g) => ({ ...g, items: g.items.map((c) => ({ ...c, id: `
     document.addEventListener(
       "keydown",
       (e) => {
-        if (e.isComposing) return;
+        if (e.isComposing || document.querySelector("[data-film][open]")) return;
         const key = e.key ?? "";
         // Cmd+K or Ctrl+K, by the letter the layout types; by position where the layout has no Latin letters.
         if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (/^[a-z]$/i.test(key) ? key.toLowerCase() === "k" : e.code === "KeyK")) {

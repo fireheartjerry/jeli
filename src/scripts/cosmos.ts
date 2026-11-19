@@ -43,6 +43,8 @@
  */
 import { fingerprint, mulberry32 } from "./worldline";
 import { rockBuilder } from "./geo/psyche";
+import { easeShot, filmAt, type FilmShot } from "./film";
+import { filmGeometry, FILM_HARDWARE_VERTEX, FILM_HARDWARE_FRAGMENT } from "./film-geometry";
 
 export const L_SUN = 3.828e26; // W
 export const BELT_MASS = 2.39e21; // kg
@@ -130,6 +132,8 @@ export interface Cosmos {
   setScroll(s: number): void;
   /** Where the camera is on the whole take. Parts left out keep their value. */
   setVoyage(v: Partial<Voyage>): void;
+  /** Sample the authored film directly. Null hands the camera back to the page. */
+  setFilm(seconds: number | null, screening?: boolean): void;
   /** Send one pulse of light up the beam. */
   pulse(): void;
   /** The page has reached its `n`th chapter (section): the camera swings round to a new heading, and back again if `n` goes down. */
@@ -937,10 +941,22 @@ void main() {
   float ca = atan(v_q.y, v_q.x);
   float streams = fbm3(vec3(cos(ca) * 2.6, sin(ca) * 2.6, r * 0.07 + u_turn * 0.02), 4);
   glow += pow(streams, 3.0) * 1.1 * exp(-(r - 1.0) * 0.75) * smoothstep(1.0, 1.15, r);
+  float angle = mod(ca + u_turn * 0.015 + 3.14159, 6.28318);
+  float prominence = 0.0;
+  for (int i = 0; i < 4; ++i) {
+    float centre = 0.4 + float(i) * 1.49;
+    float width = 0.08 + 0.027 * float(i);
+    float offset = (angle - centre) / width;
+    float arc = sqrt(max(1.0 - offset * offset, 0.0));
+    float top = 1.0 + arc * (0.055 + 0.044 * float(i));
+    float filament = r - top + 0.006 * sin(angle * 79.0 - r * 93.0);
+    prominence += (1.0 - smoothstep(0.85, 1.0, abs(offset))) *
+      (0.16 * exp(-abs(filament) * 35.0) + 0.85 * exp(-abs(filament) * 130.0));
+  }
   float halo = exp(-pow((r - 4.6) / 0.16, 2.0)) * 0.09 + exp(-pow((r - 8.4) / 0.3, 2.0)) * 0.035;
   float edge = smoothstep(u_span, u_span * 0.45, r);
   float m = (glow * (1.0 - 0.8 * u_dim) + shafts * (1.0 - 0.45 * u_dim) + halo * (1.0 - 0.6 * u_dim)) * edge * u_gain;
-  o = vec4(mix(vec3(1.0, 0.93, 0.8), vec3(1.0, 0.8, 0.5), smoothstep(1.0, 4.5, r)) * m, 0.0);
+  o = vec4(mix(vec3(1.0, 0.93, 0.8), vec3(1.0, 0.8, 0.5), smoothstep(1.0, 4.5, r)) * m + vec3(0.9, 0.23, 0.065) * prominence * edge * u_gain, 0.0);
 }`;
 
 // ---- collectors: one oriented hexagon each, facing the Sun, on its own orbit ----
@@ -1006,6 +1022,7 @@ const FS_PANEL = FRAG_HEAD + `
 in vec2 v_q; in float v_face; in float v_fresh; in float v_seed; in float v_glint; in float v_far; in float v_px; in float v_back;
 in float v_spec; in float v_mat;
 uniform float u_heat;
+uniform vec2 u_grade; // reflected light, rim intensity
 uniform float u_emit; // 1: write only the light this panel gives off, for the shafts and bloom
 void main() {
   // A hexagon with two flat sides across the orbit, so neighbours on a ring meet edge to edge.
@@ -1053,10 +1070,10 @@ void main() {
     // What the swarm collects it must shed: as it closes, the outside holds a dull ember of waste heat.
     col += vec3(0.075, 0.017, 0.006) * u_heat * (0.55 + 0.45 * v_seed) * (1.0 - 0.5 * frame);
     // Close in front of the Sun, the rim of a panel catches its light.
-    col += vec3(1.0, 0.8, 0.5) * smoothstep(0.7, 0.85, h) * detail * v_back * 0.9;
+    col += vec3(1.0, 0.8, 0.5) * smoothstep(0.76, 0.85, h) * detail * v_back * u_grade.y;
   }
   col = mix(col, vec3(0.62, 0.74, 1.0) * 1.3, v_fresh * 0.9);
-  o = vec4(col * v_far, alpha);
+  o = vec4(col * v_far * u_grade.x, alpha);
 }`;
 const FS_DOT = FRAG_HEAD + `
 in vec3 v_c; in float v_a;
@@ -1424,7 +1441,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const light = !!opts.light;
 
   type Prog = ReturnType<typeof compile>;
-  let prog: Record<"far" | "deep" | "sky" | "sun" | "swarm" | "rock" | "tug" | "line" | "big" | "lamp" | "haze" | "haul" | "beam" | "shaft" | "down" | "up" | "mix", Prog>;
+  let prog: Record<"far" | "deep" | "sky" | "sun" | "swarm" | "rock" | "tug" | "line" | "big" | "lamp" | "haze" | "haul" | "beam" | "shaft" | "down" | "up" | "mix" | "hardware", Prog>;
   let paint: Prog;
   try {
     paint = compile(gl, VS_POST, FS_PAINT);
@@ -1446,6 +1463,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       down: compile(gl, VS_POST, FS_DOWN),
       up: compile(gl, VS_POST, FS_UP),
       mix: compile(gl, VS_POST, FS_MIX),
+      hardware: compile(gl, FILM_HARDWARE_VERTEX, FILM_HARDWARE_FRAGMENT),
     };
   } catch (err) {
     console.warn("cover: shaders unavailable, showing the still image", err);
@@ -1495,6 +1513,10 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const mDeep = mesh(prog.deep.p, QUAD, [["a_q", 2]]);
   const mSun = mesh(prog.sun.p, QUAD, [["a_q", 2]]);
   const mHaze = mesh(prog.haze.p, QUAD, [["a_q", 2]]);
+  const hardware = filmGeometry();
+  const layout: [string, number][] = [["a_position", 3], ["a_normal", 3], ["a_material", 1]];
+  const mCollector = mesh(prog.hardware.p, hardware.collector, layout);
+  const mCargo = mesh(prog.hardware.p, hardware.tug, layout);
 
   // ---------- the galaxy, painted once ----------
   // Its plane is the great circle the stars above were gathered along: these are its axes, with the pole second.
@@ -1826,10 +1848,12 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const spot = { cover: { x: 0.6, y: 0.45 }, far: { x: 0.86, y: 0.2 }, end: { x: 0.6, y: 0.45 } };
   const from = opts.from ?? {};
   let scroll = from.cover ?? 0; // 0..1 through the cover
-  let shot = scroll; // the same, a moment behind: the camera follows the scroll instead of jumping with it
+  let easedCover = scroll; // the same, a moment behind: the camera follows the scroll instead of jumping with it
   // The rest of the take: where the scroll puts the camera, and where it has got to.
   const aim = { depart: from.depart ?? 0, cruise: from.cruise ?? 0, arrive: from.arrive ?? 0, lift: 0, reach: from.reach ?? -1 };
-  const leg = { ...aim };
+  const pageLeg = { ...aim };
+  let film: FilmShot | null = null;
+  let screening = false;
   // The chapter the page is in, as a heading: where it is turning from and to, and since when.
   const chapter = { from: 0, to: 0, at: -99, now: 0 };
   let away = 0; // 0 at the sphere, 1 in deep space
@@ -1838,12 +1862,12 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   let girth = 1; // the sphere's size on screen against its size as the cover ends; never more than 1
   let pulsed = -1; // when the last pulse left, on the scene's clock
   let clock = 0; // seconds the scene has run
-  let p = opts.still ? START : opts.from ? 1 : 0; // built fraction on screen
+  let built = opts.still ? START : opts.from ? 1 : 0; // built fraction on screen
   let az = 0.4, dragAz = 0, dragEl = 0, velAz = 0;
   const look = { az: 0, el: 0, wantAz: 0, wantEl: 0 }; // the pointer leans the camera a little
   let pull = 0; // the scroll, eased: 0 close in, 1 pulled all the way back
   let spin = 0.9; // the rock's turn about its axis, radians
-  let years = 3.1;
+  let orbitalYears = 3.1;
   let running = false, raf = 0, last = 0, born = opts.still || opts.from ? 99 : 0;
   let building = 0; // eases towards 1 while the built fraction is rising
   const eye = new Float32Array(3);
@@ -1916,12 +1940,14 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   const smooth = (t: number) => t * t * (3 - 2 * t);
 
   function camera() {
-    F = F0 * (1 - 0.055 * warp);
+    F = F0 * (1 - 0.055 * (screening ? 0 : warp));
+    const shot = film?.cover ?? easedCover;
+    const leg = film?.voyage ?? pageLeg;
     const s = smooth(shot);
     pull = s;
     const tall = h > w * 1.1 ? 1.22 : 1;
     // Arriving: the camera starts a little closer in and to one side, and settles.
-    const late = opts.still || opts.from ? 0 : (1 - Math.min(1, born / ARRIVE.seconds)) ** 3;
+    const late = film || opts.still || opts.from ? 0 : (1 - Math.min(1, born / ARRIVE.seconds)) ** 3;
     // The voyage: out after the cover, and home again for the footer. Each leg
     // starts and ends at rest, so it joins the pull-back with no step in speed.
     const out = smooth(leg.depart), home = smooth(leg.arrive);
@@ -1940,17 +1966,23 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     const off = tall > 1 && leg.cruise > 0.5 ? 1 + HOME_TALL * (1 - away) : 1;
     // Out and back: nothing at either end of the page, everything in the middle, and at rest at all three.
     // Or, where the page has given its own places on the way out, the way out is those, and goes no further than FAR.r.
-    const staged = aim.reach >= 0;
+    const staged = !!film || aim.reach >= 0;
     const deep = staged ? 0 : Math.sin(Math.PI * leg.cruise) ** 2 * away;
     const gone = staged ? Math.max(0, leg.reach) * (1 - home) : left;
     // (A tall screen holds the camera further off so the sphere fits; on a staged way out that is let go by the first place, so the distance there is the place's own.)
     const room = staged ? Math.max(0, 1 - gone / 0.08) : 1;
-    const dist = (NEAR.r + (WIDE.r - NEAR.r) * pulled) * (1 + (tall - 1) * (0.35 + 0.65 * s) * room) * (1 - ARRIVE.closer * late) * off * (FAR.r / WIDE.r) ** gone * (FAR.deep / FAR.r) ** deep;
+    let dist = (NEAR.r + (WIDE.r - NEAR.r) * pulled) * (1 + (tall - 1) * (0.35 + 0.65 * s) * room) * (1 - ARRIVE.closer * late) * off * (FAR.r / WIDE.r) ** gone * (FAR.deep / FAR.r) ** deep;
+    if (film?.id === "collector") {
+      dist = 1.3 + film.ease * 0.26;
+      F *= 1.17 - film.ease * 0.14;
+    } else if (film?.id === "home") {
+      dist = ((screening ? 8.4 : 5.4) - (screening ? 4.5 : 1.5) * easeShot(film.progress * 1.6)) * (tall > 1 ? 1.22 : 1);
+    }
     range = dist;
     // How fast the camera is travelling, in the logarithm of its distance per second: a reading pace is under the
     // threshold and leaves the lens alone; a fast fling down the page opens it a little, and it eases back.
     const lr = Math.log(Math.max(1e-3, dist));
-    if (warpAt >= 0) {
+    if (!screening && warpAt >= 0) {
       const rate = Math.abs(lr - lastLr) / Math.max(1 / 240, clock - warpAt);
       const want = smooth(Math.max(0, Math.min(1, (rate - 0.25) / 1.1)));
       warp += (want - warp) * (want > warp ? 0.1 : 0.045);
@@ -1960,14 +1992,17 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     lastLr = lr;
     stop = ((NEAR.r + (WIDE.r - NEAR.r) * pulled) / WIDE.r) ** 1.9;
     // Far out it rises over the ecliptic, and the orbits open from lines into rings.
-    const el = Math.max(0.05, Math.min(1.35, NEAR.el + (WIDE.el - NEAR.el) * s + (FAR.el - WIDE.el) * away + dragEl + look.el + ARRIVE.el * late));
+    const authoredEl = film?.id === "home" ? 0.21 + film.ease * 0.51 : film?.id === "collector" ? 0.72 - film.ease * 0.17 : null;
+    const tiltInput = screening ? 0 : dragEl + look.el;
+    const el = Math.max(0.05, Math.min(1.35, (authoredEl ?? (NEAR.el + (WIDE.el - NEAR.el) * s + (FAR.el - WIDE.el) * away)) + tiltInput + ARRIVE.el * late));
     // Pulling back also carries the camera round the Sun, so what is near crosses
     // what is far; and it keeps going round, slowly, for as long as the page is read.
     // A new chapter of the page is a new heading: the camera swings to it and settles, at rest at both ends.
     const turned = Math.max(0, Math.min(1, (clock - chapter.at) / CHAPTER.seconds));
     chapter.now = chapter.from + (chapter.to - chapter.from) * (turned < 0.5 ? 4 * turned ** 3 : 1 - (-2 * turned + 2) ** 3 / 2);
-    const round = az + SWEEP * s + FAR.sweep * leg.cruise + chapter.now * away;
-    const a = round + dragAz + look.az + ARRIVE.az * late;
+    const heading = film ? 0.52 + (film.id === "home" ? 0.33 + film.ease * 0.46 : 0.25 * film.ease) : az;
+    const round = heading + SWEEP * s + FAR.sweep * leg.cruise + (film ? 0 : chapter.now * away);
+    const a = round + (screening ? 0 : dragAz + look.az) + ARRIVE.az * late;
     const aspect = w / h;
     // The lens shift that puts the Sun where the layout wants it. As the camera
     // leaves, it tilts up a little, so the pole has sky above it at the end.
@@ -1977,6 +2012,22 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     sunX = base.x + (spot.far.x - base.x) * away;
     // (The footer's lift is for the camera at home: far out it would only push the sky off the screen.)
     sunY = base.y + (base === spot.end ? Math.min(1.5, leg.lift) * (1 - away) : 0) + (spot.far.y - base.y) * away;
+    if (film?.id === "collector" || film?.id === "reveal") {
+      sunX = screening ? (aspect > 1 ? 0.59 : 0.53) : spot.cover.x;
+      sunY = screening ? 0.46 : spot.cover.y;
+      if (film.id === "collector") {
+        sunX += (aspect > 1 ? 0.13 : 0.14) * (1 - 0.5 * film.ease);
+        sunY -= 0.035 * (1 - film.ease);
+      }
+    }
+    if (screening && film?.id === "quarry") { sunX = 0.78; sunY = 0.35; }
+    if (screening && film?.id === "saturn") { sunX = 0.17; sunY = 0.25; }
+    if (screening && film?.id === "voyager") { sunX = 0.7; sunY = 0.34; }
+    if (screening && film?.id === "home") {
+      const land = easeShot(film.progress * 2);
+      sunX = 0.7 - 0.19 * land;
+      sunY = 0.34 + 0.24 * land;
+    }
     const ox = sunX * 2 - 1, oy = 1 - sunY * 2 - tilt * s * (1 - away);
     lens[0] = ox;
     lens[1] = oy;
@@ -2014,6 +2065,14 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     const tx = hang[0] - (base.x * 2 - 1), ty = hang[1] - (1 - base.y * 2 - tilt);
     const rx = (tx * depth * aspect) / F, ry = (ty * depth) / F;
     for (let i = 0; i < 3; i++) rockW[i] = c1[i] + B0[i] * rx + B0[3 + i] * ry + B0[6 + i] * depth;
+    big.r = film?.id === "quarry" ? ROCK.r * 1.5 : ROCK.r;
+    if (film?.id === "quarry") {
+      // Bring the existing quarry mesh to the lens, then let it fall behind.
+      const z = 0.59 + film.ease * 1.13;
+      const x = ((aspect > 1 ? -0.62 + film.ease * 0.38 : -0.36 + film.ease * 0.25) - ox) * z * aspect / F;
+      const y = ((-0.18 - film.ease * 0.28) - oy) * z / F;
+      for (let i = 0; i < 3; i++) rockW[i] = eye[i] + B[i] * x + B[3 + i] * y + B[6 + i] * z;
+    }
     big.x = view[0] * rockW[0] + view[4] * rockW[1] + view[8] * rockW[2] + view[12];
     big.y = view[1] * rockW[0] + view[5] * rockW[1] + view[9] * rockW[2] + view[13];
     big.z = view[2] * rockW[0] + view[6] * rockW[1] + view[10] * rockW[2] + view[14];
@@ -2031,7 +2090,8 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       const wl = Math.hypot(w1[0], w1[1], w1[2]);
       w1 = w1.map((v) => v / wl);
       const w2 = [k[1] * w1[2] - k[2] * w1[1], k[2] * w1[0] - k[0] * w1[2], k[0] * w1[1] - k[1] * w1[0]];
-      const cs = Math.cos(spin), sn = Math.sin(spin);
+      const rockSpin = film ? 0.72 + film.time * TAU / ROCK.day : spin;
+      const cs = Math.cos(rockSpin), sn = Math.sin(rockSpin);
       for (let i = 0; i < 3; i++) {
         const u1 = cs * w1[i] + sn * w2[i], u2 = cs * w2[i] - sn * w1[i];
         for (let j = 0; j < 3; j++) turn[j * 3 + i] = u1 * rock.a1[j] + u2 * rock.a2[j] + k[i] * rock.axis[j];
@@ -2059,12 +2119,12 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       b.on = close && vz < -b.r * 1.5 && Math.abs((F / aspect) * (vx / -vz) + ox) < 1 + edge / aspect && Math.abs(F * (vy / -vz) + oy) < 1 + edge;
       if (!b.on) continue;
       // Rodrigues: a turn of `ang` about the boulder's axis.
-      const ang = b.phase + b.rate * clock, c = Math.cos(ang), sn = Math.sin(ang), [kx, ky, kz] = b.axis, m = 1 - c;
+      const ang = b.phase + b.rate * (screening && film ? film.time : clock), c = Math.cos(ang), sn = Math.sin(ang), [kx, ky, kz] = b.axis, m = 1 - c;
       b.turn.set([c + kx * kx * m, ky * kx * m + kz * sn, kz * kx * m - ky * sn, kx * ky * m - kz * sn, c + ky * ky * m, kz * ky * m + kx * sn, kx * kz * m + ky * sn, ky * kz * m - kx * sn, c + kz * kz * m]);
     }
     // The opening: the Sun comes up from nothing over the first seconds.
     const t = Math.min(1, born / 3.4);
-    big.seen = opts.still || opts.from ? 1 : 1 - (1 - t) ** 3;
+    big.seen = film || opts.still || opts.from ? 1 : 1 - (1 - t) ** 3;
   }
 
   function toScreen(x: number, y: number, z: number) {
@@ -2307,7 +2367,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     seen.nx = sun.nx;
     seen.ny = sun.ny;
     seen.px = spherePx;
-    const take = held > 0 ? Math.max(1 - Math.exp(-held / SHAFT.linger), Math.min(1, moved * 30)) : 1;
+    const take = !fresh && held > 0 ? Math.max(1 - Math.exp(-held / SHAFT.linger), Math.min(1, moved * 30)) : 1;
     g.enable(g.BLEND);
     g.blendColor(0, 0, 0, take);
     g.blendFunc(g.CONSTANT_ALPHA, g.ONE_MINUS_CONSTANT_ALPHA);
@@ -2369,10 +2429,54 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
   }
 
+  function drawHardware() {
+    if (film?.id !== "collector") return;
+    const g = gl!;
+    const t = film.progress;
+    const slide = easeShot((t - 0.08) / 0.92);
+    const tall = h > w * 1.1;
+    const aspect = w / h;
+    const exposure = prog.hardware.u;
+    g.useProgram(prog.hardware.p);
+    g.uniformMatrix4fv(exposure.u_projection, false, proj);
+    g.uniform3f(exposure.u_key, 0.73, 0.44, -0.48);
+    g.enable(g.DEPTH_TEST);
+    g.depthMask(true);
+    g.disable(g.BLEND);
+    const shift = screening ? 0 : dragAz * 0.28;
+    const z = 0.38 - slide * 0.20;
+    const x = (-0.26 - slide * 1.2 + shift) * z * aspect / F;
+    const y = (0.11 + slide * 1.65 + (tall && !screening ? 0.14 : 0)) * z / F;
+    g.uniform4f(exposure.u_pose, x, y, -z, Math.min(0.23, z * aspect * 0.62));
+    g.uniform3f(exposure.u_angles, -0.57 + 0.48 * slide, 0.86 + 0.33 * slide, -0.37 - 0.29 * slide);
+    g.uniform1f(exposure.u_silhouette, 0.55 - slide * 0.38);
+    g.bindVertexArray(mCollector.vao);
+    g.drawArrays(g.TRIANGLES, 0, mCollector.count);
+
+    const pass = easeShot((t - 0.05) / 0.91);
+    const dz = 0.52 - pass * 0.18;
+    const tx = (-0.68 + pass * 1.44 + shift) * dz * aspect / F;
+    const ty = (-0.36 + pass * 0.85 + (tall && !screening ? 0.32 : 0)) * dz / F;
+    g.uniform4f(exposure.u_pose, tx, ty, -dz, Math.min(0.104, dz * aspect * 0.24));
+    g.uniform3f(exposure.u_angles, -0.57, -0.34 + pass * 0.55, 0.16 + pass * 0.21);
+    g.uniform3f(exposure.u_key, 0.57, 0.69, 0.40);
+    g.uniform1f(exposure.u_silhouette, 0.28);
+    g.bindVertexArray(mCargo.vao);
+    g.drawArrays(g.TRIANGLES, 0, mCargo.count);
+    g.disable(g.DEPTH_TEST);
+    g.enable(g.BLEND);
+  }
+
   function draw() {
     if (!w) return;
     camera();
     const g = gl!;
+    const p = film?.build ?? built;
+    const years = screening && film ? 3.1 + film.time / YEAR_SECONDS : orbitalYears;
+    const shotClock = screening && film ? film.time : clock;
+    const closeLens = film?.id === "collector";
+    const darkSide = film?.id === "home" ? 0.055 + 0.21 * film.ease : 1;
+    const glare = darkSide * (closeLens ? 0.46 : 1);
     g.viewport(0, 0, canvas.width, canvas.height);
     g.clearColor(6 / 255, 8 / 255, 13 / 255, 1);
     g.clearDepth(1);
@@ -2382,12 +2486,13 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.blendFunc(g.ONE, g.ONE_MINUS_SRC_ALPHA);
     const px = dpr * Math.min(1.3, Math.max(0.8, h / 900));
     const work = p >= 0.9995 ? 0 : 0.3 + 0.7 * Math.min(1, p * 30);
-    const beam = Math.max(0, Math.min(1, (p - 0.992) / 0.008));
+    const ignition = film?.id === "home" ? easeShot((film.progress - 0.27) / 0.23) : screening ? 0 : 1;
+    const beam = Math.max(0, Math.min(1, (p - 0.992) / 0.008)) * ignition;
     const aspect = w / h;
     // From far out the sphere is drawn in less and less detail: first without its
     // shafts and bloom, then with a share of its collectors, and at last as a star.
     const ramp = (a: number, b: number, v: number) => smooth(Math.max(0, Math.min(1, (v - a) / (b - a))));
-    const share = post ? ramp(LOD.post[0], LOD.post[1], spherePx) : 0;
+    const share = post ? ramp(LOD.post[0], LOD.post[1], spherePx) * glare : 0;
     const star = 1 - ramp(LOD.star[0], LOD.star[1], spherePx);
     const count = spherePx >= LOD.thin ? mSwarm.count : Math.max(2400, Math.round(mSwarm.count * (spherePx / LOD.thin) ** 2));
     use = (pr: Prog) => {
@@ -2407,12 +2512,13 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.depthMask(false);
     // The sky is faint. Close to the Sun the lens is stopped down too far to
     // show much of it; it comes out as the camera leaves and the sphere closes.
-    const night = (0.22 + 0.78 * pull) * big.seen;
+    const palette = film?.id === "voyager" ? 0.4 : closeLens ? 0.6 : 1;
+    const night = (0.3 + 0.7 * pull) * big.seen * palette;
     // How far the sky moved across the frame while the shutter was open (half the frame's turn), device px.
     const smear = fresh ? 0 : Math.hypot(view[2] - viewWas[2], view[6] - viewWas[6], view[10] - viewWas[10], view[1] - viewWas[1], view[5] - viewWas[5], view[9] - viewWas[9]) * F * (canvas.height / 2) * 0.5 * 0.7;
     // The string is laid across the frame, steeply, where the page leaves open sky. (It is held there as the camera
     // drifts, not fixed on the sky: out here the camera hardly turns, and a line that slid out of frame would be lost.)
-    if (seam.open > 0) {
+    if (!screening && seam.open > 0) {
       const lx = aspect / F, ly = 1 / F, tallF = h > w * 1.1;
       const e1 = tallF ? [0.15, 1] : [0.4, 1], e2 = tallF ? [0.65, -1] : [0.8, -1];
       const P1 = [(e1[0] - lens[0]) * lx, (e1[1] - lens[1]) * ly, -1], P2 = [(e2[0] - lens[0]) * lx, (e2[1] - lens[1]) * ly, -1];
@@ -2424,7 +2530,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       seam.n = toW(nV);
       seam.a = toW(aV);
     }
-    const seamD = seam.open > 0 ? SEAM_DEFICIT * smooth(seam.open) : 0;
+    const seamD = !screening && seam.open > 0 ? SEAM_DEFICIT * smooth(seam.open) : 0;
     // The same, in the galaxy's frame, for the painted band.
     const toV = (v: number[]) => [view[0] * v[0] + view[4] * v[1] + view[8] * v[2], view[1] * v[0] + view[5] * v[1] + view[9] * v[2], view[2] * v[0] + view[6] * v[1] + view[10] * v[2]];
     const toG = (v: number[]) => [0, 1, 2].map((j) => lookG[j] * v[0] + lookG[3 + j] * v[1] + lookG[6 + j] * v[2]);
@@ -2463,7 +2569,6 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.drawArrays(g.POINTS, 0, mSky.count);
     }
     viewWas.set(view);
-    fresh = false;
 
     // Deep sky, out past the planets.
     const deepK = smooth(Math.max(0, Math.min(1, (away - 0.55) / 0.4)));
@@ -2481,7 +2586,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.disable(g.SCISSOR_TEST);
     }
     // (With nothing hung on the sky and no star going off it draws nothing, so it is not drawn.)
-    if (galaxy && deepK > 0.002 && (Object.keys(staged).length > 0 || novae.some((n) => clock - n.at < NOVA))) {
+    if (!screening && galaxy && deepK > 0.002 && (Object.keys(staged).length > 0 || novae.some((n) => clock - n.at < NOVA))) {
       for (const [k, at] of Object.entries(staged)) deepSky[k as Far] = skyAt(at!.cruise, at!.ch, at!.nx, at!.ny);
       const dp = prog.deep;
       g.useProgram(dp.p);
@@ -2527,13 +2632,13 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     for (const l of loops) {
       // A lit orbit is the one being crossed: it comes up gold, over whatever it is drawn at otherwise.
       let k = 0;
-      if (l.name) {
+      if (l.name && !screening) {
         const to = marked[l.name] ?? 0;
         k = lit[l.name] = (lit[l.name] ?? 0) + (to - (lit[l.name] ?? 0)) * 0.06;
         if (Math.abs(to - k) > 0.002) glowing = true;
       }
       const base = l.alpha * (l.far === 0 ? 1 - outer : l.far === 1 ? outer : 1);
-      const al = base + (0.72 - base) * k;
+      const al = (base + (0.72 - base) * k) * (screening ? 0.23 : 1);
       if (al < 0.004) continue;
       const gold = k;
       g.uniform4f(u.u_col, (0.94 + 0.06 * gold) * al, (0.93 - 0.17 * gold) * al, (0.9 - 0.42 * gold) * al, al);
@@ -2554,7 +2659,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     // Light held inside the sphere: stronger as it closes.
     g.uniform1f(u.u_mode, 2);
     g.uniform1f(u.u_size, 1.03);
-    g.uniform1f(u.u_gain, (0.05 + 0.3 * p * p) * big.seen);
+    g.uniform1f(u.u_gain, (0.05 + 0.3 * p * p) * big.seen * darkSide);
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
     const span = 34;
     g.uniform1f(u.u_turn, years * TAU * 0.25);
@@ -2562,7 +2667,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.uniform1f(u.u_span, span);
     g.uniform1f(u.u_size, SUN_R * span);
     g.uniform1f(u.u_dim, p);
-    g.uniform1f(u.u_gain, big.seen);
+    g.uniform1f(u.u_gain, big.seen * glare);
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
 
     // Solid things write depth: the Sun's disc, the outpost, rocks and planets.
@@ -2570,7 +2675,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.depthMask(true);
     g.uniform1f(u.u_mode, 1);
     g.uniform1f(u.u_size, SUN_R);
-    g.uniform1f(u.u_gain, Math.min(1, big.seen * 1.6));
+    g.uniform1f(u.u_gain, Math.min(1, big.seen * 1.6) * (closeLens ? 0.73 : darkSide));
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
 
     u = use(prog.rock);
@@ -2594,6 +2699,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.uniform1f(u.u_scale, (F * canvas.height) / 2);
     g.uniform1f(u.u_building, building);
     g.uniform1f(u.u_heat, p * p * p);
+    g.uniform2f(u.u_grade, closeLens ? 0.63 : film?.id === "home" ? 0.43 + 0.38 * film.ease : 1, closeLens ? 0.22 : 0.6);
     g.disable(g.BLEND);
     g.enable(g.SAMPLE_ALPHA_TO_COVERAGE);
     g.bindVertexArray(mSwarm.vao);
@@ -2619,7 +2725,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     g.uniform1f(u.u_span, 9);
     g.uniform1f(u.u_size, SUN_R * 9);
     g.uniform1f(u.u_dim, p);
-    g.uniform1f(u.u_gain, 0.2 * big.seen * (1 - p) * (1 - p));
+    g.uniform1f(u.u_gain, 0.2 * big.seen * (1 - p) * (1 - p) * glare);
     g.uniform1f(u.u_fill, 1);
     g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
     g.uniform1f(u.u_fill, 0);
@@ -2634,7 +2740,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.uniform1f(u.u_size, (118 * range) / ((F * h) / 2));
       // On a narrow screen there is no margin for it: it is always behind type, and kept quieter.
       // What gets out comes through gaps that are always moving, so it is never quite steady.
-      g.uniform1f(u.u_gain, star * big.seen * (w < h ? 0.62 : 1) * (0.93 + 0.07 * Math.sin(clock * 1.9) * Math.sin(clock * 0.83 + 1.3)));
+      g.uniform1f(u.u_gain, star * big.seen * (w < h ? 0.62 : 1) * (0.93 + 0.07 * Math.sin(shotClock * 1.9) * Math.sin(shotClock * 0.83 + 1.3)));
       g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
     }
 
@@ -2670,7 +2776,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
         u = use(prog.haze);
         g.uniform3f(u.u_at, lampsW[0], lampsW[1], lampsW[2]);
         g.uniform1f(u.u_size, big.r * 0.62);
-        g.uniform1f(u.u_gain, (0.15 + 0.012 * Math.sin(clock * 2.3) * Math.sin(clock * 0.71)) * lit);
+        g.uniform1f(u.u_gain, (0.15 + 0.012 * Math.sin(shotClock * 2.3) * Math.sin(shotClock * 0.71)) * lit);
         g.bindVertexArray(mHaze.vao);
         g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
         u = use(prog.haul);
@@ -2702,14 +2808,16 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.uniform1f(u.u_wide, wide);
       g.uniform1f(u.u_k, girth);
       g.uniform3f(u.u_thin, (wide * canvas.height) / 2, (0.19 * girth) / wide, 7 * away * away);
-      g.uniform1f(u.u_flow, clock * 7);
+      g.uniform1f(u.u_flow, shotClock * 7);
       const len = Math.hypot((b.nx - a.nx) * aspect, b.ny - a.ny);
       g.uniform1f(u.u_len, len);
       g.uniform1f(u.u_aspect, aspect);
       // A pulse runs the beam's length in about a second and a half, then it is gone.
-      const run = pulsed < 0 ? -1 : (clock - pulsed) * 1.5 * girth;
-      if (run > len + 0.6 * girth) pulsed = -1;
-      g.uniform1f(u.u_pulse, pulsed < 0 ? -1 : run);
+      const run = screening
+        ? film?.id === "home" ? (film.time - 38.3) * 1.5 * girth : -1
+        : pulsed < 0 ? -1 : (clock - pulsed) * 1.5 * girth;
+      if (!screening && run > len + 0.6 * girth) pulsed = -1;
+      g.uniform1f(u.u_pulse, run > len + 0.6 * girth ? -1 : run);
       g.uniform1f(u.u_gain, beam * (0.9 + 0.1 * Math.sin(years * 900)) * (1 - 0.4 * away));
       g.bindVertexArray(mBeam.vao);
       g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
@@ -2737,7 +2845,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       g.disable(g.SCISSOR_TEST);
     }
     for (let kind = 0; kind < 3 && planet; kind++) {
-      const t = passes[kind];
+      const t = screening ? (film?.id === "saturn" && kind === 1 ? -0.18 + film.ease * 0.48 : 9) : passes[kind];
       if (t > 8) continue;
       const Z = 1 + 0.85 * t;
       const tallFrame = h > w * 1.1;
@@ -2746,8 +2854,8 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       const window_ = tallFrame ? smooth(Math.max(0, Math.min(1, (0.62 - Math.abs(t)) / 0.22))) : smooth(Math.max(0, Math.min(1, (2.3 - t) / 0.8)));
       const seen = window_ * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
       if (seen > 0.003) {
-        const at = tallFrame ? [0.32, 0.1] : kind === 1 ? [0.66, -0.66] : [0.7, -0.74];
-        const size = (tallFrame ? [0.22, 0.15, 0.16] : [0.4, 0.28, 0.27])[kind];
+        const at = screening ? [tallFrame ? 0.02 : 0.12 + 0.28 * (film?.ease ?? 0), -0.09] : tallFrame ? [0.32, 0.1] : kind === 1 ? [0.59, -0.57] : [0.7, -0.74];
+        const size = screening ? (tallFrame ? 0.17 : 0.39) : (tallFrame ? [0.22, 0.19, 0.16] : [0.4, 0.34, 0.27])[kind];
         const lx = aspect / F, ly = 1 / F;
         const X = (at[0] - lens[0]) * lx, Y = (at[1] - lens[1]) * ly; // the line the planet is on, per unit of depth
         g.useProgram(planet.p);
@@ -2767,10 +2875,11 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
         g.uniform3f(u.u_L, sx / sd / kl, sy / sd / kl, kz / kl);
         // The pole stands up the frame, leaning a little to one side and tipped towards the lens, so the belts run
         // across the face and Saturn's rings open to about 24 degrees, as they do from Earth at their widest.
-        const tip = [0.14, 0.42, 0.3][kind], lean = [-0.12, -0.32, 0.22][kind];
+        const tip = kind === 1 ? (screening ? 0.02 + 0.59 * (film?.ease ?? 0) : 0.05 + 0.48 * easeShot((t + 0.56) / 1.14)) : [0.14, 0, 0.3][kind];
+        const lean = [-0.12, -0.32, 0.22][kind];
         g.uniform3f(u.u_pole, Math.sin(lean) * Math.cos(tip), Math.cos(lean) * Math.cos(tip), Math.sin(tip));
         g.uniform1f(u.u_kind, kind);
-        g.uniform1f(u.u_spin, clock * [0.05, 0.04, 0.03][kind]);
+        g.uniform1f(u.u_spin, shotClock * [0.05, 0.04, 0.03][kind]);
         g.uniform1f(u.u_pix, (2 * ly) / canvas.height);
         g.uniform1f(u.u_a, seen);
         g.bindVertexArray(mFar.vao);
@@ -2778,7 +2887,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       }
     }
     // The probe at the heliopause: the same pass, a smaller thing seen closer.
-    const tp = passes[3];
+    const tp = screening ? (film?.id === "voyager" ? -0.24 + film.ease * 0.46 : 9) : passes[3];
     if (tp < 8 && probe) {
       const Z = 1 + 0.85 * tp;
       const tallFrame = h > w * 1.1;
@@ -2786,26 +2895,28 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       const seen = window_ * smooth(Math.max(0, Math.min(1, (Z - 0.06) / 0.2)));
       if (seen > 0.003) {
         const lx = aspect / F, ly = 1 / F;
-        const at = tallFrame ? [0.0, 0.18] : [0.42, -0.42];
+        const at = screening ? [tallFrame ? -0.25 : -0.33, -0.14] : tallFrame ? [0.0, 0.18] : [0.42, -0.42];
         g.useProgram(probe.p);
         const u = probe.u;
         g.uniform4f(u.u_lens, lx, ly, lens[0], lens[1]);
         g.uniform3f(u.u_c, (at[0] - lens[0]) * lx, (at[1] - lens[1]) * ly, -Z);
         // About 22 m across the frame's height at the mark: the dish a sixth of it, the boom reaching most of the way across.
-        g.uniform1f(u.u_m, (tallFrame ? 0.06 : 0.09) * ly);
+        g.uniform1f(u.u_m, (screening ? 0.13 : tallFrame ? 0.06 : 0.09) * ly);
         g.uniformMatrix3fv(u.u_R, false, tallFrame ? probeRTall : probeR);
         const sl = Math.hypot(view[12], view[13], view[14]) || 1;
         g.uniform3f(u.u_S, view[12] / sl, view[13] / sl, view[14] / sl);
         const cx = lens[0] + (at[0] - lens[0]) / Z, cy = lens[1] + (at[1] - lens[1]) / Z;
         const sx = (sun.nx - cx) * lx, sy = (sun.ny - cy) * ly, sd = Math.hypot(sx, sy) || 1;
-        g.uniform3f(u.u_L, (sx / sd) * 0.97, (sy / sd) * 0.97, 0.12);
+        g.uniform3f(u.u_L, (sx / sd) * 0.97, (sy / sd) * 0.97, screening ? -0.22 : 0.12);
         g.uniform1f(u.u_pix, (2 * ly) / canvas.height);
         g.uniform1f(u.u_a, seen);
         g.bindVertexArray(mFar.vao);
         g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
       }
     }
+    drawHardware();
     g.bindVertexArray(null);
+    fresh = false;
 
     if (opts.onFrame) {
       state.built = p;
@@ -2841,15 +2952,15 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     born += dt;
     clock += dt;
     held += dt;
-    years += dt / YEAR_SECONDS;
+    orbitalYears += dt / YEAR_SECONDS;
     // The camera follows the scroll rather than jumping with it: a wheel moves a page in steps.
     const follow = 1 - Math.exp(-dt * 9);
-    shot += (scroll - shot) * follow;
-    if (Math.abs(scroll - shot) < 1e-4) shot = scroll;
-    let moving = shot !== scroll;
+    easedCover += (scroll - easedCover) * follow;
+    if (Math.abs(scroll - easedCover) < 1e-4) easedCover = scroll;
+    let moving = easedCover !== scroll;
     for (const k of ["depart", "cruise", "arrive", "lift", "reach"] as const) {
-      leg[k] += (aim[k] - leg[k]) * follow;
-      if (Math.abs(aim[k] - leg[k]) < 1e-4) leg[k] = aim[k];
+      pageLeg[k] += (aim[k] - pageLeg[k]) * follow;
+      if (Math.abs(aim[k] - pageLeg[k]) < 1e-4) pageLeg[k] = aim[k];
       else moving = true;
     }
     if (clock - chapter.at < CHAPTER.seconds || glowing || flying || warp > 0) moving = true;
@@ -2860,7 +2971,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     // The camera keeps the orbit of wherever it is, so what is near it drifts
     // slowly. Far out a real orbit would take centuries; there it is given a
     // drift of a few pixels a second, enough that the sky is never quite still.
-    const here = NEAR.r + (WIDE.r - NEAR.r) * shot;
+    const here = NEAR.r + (WIDE.r - NEAR.r) * easedCover;
     const orbit = TAU / here ** 1.5 / YEAR_SECONDS;
     az += dt * (orbit + (0.0042 - orbit) * away);
     // Let go, the camera coasts a little, waits, and then goes back to its mark:
@@ -2882,16 +2993,16 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     const want = START + (1 - START) * Math.min(1, scroll / CLOSE);
     const intro = Math.min(1, born / 3.2);
     const goal = want * (1 - (1 - intro) ** 3);
-    const before = p;
-    p += (goal - p) * Math.min(1, dt * 7);
-    building += ((Math.abs(p - before) > 1e-5 ? 1 : 0) - building) * Math.min(1, dt * 3);
-    if (want >= 0.9999 && p > 0.9985) p = 1;
+    const before = built;
+    built += (goal - built) * Math.min(1, dt * 7);
+    building += ((Math.abs(built - before) > 1e-5 ? 1 : 0) - building) * Math.min(1, dt * 3);
+    if (want >= 0.9999 && built > 0.9985) built = 1;
     // Far out with nothing asked of it, the sky moves a fraction of a pixel a
     // frame. Half the frames are then enough, and the page keeps the rest.
     // After a few seconds of that, a quarter of them: it is a still sky behind someone reading.
     const calm = away > 0.97 && !moving && !grab && Math.abs(look.wantAz - look.az) + Math.abs(look.wantEl - look.el) < 2e-4;
     quiet = calm ? quiet + dt : 0;
-    if (resting || (calm && ++skipped < (quiet > 4 ? 4 : 2))) {
+    if (resting || (!film && calm && ++skipped < (quiet > 4 ? 4 : 2))) {
       // not this frame (or none at all, while the window is covered)
     } else {
       skipped = 0;
@@ -2905,7 +3016,7 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
   let grab: { x: number; y: number; az: number; el: number; t: number } | null = null;
   let rest = 0; // seconds since the camera was last held
   const down = (e: PointerEvent) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if ((e.pointerType === "mouse" && e.button !== 0) || (e.target instanceof Element && e.target.closest("a, button, input"))) return;
     grab = { x: e.clientX, y: e.clientY, az: dragAz, el: dragEl, t: performance.now() };
     velAz = 0;
   };
@@ -2987,8 +3098,8 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
     setScroll(v) {
       scroll = Math.max(0, Math.min(1, v));
       if (!running) {
-        shot = scroll;
-        p = START + (1 - START) * scroll;
+        easedCover = scroll;
+        built = START + (1 - START) * scroll;
         draw();
       }
     },
@@ -2996,17 +3107,30 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       for (const k of ["depart", "cruise", "arrive"] as const) if (v[k] !== undefined) aim[k] = Math.max(0, Math.min(1, v[k]!));
       if (v.lift !== undefined) aim.lift = Math.max(0, v.lift);
       aim.reach = v.reach === undefined ? -1 : Math.max(0, Math.min(1, v.reach));
-      if (aim.reach < 0) leg.reach = -1;
-      else if (leg.reach < 0) leg.reach = aim.reach;
+      if (aim.reach < 0) pageLeg.reach = -1;
+      else if (pageLeg.reach < 0) pageLeg.reach = aim.reach;
       if (v.cover !== undefined) scroll = Math.max(0, Math.min(1, v.cover));
       if (!running) {
         // Stopped (out of sight, or a still frame): the camera is simply where the
         // scroll has it, so it is in the right place when the scene is next seen.
-        Object.assign(leg, aim);
-        shot = scroll;
-        if (born > 3.2) p = opts.from ? 1 : START + (1 - START) * Math.min(1, scroll / CLOSE);
+        Object.assign(pageLeg, aim);
+        easedCover = scroll;
+        if (born > 3.2) built = opts.from ? 1 : START + (1 - START) * Math.min(1, scroll / CLOSE);
         if (opts.still) draw();
       }
+    },
+    setFilm(seconds, play = false) {
+      const next = seconds === null ? null : filmAt(seconds);
+      if (screening !== play || film?.id !== next?.id || (next && film && Math.abs(next.time - film.time) > 0.5)) {
+        fresh = true;
+        held = 0;
+        smeared = 0;
+        warp = 0;
+        warpAt = -1;
+      }
+      film = next;
+      screening = play;
+      if (!running) draw();
     },
     pulse() {
       pulsed = clock;
@@ -3059,9 +3183,9 @@ export function mountCosmos(canvas: HTMLCanvasElement, opts: CosmosOptions): Cos
       chapter.from = chapter.now = chapter.to;
       chapter.at = -99;
       if (settled) born = Math.max(born, 99);
-      Object.assign(leg, aim);
-      shot = scroll;
-      if (born > 3.2) p = opts.from ? 1 : START + (1 - START) * Math.min(1, scroll / CLOSE);
+      Object.assign(pageLeg, aim);
+      easedCover = scroll;
+      if (born > 3.2) built = opts.from ? 1 : START + (1 - START) * Math.min(1, scroll / CLOSE);
     },
     still() {
       // A copy can only be taken in the same turn as the drawing: the browser

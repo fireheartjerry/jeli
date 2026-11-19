@@ -1,0 +1,97 @@
+---
+import { FILM_DURATION } from "../scripts/film";
+---
+
+<dialog class="film" data-film data-lenis-prevent aria-labelledby="film-title">
+  <div class="screen" data-film-screen></div>
+  <div class="top">
+    <span id="film-title" class="film-title">Building a Dyson swarm</span>
+    <form method="dialog"><button class="control" aria-label="Close film">Close <span aria-hidden="true">×</span></button></form>
+  </div>
+  <div class="bottom">
+    <p class="location" data-film-location aria-hidden="true"></p>
+    <div class="transport">
+      <button class="control toggle" data-film-toggle type="button">Pause</button>
+      <input type="range" min="0" max={FILM_DURATION} step="0.01" value="0" aria-label="Film position" data-film-seek />
+      <output class="time" data-film-time aria-hidden="true">0:00 / 0:{FILM_DURATION}</output>
+      <button class="control" data-film-sound type="button" aria-pressed="false">Sound</button>
+    </div>
+  </div>
+</dialog>
+
+<style>
+  :global(html:has([data-film][open])) { overflow: hidden; }
+  .film {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    color: #efeee9;
+    background: #06080d;
+  }
+  .film::backdrop { background: #06080d; }
+  .film .screen, .film .screen :global(canvas) { position: absolute; inset: 0; }
+  .film .screen :global(canvas) { width: 100%; height: 100%; }
+  .film .top, .film .bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding-inline: clamp(16px, 5vw, 72px);
+  }
+  .film .top {
+    top: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: 20px;
+    background: linear-gradient(#06080de8, transparent);
+  }
+  .film .film-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .film .bottom {
+    bottom: 0;
+    padding-top: 52px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    background: linear-gradient(transparent, #06080de8 68%);
+  }
+  .film .location {
+    min-height: 1.4em;
+    margin: 0 0 8px;
+    color: #ddd8ca;
+    font-size: 12px;
+    font-family: var(--mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .film .transport { display: flex; align-items: center; gap: clamp(8px, 2vw, 20px); }
+  .film .control {
+    color: inherit;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    min-height: 44px;
+    min-width: 44px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .film .control:hover, .film .control[aria-pressed="true"] { color: #f4c382; }
+  .film .control span { font-size: 20px; vertical-align: -1px; margin-inline-start: 4px; }
+  .film .toggle { min-width: 50px; text-align: left; }
+  .film input { flex: 1; min-width: 24px; min-height: 44px; accent-color: #e5b87e; cursor: pointer; }
+  .film .time { font: 11px var(--mono); white-space: nowrap; }
+  .film :focus-visible { outline: 2px solid #f4c382; outline-offset: 3px; }
+</style>

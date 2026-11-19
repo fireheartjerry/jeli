@@ -1,5 +1,6 @@
 ---
 import { fingerprint, hex } from "../scripts/worldline";
+import { FILM_DURATION } from "../scripts/film";
 
 const SEED = "yuzeli";
 const seedHex = hex(fingerprint(SEED));
@@ -63,6 +64,9 @@ const seedHex = hex(fingerprint(SEED));
         <span class="lamp" aria-hidden="true"></span><span class="k readout">Now</span>
         <span>Co-founder and software lead of <a class="ln" href="https://waterloodefence.ca" target="_blank" rel="noopener">Waterloo Defence</a>, and founder of <a class="ln" href="https://topsoj.com" target="_blank" rel="noopener">TopsOJ</a></span>
       </p>
+      <button type="button" class="play-film" data-play-film>
+        <span aria-hidden="true"></span> Play film <small>0:{FILM_DURATION}</small>
+      </button>
     </div>
 
 
@@ -143,6 +147,32 @@ const seedHex = hex(fingerprint(SEED));
     padding-top: calc(var(--bar) + clamp(20px, 4.4svh, 44px));
     padding-bottom: clamp(24px, 4svh, 40px);
   }
+
+  .play-film {
+    display: none;
+    align-items: center;
+    min-height: 44px;
+    gap: 9px;
+    margin-top: 12px;
+    padding: 0 12px;
+    background: rgb(8 10 16 / 0.74);
+    color: #f1ece2;
+    border: 1px solid rgb(223 205 174 / 0.36);
+    border-radius: 3px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  :global(html[data-voyage]) .play-film { display: inline-flex; }
+  .play-film:hover { border-color: #edc086; }
+  .play-film span {
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 7px solid #edc086;
+  }
+  .play-film small { color: #c9bfae; font: 10px var(--mono); }
 
   .legend,
   .id {
@@ -428,6 +458,12 @@ const seedHex = hex(fingerprint(SEED));
     }
     :global(html[data-motion]:not([data-flat])) .hold::after {
       height: 150svh;
+    }
+    .play-film {
+      position: absolute;
+      top: calc(var(--bar) + var(--sky-h, 62vw) - 52px);
+      inset-inline-start: var(--gutter);
+      margin-top: 0;
     }
     .cue {
       display: flex;

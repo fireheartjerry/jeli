@@ -10,6 +10,8 @@
  */
 import { gsap, ScrollTrigger, reducedMotion } from "./motion";
 import { mountCosmos, L_SUN, BELT_MASS, type CosmosState } from "./cosmos";
+import { COVER_DURATION, FILM_DURATION } from "./film";
+import { attachFilm } from "./player";
 
 const layer = document.querySelector<HTMLElement>("[data-cosmos]");
 if (layer) {
@@ -111,7 +113,10 @@ function init(layer: HTMLElement) {
   // The frame-by-frame tools (tools/qa) read the camera's state from here; nothing else does.
   const qa = (window as unknown as { __qa?: { note(name: string, value: unknown): void } }).__qa;
 
+  let filmPlayer: HTMLDialogElement | null = null;
+  let live = true;
   function frame(s: CosmosState) {
+    if (filmPlayer?.open) return;
     away = s.away;
     qa?.note("cosmos", { built: s.built, range: s.range, away: s.away, sphere: s.spherePx, sunX: s.labels.sun.x, sunY: s.labels.sun.y, beam: s.beam });
     put("n", fmt.format(s.collectors));
@@ -182,8 +187,10 @@ function init(layer: HTMLElement) {
     onFrame: frame,
     onLost() {
       // The browser has taken the graphics context back. The page goes on without the scene, on its stills.
+      live = false;
+      filmPlayer?.close();
       root.removeAttribute("data-voyage");
-      if (hero && !hero.querySelector(".sky.still")) hero.prepend(Object.assign(new Image(), { className: "sky still", alt: "", src: "/cover.webp" }));
+      flat();
     },
     place(w, h) {
       box = { w, h };
@@ -223,7 +230,8 @@ function init(layer: HTMLElement) {
 
   if (still) {
     canvas.toggleAttribute("data-on", true);
-    cosmos.setScroll(poster !== null ? +poster : 0.55);
+    if (poster !== null) cosmos.setScroll(+poster);
+    else cosmos.setFilm(9.4);
     if (poster !== null) requestAnimationFrame(() => (root.dataset.posterReady = ""));
     return;
   }
@@ -313,11 +321,16 @@ function init(layer: HTMLElement) {
   };
   let landed = false;
   const track = (y: number) => {
+    if (!live) return;
     const body = Math.max(1, max - coverEnd);
     const past = y - coverEnd;
     const held = hold ? Math.max(0, Math.min(1, (y - holdTop) / holdLen)) : 1;
     const cruise = Math.max(0, Math.min(1, past / body));
     const arrive = foot ? Math.max(0, Math.min(1, (y - (max - land)) / land)) : 0;
+    if (!filmPlayer?.open && hero) {
+      const feature = past < 0 ? held * COVER_DURATION : arrive > 0.4 ? 35 + (FILM_DURATION - 35) * (arrive - 0.4) / 0.6 : null;
+      cosmos.setFilm(feature);
+    }
     // The page sets the way out itself: the camera goes from
     // one passage's place to the next at a steady zoom, and the far end of the
     // cruise is kept for the stretch after the last, so the turn for home is
@@ -414,7 +427,12 @@ function init(layer: HTMLElement) {
   // By day the page between the cover and the footer is paper, so it runs only
   // while one of those two is on screen.
   const seen = new Set<Element>();
-  const sync = () => cosmos.run(!document.hidden && (root.dataset.theme !== "light" || seen.size > 0));
+  const sync = () => cosmos.run(live && !document.hidden && (filmPlayer?.open || root.dataset.theme !== "light" || seen.size > 0));
+  if (hero) filmPlayer = attachFilm(canvas, cosmos, () => {
+    if (!live) return;
+    track(window.scrollY);
+    cosmos.snap(true);
+  }, sync);
   // Half a screen early, so by day the camera is already under way when a stretch of sky comes up, not setting off as it does.
   const io = new IntersectionObserver(
     (entries) => {
